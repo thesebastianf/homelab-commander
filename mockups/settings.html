@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HLC V2 — Settings</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #07080d;
+      --glass: rgba(14, 17, 30, .55); --glass2: rgba(20, 24, 42, .45);
+      --glass-border: rgba(255, 255, 255, .06); --glass-border-h: rgba(255, 255, 255, .1);
+      --text: #e2e6f0; --text2: #6c7290; --text3: #3e4360;
+      --accent: #6c8cff; --accent-glow: rgba(108, 140, 255, .15);
+      --green: #3ee8b5; --green-bg: rgba(62, 232, 181, .08);
+      --yellow: #f0c050; --yellow-bg: rgba(240, 192, 80, .08);
+      --red: #ff6b6b; --red-bg: rgba(255, 107, 107, .08);
+      --orange: #f09050; --purple: #a78bfa;
+      --radius: 14px; --radius-sm: 8px; --nav-w: 72px;
+    }
+    html { font-size: 14px; }
+    body {
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      background: var(--bg); color: var(--text); display: flex; min-height: 100vh;
+      background-image:
+        radial-gradient(ellipse 80% 60% at 10% 20%, rgba(108,140,255,.06), transparent),
+        radial-gradient(ellipse 60% 70% at 85% 80%, rgba(167,139,250,.04), transparent),
+        radial-gradient(ellipse 50% 40% at 50% 50%, rgba(62,232,181,.02), transparent);
+      background-attachment: fixed;
+    }
+
+    /* ─── Icon Rail ─── */
+    nav.rail { width: var(--nav-w); position: fixed; top: 0; bottom: 0; left: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; padding: 1.2rem 0; background: rgba(10,12,22,.8); backdrop-filter: blur(20px); border-right: 1px solid var(--glass-border); }
+    nav.rail .logo { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), #a78bfa); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: .85rem; color: #fff; margin-bottom: 1.8rem; box-shadow: 0 4px 20px rgba(108,140,255,.25); }
+    nav.rail a { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--text2); text-decoration: none; margin-bottom: .25rem; transition: all .2s; position: relative; }
+    nav.rail a svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    nav.rail a:hover { background: rgba(255,255,255,.04); color: var(--text); }
+    nav.rail a.active { background: var(--accent-glow); color: var(--accent); }
+    nav.rail a.active::before { content: ''; position: absolute; left: -1px; top: 50%; transform: translateY(-50%); width: 3px; height: 20px; border-radius: 0 3px 3px 0; background: var(--accent); }
+    nav.rail a .tip { display: none; position: absolute; left: 56px; top: 50%; transform: translateY(-50%); background: #1a1d2e; color: var(--text); padding: .3rem .6rem; border-radius: 6px; font-size: .72rem; white-space: nowrap; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+    nav.rail a:hover .tip { display: block; }
+    nav.rail .spacer { flex: 1; }
+    nav.rail .avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #2a2f4a, #1a1f35); border: 1.5px solid var(--glass-border-h); display: flex; align-items: center; justify-content: center; font-size: .7rem; color: var(--text2); font-weight: 600; }
+
+    /* ─── Main ─── */
+    main { margin-left: var(--nav-w); flex: 1; padding: 1.5rem 2rem; overflow-y: auto; }
+    .g-card { background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 1.2rem; transition: border-color .2s; }
+    .g-card:hover { border-color: var(--glass-border-h); }
+    .page-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem; background: linear-gradient(135deg, var(--text), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+    /* Tab Bar */
+    .tab-bar { display: flex; gap: .15rem; margin-bottom: 1.2rem; background: rgba(10,12,22,.4); border-radius: 12px; padding: .2rem; }
+    .tab { padding: .45rem .8rem; border-radius: 10px; font-size: .78rem; font-weight: 500; color: var(--text2); cursor: pointer; transition: all .15s; white-space: nowrap; }
+    .tab:hover { color: var(--text); }
+    .tab.active { background: var(--accent-glow); color: var(--accent); font-weight: 600; }
+
+    /* Tab Content */
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .section-title { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text2); margin-bottom: .8rem; display: flex; align-items: center; gap: .4rem; }
+    .section-title svg { width: 14px; height: 14px; stroke: var(--accent); fill: none; stroke-width: 2; }
+
+    /* Form Elements */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin-bottom: 1.2rem; }
+    .form-group { display: flex; flex-direction: column; gap: .3rem; }
+    .form-label { font-size: .72rem; color: var(--text2); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    .form-input { padding: .4rem .6rem; border-radius: var(--radius-sm); border: 1px solid var(--glass-border); background: rgba(255,255,255,.02); color: var(--text); font-family: inherit; font-size: .82rem; transition: border-color .15s; }
+    .form-input:focus { outline: none; border-color: rgba(108,140,255,.3); }
+    .form-input.mono { font-family: monospace; }
+    select.form-input { cursor: pointer; }
+
+    /* Toggle */
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: .5rem 0; border-bottom: 1px solid var(--glass-border); }
+    .toggle-row:last-child { border-bottom: none; }
+    .toggle-info .toggle-label { font-size: .85rem; font-weight: 500; }
+    .toggle-info .toggle-desc { font-size: .72rem; color: var(--text2); }
+    .toggle { width: 38px; height: 20px; border-radius: 10px; background: var(--glass2); border: 1px solid var(--glass-border); position: relative; cursor: pointer; flex-shrink: 0; transition: all .2s; }
+    .toggle.on { background: rgba(62,232,181,.15); border-color: rgba(62,232,181,.3); }
+    .toggle .knob { width: 14px; height: 14px; border-radius: 50%; background: var(--text2); position: absolute; top: 2px; left: 2px; transition: all .2s; }
+    .toggle.on .knob { left: 20px; background: var(--green); }
+
+    /* Env Hub Table */
+    .env-hub-table { width: 100%; font-size: .82rem; border-collapse: collapse; }
+    .env-hub-table th { text-align: left; padding: .45rem .6rem; font-size: .65rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); font-weight: 600; background: rgba(10,12,22,.3); border-bottom: 1px solid var(--glass-border); }
+    .env-hub-table td { padding: .4rem .6rem; border-bottom: 1px solid var(--glass-border); }
+    .env-hub-table td:first-child { font-family: monospace; color: var(--accent); font-weight: 500; }
+    .env-hub-table input { background: rgba(255,255,255,.03); border: 1px solid var(--glass-border); color: var(--text); padding: .25rem .4rem; border-radius: 6px; font-family: monospace; font-size: .8rem; width: 100%; }
+    .env-hub-table input:focus { outline: none; border-color: rgba(108,140,255,.3); }
+    .inject-count { font-size: .65rem; color: var(--text2); }
+
+    /* NAS Mount Cards */
+    .nas-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .8rem; margin-bottom: 1rem; }
+    .nas-card { position: relative; }
+    .nas-card .nas-status { position: absolute; top: .8rem; right: .8rem; width: 8px; height: 8px; border-radius: 50%; }
+    .nas-card .nas-path { font-family: monospace; font-size: .82rem; color: var(--accent); margin-bottom: .3rem; }
+    .nas-card .nas-mount { font-size: .72rem; color: var(--text2); }
+    .nas-card .nas-detail { font-size: .72rem; color: var(--text2); margin-top: .3rem; display: flex; align-items: center; gap: .3rem; }
+
+    /* Policy Cards */
+    .policy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+
+    /* Path Preset Table */
+    .preset-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    .preset-table th { text-align: left; padding: .45rem .6rem; font-size: .65rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); font-weight: 600; background: rgba(10,12,22,.3); }
+    .preset-table td { padding: .4rem .6rem; border-bottom: 1px solid var(--glass-border); }
+    .preset-var { font-family: monospace; color: var(--yellow); background: var(--yellow-bg); padding: .1rem .35rem; border-radius: 4px; font-size: .78rem; }
+
+    /* Buttons */
+    .btn { padding: .4rem .8rem; border-radius: var(--radius-sm); border: 1px solid var(--glass-border); background: var(--glass); color: var(--text); font-size: .78rem; cursor: pointer; font-weight: 500; transition: all .15s; display: inline-flex; align-items: center; gap: .3rem; }
+    .btn:hover { border-color: var(--glass-border-h); }
+    .btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn.primary:hover { background: #5a7ee8; }
+    .btn.success { background: rgba(62,232,181,.1); color: var(--green); border-color: rgba(62,232,181,.2); }
+
+    .card-footer { display: flex; justify-content: flex-end; gap: .4rem; margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--glass-border); }
+  </style>
+</head>
+<body>
+  <nav class="rail">
+    <div class="logo">H</div>
+    <a href="dashboard.html"><svg><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><div class="tip">Dashboard</div></a>
+    <a href="stack-editor.html"><svg><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg><div class="tip">Stacks</div></a>
+    <a href="container.html"><svg><rect x="2" y="2" width="20" height="20" rx="2" ry="2"/><line x1="7" y1="2" x2="7" y2="22"/></svg><div class="tip">Container</div></a>
+    <a href="backups.html"><svg><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><div class="tip">Backups</div></a>
+    <a href="settings.html" class="active"><svg><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg><div class="tip">Settings</div></a>
+    <a href="notifications.html"><svg><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg><div class="tip">Notifications</div></a>
+    <a href="audit.html"><svg><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><div class="tip">Audit Log</div></a>
+    <a href="migration.html"><svg><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h2a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2v-2"/></svg><div class="tip">Migration</div></a>
+    <div class="spacer"></div>
+    <div class="avatar">SE</div>
+  </nav>
+
+  <main>
+    <div class="page-title">Settings</div>
+
+    <div class="tab-bar">
+      <div class="tab active" onclick="switchTab('general')">General</div>
+      <div class="tab" onclick="switchTab('paths')">Path Presets</div>
+      <div class="tab" onclick="switchTab('env')">Global Env Hub</div>
+      <div class="tab" onclick="switchTab('nas')">NAS Mounts</div>
+      <div class="tab" onclick="switchTab('policies')">Policies</div>
+      <div class="tab" onclick="switchTab('backups')">Backups</div>
+      <div class="tab" onclick="switchTab('security')">Security</div>
+    </div>
+
+    <!-- General -->
+    <div class="tab-content active" id="tab-general">
+      <div class="g-card" style="margin-bottom:1rem">
+        <div class="section-title"><svg><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> Instance Configuration</div>
+        <div class="form-grid">
+          <div class="form-group"><div class="form-label">Instance Name</div><input class="form-input" value="HomeLab-01" /></div>
+          <div class="form-group"><div class="form-label">Listen Port</div><input class="form-input" type="number" value="3000" /></div>
+          <div class="form-group"><div class="form-label">Docker Socket</div><input class="form-input mono" value="/var/run/docker.sock" /></div>
+          <div class="form-group"><div class="form-label">Log Level</div><select class="form-input"><option>Info</option><option>Debug</option><option>Warn</option></select></div>
+        </div>
+      </div>
+      <div class="g-card">
+        <div class="section-title"><svg><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> Homepage Integration</div>
+        <div class="toggle-row">
+          <div class="toggle-info"><div class="toggle-label">Enable Homepage widget</div><div class="toggle-desc">Expose API for Homepage dashboard integration</div></div>
+          <div class="toggle on"><div class="knob"></div></div>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle-info"><div class="toggle-label">Show container count</div><div class="toggle-desc">Include total/running counts in widget</div></div>
+          <div class="toggle on"><div class="knob"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Path Presets -->
+    <div class="tab-content" id="tab-paths">
+      <div class="g-card" style="padding:0; overflow:hidden;">
+        <div style="padding:1rem 1.2rem .6rem"><div class="section-title"><svg><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg> Path Presets</div></div>
+        <table class="preset-table">
+          <thead><tr><th>Variable</th><th>Value</th><th>Used In</th></tr></thead>
+          <tbody>
+            <tr><td><span class="preset-var">{{BASE_STACK}}</span></td><td><input class="form-input mono" value="/opt/stacks" style="width:200px" /></td><td>All stacks</td></tr>
+            <tr><td><span class="preset-var">{{BASE_CONFIG}}</span></td><td><input class="form-input mono" value="/opt/configs" style="width:200px" /></td><td>12 containers</td></tr>
+            <tr><td><span class="preset-var">{{MEDIA_ROOT}}</span></td><td><input class="form-input mono" value="/mnt/nas/media" style="width:200px" /></td><td>media-stack</td></tr>
+            <tr><td><span class="preset-var">{{BACKUP_DIR}}</span></td><td><input class="form-input mono" value="/mnt/nas/backups" style="width:200px" /></td><td>Backup engine</td></tr>
+          </tbody>
+        </table>
+        <div class="card-footer" style="padding:0 1.2rem 1rem"><button class="btn primary">Save Presets</button></div>
+      </div>
+    </div>
+
+    <!-- Global Env Hub -->
+    <div class="tab-content" id="tab-env">
+      <div class="g-card" style="padding:0; overflow:hidden;">
+        <div style="padding:1rem 1.2rem .6rem; display:flex; align-items:center; justify-content:space-between;">
+          <div class="section-title" style="margin-bottom:0"><svg><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> Global Environment Variables</div>
+          <button class="btn success"><svg><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg> Save &amp; Inject All</button>
+        </div>
+        <table class="env-hub-table">
+          <thead><tr><th>Variable</th><th>Value</th><th>Injected Into</th></tr></thead>
+          <tbody>
+            <tr><td>TZ</td><td><input value="Europe/Berlin" /></td><td><span class="inject-count">14 containers</span></td></tr>
+            <tr><td>PUID</td><td><input value="1000" /></td><td><span class="inject-count">12 containers</span></td></tr>
+            <tr><td>PGID</td><td><input value="1000" /></td><td><span class="inject-count">12 containers</span></td></tr>
+            <tr><td>DOCKER_MODS</td><td><input value="" placeholder="optional" /></td><td><span class="inject-count">0 containers</span></td></tr>
+            <tr><td>UMASK</td><td><input value="022" /></td><td><span class="inject-count">8 containers</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- NAS Mounts -->
+    <div class="tab-content" id="tab-nas">
+      <div class="section-title" style="margin-bottom:.8rem"><svg><path d="M22 12H2M22 6H2M22 18H2"/></svg> NAS Mount Points</div>
+      <div class="nas-grid">
+        <div class="g-card nas-card">
+          <div class="nas-status" style="background:var(--green)"></div>
+          <div class="nas-path">/mnt/nas/media</div>
+          <div class="nas-mount">192.168.1.50:/volume1/media</div>
+          <div class="nas-detail"><svg style="width:12px;height:12px;stroke:var(--green);fill:none;stroke-width:2"><polyline points="20 6 9 17 4 12"/></svg> Mounted &middot; 4.2 TB free</div>
+        </div>
+        <div class="g-card nas-card">
+          <div class="nas-status" style="background:var(--green)"></div>
+          <div class="nas-path">/mnt/nas/backups</div>
+          <div class="nas-mount">192.168.1.50:/volume1/backups</div>
+          <div class="nas-detail"><svg style="width:12px;height:12px;stroke:var(--green);fill:none;stroke-width:2"><polyline points="20 6 9 17 4 12"/></svg> Mounted &middot; 890 GB free</div>
+        </div>
+        <div class="g-card nas-card">
+          <div class="nas-status" style="background:var(--red)"></div>
+          <div class="nas-path">/mnt/nas/downloads</div>
+          <div class="nas-mount">192.168.1.50:/volume1/downloads</div>
+          <div class="nas-detail"><svg style="width:12px;height:12px;stroke:var(--red);fill:none;stroke-width:2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/></svg> Unmounted &middot; stale</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Policies -->
+    <div class="tab-content" id="tab-policies">
+      <div class="policy-grid">
+        <div class="g-card">
+          <div class="section-title"><svg><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Mandatory Stack Membership (MSM)</div>
+          <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">Enforce MSM</div><div class="toggle-desc">Only manage containers that belong to a stack</div></div><div class="toggle on"><div class="knob"></div></div></div>
+          <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">Auto-quarantine orphans</div><div class="toggle-desc">Stop unmanaged containers automatically</div></div><div class="toggle"><div class="knob"></div></div></div>
+        </div>
+        <div class="g-card">
+          <div class="section-title"><svg><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Quiet Hours</div>
+          <div class="form-grid">
+            <div class="form-group"><div class="form-label">Start</div><input class="form-input" type="time" value="01:00" /></div>
+            <div class="form-group"><div class="form-label">End</div><input class="form-input" type="time" value="06:00" /></div>
+          </div>
+          <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">Block updates during quiet hours</div><div class="toggle-desc">Defer pulls and restarts</div></div><div class="toggle on"><div class="knob"></div></div></div>
+        </div>
+        <div class="g-card">
+          <div class="section-title"><svg><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/></svg> Auto-Backup Policy</div>
+          <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">Pre-update backup</div><div class="toggle-desc">Snapshot volumes before image pull</div></div><div class="toggle on"><div class="knob"></div></div></div>
+          <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">Scheduled nightly backup</div><div class="toggle-desc">Run full backup at 02:00</div></div><div class="toggle on"><div class="knob"></div></div></div>
+        </div>
+        <div class="g-card">
+          <div class="section-title"><svg><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> Read-Only Mode</div>
+          <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">Enable read-only mode</div><div class="toggle-desc">Block all state-changing operations</div></div><div class="toggle"><div class="knob"></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Backups Settings -->
+    <div class="tab-content" id="tab-backups">
+      <div class="g-card">
+        <div class="section-title"><svg><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/></svg> Backup Configuration</div>
+        <div class="form-grid">
+          <div class="form-group"><div class="form-label">Backup Directory</div><input class="form-input mono" value="/mnt/nas/backups/hlc" /></div>
+          <div class="form-group"><div class="form-label">Retention (days)</div><input class="form-input" type="number" value="30" /></div>
+          <div class="form-group"><div class="form-label">Schedule</div><select class="form-input"><option>Daily @ 02:00</option><option>Every 12h</option><option>Weekly</option></select></div>
+          <div class="form-group"><div class="form-label">Compression</div><select class="form-input"><option>zstd (fast)</option><option>gzip</option><option>none</option></select></div>
+        </div>
+        <div class="card-footer"><button class="btn primary">Save Backup Settings</button></div>
+      </div>
+    </div>
+
+    <!-- Security -->
+    <div class="tab-content" id="tab-security">
+      <div class="g-card" style="margin-bottom:1rem">
+        <div class="section-title"><svg><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> API Token</div>
+        <div class="form-group" style="margin-bottom:.6rem"><div class="form-label">Current Token</div><input class="form-input mono" value="hlc_a1b2c3d4e5f6g7h8i9j0" type="password" /></div>
+        <button class="btn">Regenerate Token</button>
+      </div>
+      <div class="g-card">
+        <div class="section-title"><svg><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Access Control</div>
+        <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">Require authentication</div><div class="toggle-desc">Protect all endpoints with token auth</div></div><div class="toggle on"><div class="knob"></div></div></div>
+        <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">Allow local bypass</div><div class="toggle-desc">Skip auth for 127.0.0.1 / ::1</div></div><div class="toggle on"><div class="knob"></div></div></div>
+        <div class="toggle-row"><div class="toggle-info"><div class="toggle-label">Audit all API calls</div><div class="toggle-desc">Log every mutating request to audit log</div></div><div class="toggle on"><div class="knob"></div></div></div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function switchTab(name) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.querySelector('#tab-' + name).classList.add('active');
+      event.target.classList.add('active');
+    }
+  </script>
+</body>
+</html>

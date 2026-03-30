@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HLC V2 — Backups</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #07080d;
+      --glass: rgba(14, 17, 30, .55); --glass2: rgba(20, 24, 42, .45);
+      --glass-border: rgba(255, 255, 255, .06); --glass-border-h: rgba(255, 255, 255, .1);
+      --text: #e2e6f0; --text2: #6c7290; --text3: #3e4360;
+      --accent: #6c8cff; --accent-glow: rgba(108, 140, 255, .15);
+      --green: #3ee8b5; --green-bg: rgba(62, 232, 181, .08);
+      --yellow: #f0c050; --yellow-bg: rgba(240, 192, 80, .08);
+      --red: #ff6b6b; --red-bg: rgba(255, 107, 107, .08);
+      --orange: #f09050; --purple: #a78bfa;
+      --radius: 14px; --radius-sm: 8px; --nav-w: 72px;
+    }
+    html { font-size: 14px; }
+    body {
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      background: var(--bg); color: var(--text); display: flex; min-height: 100vh;
+      background-image:
+        radial-gradient(ellipse 80% 60% at 10% 20%, rgba(108,140,255,.06), transparent),
+        radial-gradient(ellipse 60% 70% at 85% 80%, rgba(167,139,250,.04), transparent),
+        radial-gradient(ellipse 50% 40% at 50% 50%, rgba(62,232,181,.02), transparent);
+      background-attachment: fixed;
+    }
+
+    /* ─── Icon Rail ─── */
+    nav.rail { width: var(--nav-w); position: fixed; top: 0; bottom: 0; left: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; padding: 1.2rem 0; background: rgba(10,12,22,.8); backdrop-filter: blur(20px); border-right: 1px solid var(--glass-border); }
+    nav.rail .logo { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), #a78bfa); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: .85rem; color: #fff; margin-bottom: 1.8rem; box-shadow: 0 4px 20px rgba(108,140,255,.25); }
+    nav.rail a { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--text2); text-decoration: none; margin-bottom: .25rem; transition: all .2s; position: relative; }
+    nav.rail a svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    nav.rail a:hover { background: rgba(255,255,255,.04); color: var(--text); }
+    nav.rail a.active { background: var(--accent-glow); color: var(--accent); }
+    nav.rail a.active::before { content: ''; position: absolute; left: -1px; top: 50%; transform: translateY(-50%); width: 3px; height: 20px; border-radius: 0 3px 3px 0; background: var(--accent); }
+    nav.rail a .tip { display: none; position: absolute; left: 56px; top: 50%; transform: translateY(-50%); background: #1a1d2e; color: var(--text); padding: .3rem .6rem; border-radius: 6px; font-size: .72rem; white-space: nowrap; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+    nav.rail a:hover .tip { display: block; }
+    nav.rail .spacer { flex: 1; }
+    nav.rail .avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #2a2f4a, #1a1f35); border: 1.5px solid var(--glass-border-h); display: flex; align-items: center; justify-content: center; font-size: .7rem; color: var(--text2); font-weight: 600; }
+
+    /* ─── Main ─── */
+    main { margin-left: var(--nav-w); flex: 1; padding: 1.5rem 2rem; overflow-y: auto; }
+    .g-card { background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 1.2rem; transition: border-color .2s; }
+    .g-card:hover { border-color: var(--glass-border-h); }
+    .page-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.2rem; background: linear-gradient(135deg, var(--text), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+    /* Stat Cards */
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: .8rem; margin-bottom: 1rem; }
+    .stat-card { position: relative; overflow: hidden; }
+    .stat-card .stat-icon { position: absolute; right: 1rem; top: 1rem; width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    .stat-card .stat-icon svg { width: 18px; height: 18px; fill: none; stroke-width: 2; stroke-linecap: round; }
+    .stat-label { font-size: .72rem; color: var(--text2); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .3rem; }
+    .stat-val { font-size: 1.6rem; font-weight: 800; }
+    .stat-sub { font-size: .72rem; color: var(--text2); margin-top: .2rem; }
+
+    /* Progress Banner */
+    .progress-banner { display: flex; align-items: center; gap: .8rem; margin-bottom: 1rem; padding: .7rem 1rem; border-color: rgba(108,140,255,.15); }
+    .spinner { width: 20px; height: 20px; border: 2px solid var(--glass-border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .progress-info { flex: 1; }
+    .progress-info .name { font-weight: 600; font-size: .85rem; }
+    .progress-info .detail { font-size: .72rem; color: var(--text2); }
+    .progress-bar-track { flex: 0 0 200px; height: 6px; background: rgba(255,255,255,.04); border-radius: 3px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--purple)); width: 65%; }
+    .progress-pct { font-weight: 700; font-size: .82rem; color: var(--accent); }
+
+    /* Filter bar */
+    .filter-bar { display: flex; align-items: center; gap: .5rem; margin-bottom: 1rem; }
+    .filter-pill { padding: .3rem .65rem; border-radius: 20px; border: 1px solid var(--glass-border); background: transparent; color: var(--text2); font-size: .75rem; cursor: pointer; font-weight: 500; transition: all .15s; }
+    .filter-pill:hover { border-color: var(--glass-border-h); color: var(--text); }
+    .filter-pill.active { background: var(--accent-glow); color: var(--accent); border-color: rgba(108,140,255,.2); }
+    .filter-pill.fail { color: var(--red); }
+    .filter-pill.fail.active { background: var(--red-bg); color: var(--red); border-color: rgba(255,107,107,.2); }
+    .search-box { margin-left: auto; padding: .3rem .6rem; border-radius: var(--radius-sm); border: 1px solid var(--glass-border); background: rgba(255,255,255,.02); color: var(--text); font-size: .78rem; width: 180px; font-family: inherit; }
+    .search-box:focus { outline: none; border-color: rgba(108,140,255,.3); }
+
+    /* Backup Table */
+    .backup-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    .backup-table th { text-align: left; padding: .55rem .7rem; color: var(--text3); font-weight: 600; font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; background: rgba(10,12,22,.3); border-bottom: 1px solid var(--glass-border); }
+    .backup-table td { padding: .55rem .7rem; border-bottom: 1px solid var(--glass-border); }
+    .backup-table tr:hover td { background: rgba(255,255,255,.01); }
+    .type-badge { font-size: .65rem; padding: .15rem .4rem; border-radius: 10px; font-weight: 600; }
+    .type-badge.volume { background: rgba(167,139,250,.1); color: var(--purple); }
+    .type-badge.db { background: var(--accent-glow); color: var(--accent); }
+    .type-badge.full { background: var(--yellow-bg); color: var(--yellow); }
+    .status-badge { font-size: .65rem; padding: .15rem .4rem; border-radius: 10px; font-weight: 600; }
+    .status-badge.ok { background: var(--green-bg); color: var(--green); }
+    .status-badge.fail { background: var(--red-bg); color: var(--red); }
+    .status-badge.running { background: var(--accent-glow); color: var(--accent); }
+    .tbl-actions { display: flex; gap: .3rem; }
+    .tbl-btn { padding: .2rem .45rem; border-radius: 6px; border: 1px solid var(--glass-border); background: transparent; color: var(--text2); font-size: .68rem; cursor: pointer; transition: all .15s; }
+    .tbl-btn:hover { color: var(--text); border-color: var(--glass-border-h); }
+  </style>
+</head>
+<body>
+  <nav class="rail">
+    <div class="logo">H</div>
+    <a href="dashboard.html"><svg><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><div class="tip">Dashboard</div></a>
+    <a href="stack-editor.html"><svg><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg><div class="tip">Stacks</div></a>
+    <a href="container.html"><svg><rect x="2" y="2" width="20" height="20" rx="2" ry="2"/><line x1="7" y1="2" x2="7" y2="22"/></svg><div class="tip">Container</div></a>
+    <a href="backups.html" class="active"><svg><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg><div class="tip">Backups</div></a>
+    <a href="settings.html"><svg><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg><div class="tip">Settings</div></a>
+    <a href="notifications.html"><svg><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg><div class="tip">Notifications</div></a>
+    <a href="audit.html"><svg><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><div class="tip">Audit Log</div></a>
+    <a href="migration.html"><svg><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h2a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2v-2"/></svg><div class="tip">Migration</div></a>
+    <div class="spacer"></div>
+    <div class="avatar">SE</div>
+  </nav>
+
+  <main>
+    <div class="page-title">Backups</div>
+
+    <!-- Stats Row -->
+    <div class="stats-row">
+      <div class="g-card stat-card">
+        <div class="stat-icon" style="background:var(--accent-glow)"><svg style="stroke:var(--accent)"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/></svg></div>
+        <div class="stat-label">Total Backups</div>
+        <div class="stat-val" style="color:var(--accent)">147</div>
+        <div class="stat-sub">All time</div>
+      </div>
+      <div class="g-card stat-card">
+        <div class="stat-icon" style="background:var(--green-bg)"><svg style="stroke:var(--green)"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div class="stat-label">Today</div>
+        <div class="stat-val" style="color:var(--green)">12</div>
+        <div class="stat-sub">0 failed</div>
+      </div>
+      <div class="g-card stat-card">
+        <div class="stat-icon" style="background:rgba(167,139,250,.1)"><svg style="stroke:var(--purple)"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg></div>
+        <div class="stat-label">Storage Used</div>
+        <div class="stat-val" style="color:var(--purple)">2.4 GB</div>
+        <div class="stat-sub">of 50 GB limit</div>
+      </div>
+      <div class="g-card stat-card">
+        <div class="stat-icon" style="background:var(--red-bg)"><svg style="stroke:var(--red)"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
+        <div class="stat-label">Failed (7d)</div>
+        <div class="stat-val" style="color:var(--red)">1</div>
+        <div class="stat-sub">postgres — see below</div>
+      </div>
+    </div>
+
+    <!-- In-Progress -->
+    <div class="g-card progress-banner">
+      <div class="spinner"></div>
+      <div class="progress-info">
+        <div class="name">postgres — db dump</div>
+        <div class="detail">infra-stack &middot; started 2 min ago</div>
+      </div>
+      <div class="progress-bar-track"><div class="progress-bar-fill"></div></div>
+      <div class="progress-pct">65%</div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+      <span class="filter-pill active">All</span>
+      <span class="filter-pill">Volume</span>
+      <span class="filter-pill">DB Dump</span>
+      <span class="filter-pill">Full Stack</span>
+      <span class="filter-pill fail">Failed</span>
+      <input class="search-box" placeholder="Search backups…" />
+    </div>
+
+    <!-- Backup Table -->
+    <div class="g-card" style="padding:0; overflow:hidden;">
+      <table class="backup-table">
+        <thead>
+          <tr><th>Container</th><th>Type</th><th>Date</th><th>Size</th><th>Status</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="font-weight:600">jellyfin</td>
+            <td><span class="type-badge volume">Volume</span></td>
+            <td>Today 10:00</td><td>340 MB</td>
+            <td><span class="status-badge ok">Success</span></td>
+            <td><div class="tbl-actions"><button class="tbl-btn">Restore</button><button class="tbl-btn">Download</button></div></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600">sonarr</td>
+            <td><span class="type-badge volume">Volume</span></td>
+            <td>Today 10:01</td><td>28 MB</td>
+            <td><span class="status-badge ok">Success</span></td>
+            <td><div class="tbl-actions"><button class="tbl-btn">Restore</button><button class="tbl-btn">Download</button></div></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600">radarr</td>
+            <td><span class="type-badge volume">Volume</span></td>
+            <td>Today 10:02</td><td>32 MB</td>
+            <td><span class="status-badge ok">Success</span></td>
+            <td><div class="tbl-actions"><button class="tbl-btn">Restore</button><button class="tbl-btn">Download</button></div></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600">postgres</td>
+            <td><span class="type-badge db">DB Dump</span></td>
+            <td>Today 09:58</td><td>—</td>
+            <td><span class="status-badge running">In Progress</span></td>
+            <td><div class="tbl-actions"><button class="tbl-btn">Cancel</button></div></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600">vaultwarden</td>
+            <td><span class="type-badge volume">Volume</span></td>
+            <td>Today 10:00</td><td>12 MB</td>
+            <td><span class="status-badge ok">Success</span></td>
+            <td><div class="tbl-actions"><button class="tbl-btn">Restore</button><button class="tbl-btn">Download</button></div></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600">media-stack</td>
+            <td><span class="type-badge full">Full Stack</span></td>
+            <td>Yesterday 22:00</td><td>1.8 GB</td>
+            <td><span class="status-badge ok">Success</span></td>
+            <td><div class="tbl-actions"><button class="tbl-btn">Restore</button><button class="tbl-btn">Download</button></div></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600">postgres</td>
+            <td><span class="type-badge db">DB Dump</span></td>
+            <td>Yesterday 06:00</td><td>85 MB</td>
+            <td><span class="status-badge fail">Failed</span></td>
+            <td><div class="tbl-actions"><button class="tbl-btn">Retry</button><button class="tbl-btn">Logs</button></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</body>
+</html>
