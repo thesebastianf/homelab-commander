@@ -1,15 +1,26 @@
+
 # 🛸 HomeLab Commander (HLC)
 
-## 📖 Vorwort: Die Vision hinter dem Commander
-Dieses Projekt entstand aus der Beobachtung, dass moderne HomeLabs oft ein "Patchwork-Teppich" aus exzellenten, aber isolierten Tools sind...
+## Vision
+An intelligent operator for Docker-based HomeLabs.
 
-## 🎯 Hauptziele & Zweck
-1. Zentralisierung
-2. Vacation Mode
-3. Backup-Orchestrierung
-4. Resilienz
+## Core Idea
+Not a dashboard — a policy-driven system that:
+- understands context
+- protects data
+- automates safely
 
-## 🛠️ Technologie-Entscheidungen
-- Backend: Go
-- Frontend: Vue 3 + Tailwind
-- Datenbank: SQLite
+## Pillars
+1. Event-driven core
+2. Policy-based automation (Vacation Mode++)
+3. Backup-first philosophy
+4. Label-driven intelligence
+
+## Key Systems
+- Event Bus (central nervous system)
+- Policy Engine (decision making)
+- Backup Engine (data safety)
+- Update Engine (controlled change)
+
+## Long-Term Direction
+Toward a self-healing, context-aware homelab operator.
