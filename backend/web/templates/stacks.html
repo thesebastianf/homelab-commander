@@ -1,0 +1,95 @@
+{{define "content"}}
+<div class="top-bar">
+  <div>
+    <div class="page-title">Stacks</div>
+    <div class="page-subtitle">Compose-based service groups</div>
+  </div>
+  <button class="btn btn-primary" onclick="document.getElementById('new-stack-modal').classList.add('open')">
+    <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    New Stack
+  </button>
+</div>
+
+<div id="stacks-list" hx-get="/api/v1/stacks" hx-trigger="load" hx-swap="innerHTML">
+  <div class="loading">Loading stacks…</div>
+</div>
+
+<!-- Monaco-based compose editor panel (hidden by default) -->
+<div id="editor-panel" style="display:none" class="g-card" style="margin-top:1.2rem">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem">
+    <span id="editor-title" class="section-title">compose.yml</span>
+    <div style="display:flex;gap:.5rem">
+      <button class="btn btn-xs" onclick="saveCompose()">Save</button>
+      <button class="btn btn-xs btn-ghost" onclick="closeEditor()">Close</button>
+    </div>
+  </div>
+  <div id="monaco-container" style="height:480px;border-radius:8px;overflow:hidden;border:1px solid var(--glass-border)"></div>
+</div>
+
+<!-- New Stack Modal -->
+<div id="new-stack-modal" class="modal-backdrop">
+  <div class="modal g-card">
+    <div class="modal-title">New Stack</div>
+    <form hx-post="/api/v1/stacks" hx-swap="none" hx-on::after-request="document.getElementById('new-stack-modal').classList.remove('open');htmx.trigger('#stacks-list','load')">
+      <div class="form-group">
+        <label class="form-label">Stack Name</label>
+        <input name="name" type="text" class="form-input" placeholder="my-stack" required>
+      </div>
+      <div class="form-group" style="margin-top:.6rem">
+        <label class="form-label">Directory Path</label>
+        <input name="path" type="text" class="form-input mono" placeholder="/opt/stacks/my-stack">
+      </div>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem">
+        <button type="button" class="btn btn-ghost" onclick="this.closest('.modal-backdrop').classList.remove('open')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+let monacoEditor;
+
+function openEditor(stackName) {
+  document.getElementById('editor-title').textContent = stackName + ' / compose.yml';
+  document.getElementById('editor-panel').style.display = 'block';
+  fetch('/api/v1/stacks/' + stackName + '/compose')
+    .then(r => r.json())
+    .then(data => {
+      if (!monacoEditor) {
+        require(['vs/editor/editor.main'], function () {
+          monacoEditor = monaco.editor.create(document.getElementById('monaco-container'), {
+            value: data.content || '',
+            language: 'yaml',
+            theme: 'vs-dark',
+            fontSize: 13,
+            minimap: {enabled: false},
+            scrollBeyondLastLine: false,
+          });
+          monacoEditor._stackName = stackName;
+        });
+      } else {
+        monacoEditor.setValue(data.content || '');
+        monacoEditor._stackName = stackName;
+      }
+    });
+}
+
+function saveCompose() {
+  if (!monacoEditor) return;
+  fetch('/api/v1/stacks/' + monacoEditor._stackName + '/compose', {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({content: monacoEditor.getValue()})
+  }).then(r => r.json()).then(() => htmx.trigger('#stacks-list', 'load'));
+}
+
+function closeEditor() {
+  document.getElementById('editor-panel').style.display = 'none';
+}
+</script>
+<script>
+var require = { paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs' } };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
+{{end}}

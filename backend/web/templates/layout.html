@@ -1,0 +1,60 @@
+{{define "layout"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HomeLab Commander</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js"></script>
+</head>
+<body>
+  <nav class="rail">
+    <div class="logo">H</div>
+    <a href="/?page=dashboard" class="{{if eq .Page "dashboard"}}active{{end}}">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span class="tip">Dashboard</span>
+    </a>
+    <a href="/?page=stacks" class="{{if eq .Page "stacks"}}active{{end}}">
+      <svg viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>
+      <span class="tip">Stacks</span>
+    </a>
+    <a href="/?page=backups" class="{{if eq .Page "backups"}}active{{end}}">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <span class="tip">Backups</span>
+    </a>
+    <a href="/?page=notifications" class="{{if eq .Page "notifications"}}active{{end}}">
+      <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      <span class="tip">Notifications</span>
+    </a>
+    <a href="/?page=audit" class="{{if eq .Page "audit"}}active{{end}}">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+      <span class="tip">Audit Log</span>
+    </a>
+    <a href="/?page=migration" class="{{if eq .Page "migration"}}active{{end}}">
+      <svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+      <span class="tip">Migration</span>
+    </a>
+    <div class="spacer"></div>
+    <a href="/?page=settings" class="{{if eq .Page "settings"}}active{{end}}">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      <span class="tip">Settings</span>
+    </a>
+    <div class="avatar">OP</div>
+  </nav>
+  <main>
+    {{template "content" .}}
+  </main>
+  <div id="sse-status" style="display:none"></div>
+  <script>
+    // SSE live updates
+    const evtSource = new EventSource('/api/v1/events');
+    evtSource.addEventListener('keepalive', () => {});
+    evtSource.addEventListener('event', (e) => {
+      const data = JSON.parse(e.data);
+      document.dispatchEvent(new CustomEvent('hlc:event', {detail: data}));
+    });
+  </script>
+</body>
+</html>
+{{end}}

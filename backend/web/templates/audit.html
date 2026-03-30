@@ -1,0 +1,45 @@
+{{define "content"}}
+<div class="top-bar">
+  <div>
+    <div class="page-title">Audit Log</div>
+    <div class="page-subtitle">Immutable event history</div>
+  </div>
+  <select class="form-input" id="audit-filter" style="width:160px" onchange="reloadAudit()">
+    <option value="">All categories</option>
+    <option value="container">Container</option>
+    <option value="stack">Stack</option>
+    <option value="backup">Backup</option>
+    <option value="update">Update</option>
+    <option value="mount">Mount</option>
+    <option value="policy">Policy</option>
+    <option value="auth">Auth</option>
+  </select>
+</div>
+
+<div class="g-card">
+  <div id="audit-timeline" hx-get="/api/v1/audit?limit=100" hx-trigger="load" hx-swap="innerHTML">
+    <div class="loading">Loading audit log…</div>
+  </div>
+  <div style="margin-top:.8rem;text-align:center">
+    <button class="btn btn-ghost btn-sm" id="load-more-btn" onclick="loadMoreAudit()">Load more</button>
+  </div>
+</div>
+
+<script>
+let auditOffset = 0;
+
+function reloadAudit() {
+  auditOffset = 0;
+  const cat = document.getElementById('audit-filter').value;
+  const url = '/api/v1/audit?limit=100' + (cat ? '&category=' + cat : '');
+  htmx.ajax('GET', url, {target: '#audit-timeline', swap: 'innerHTML'});
+}
+
+function loadMoreAudit() {
+  auditOffset += 100;
+  const cat = document.getElementById('audit-filter').value;
+  const url = '/api/v1/audit?limit=100&offset=' + auditOffset + (cat ? '&category=' + cat : '');
+  htmx.ajax('GET', url, {target: '#audit-timeline', swap: 'beforeend'});
+}
+</script>
+{{end}}

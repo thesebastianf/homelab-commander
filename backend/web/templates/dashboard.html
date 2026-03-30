@@ -1,0 +1,48 @@
+{{define "content"}}
+<div class="top-bar">
+  <div>
+    <div class="page-title">Dashboard</div>
+    <div class="page-subtitle">System Overview</div>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:.6rem;align-items:center">
+    <div id="msm-badge" class="badge badge-green" hx-get="/api/v1/status" hx-trigger="load, every 30s" hx-swap="outerHTML" hx-select="#msm-badge">
+      Loading…
+    </div>
+  </div>
+</div>
+
+<div class="stat-grid" hx-get="/api/v1/status" hx-trigger="load, every 30s" hx-swap="innerHTML">
+  <div class="stat-card">
+    <div class="stat-label">Containers</div>
+    <div class="stat-value">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Stacks</div>
+    <div class="stat-value">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Last Backup</div>
+    <div class="stat-value">—</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Updates Available</div>
+    <div class="stat-value">—</div>
+  </div>
+</div>
+
+<div class="section-title">
+  <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/></svg>
+  Containers
+</div>
+<div class="g-card" hx-get="/api/v1/containers" hx-trigger="load, every 15s" hx-swap="innerHTML">
+  <div class="loading">Loading containers…</div>
+</div>
+
+<div class="section-title" style="margin-top:1.4rem">
+  <svg viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>
+  Stacks
+</div>
+<div class="g-card" hx-get="/api/v1/stacks" hx-trigger="load" hx-swap="innerHTML">
+  <div class="loading">Loading stacks…</div>
+</div>
+{{end}}
