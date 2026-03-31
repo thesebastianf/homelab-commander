@@ -39,6 +39,9 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	// Containers
 	mux.HandleFunc("GET /api/v1/containers", s.HandleListContainers)
 
+	// Ports overview (DockPeek-style)
+	mux.HandleFunc("GET /api/v1/ports", s.HandleListPorts)
+
 	// Stacks
 	mux.HandleFunc("GET /api/v1/stacks", s.HandleListStacks)
 	mux.HandleFunc("POST /api/v1/stacks", s.HandleCreateStack)
@@ -139,6 +142,23 @@ func (s *Server) HandleUI(w http.ResponseWriter, r *http.Request) {
 	if page == "" {
 		page = "dashboard"
 	}
+
+	// Allowlist valid pages to prevent path traversal.
+	validPages := map[string]bool{
+		"dashboard":     true,
+		"stacks":        true,
+		"backups":       true,
+		"notifications": true,
+		"audit":         true,
+		"migration":     true,
+		"ports":         true,
+		"settings":      true,
+	}
+	if !validPages[page] {
+		http.Error(w, "page not found", http.StatusNotFound)
+		return
+	}
+
 	tmpl, err := template.ParseFiles(
 		"web/templates/layout.html",
 		"web/templates/"+page+".html",
@@ -148,7 +168,8 @@ func (s *Server) HandleUI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.ExecuteTemplate(w, "layout", nil); err != nil {
+	data := struct{ Page string }{Page: page}
+	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
 		slog.Error("template execute error", "error", err)
 	}
 }

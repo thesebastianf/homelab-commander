@@ -1,0 +1,128 @@
+##############################################################################
+# HomeLab Commander V2 — docker-compose.example.yml
+#
+# This is an annotated reference showing ALL available options.
+# For a minimal quick-start, use docker-compose.yml instead.
+#
+# Usage:
+#   cp docker-compose.example.yml docker-compose.override.yml
+#   # Edit as needed, then:
+#   docker compose up -d
+##############################################################################
+
+services:
+  hlc:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: hlc:latest
+    container_name: homelab-commander
+    restart: unless-stopped
+    hostname: homelab-commander
+
+    # ── Ports ──────────────────────────────────────────────────────────────────
+    ports:
+      # Change the host-side port if 8080 is taken.
+      - "8080:8080"
+
+    # ── Environment ────────────────────────────────────────────────────────────
+    environment:
+      # Server listen address inside the container.
+      HLC_LISTEN: ":8080"
+
+      # Data & DB directories inside the container.
+      HLC_DATA_DIR: /data
+      HLC_DB_PATH: /data/hlc.db
+
+      # Where backups are written inside the container.
+      HLC_BACKUP_DIR: /data/backups
+
+      # Where compose stacks are — HLC scans this directory recursively.
+      HLC_STACK_DIR: /stacks
+
+      # Anchor file that must exist at mount root to confirm NAS is online.
+      HLC_NAS_ANCHOR: ".nas-ready"
+
+      # Docker socket path (should match the volume mount below).
+      DOCKER_SOCKET: /var/run/docker.sock
+
+      # Admin token — set a strong secret. Leave blank to disable auth in dev.
+      HLC_ADMIN_TOKEN: "change-me-before-running"
+
+      # Timezone for scheduled tasks (cron, quiet hours, etc.)
+      TZ: "Europe/London"
+
+    # ── Volumes ────────────────────────────────────────────────────────────────
+    volumes:
+      # Docker socket — needed to manage containers.
+      # Use :ro (read-only) for safe mode; remove :ro for full management.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      # Persistent HLC database and session data.
+      - hlc-data:/data
+
+      # Backups — mount your NAS share here for off-box storage.
+      # Example: /mnt/nas/hlc-backups:/data/backups
+      - hlc-backups:/data/backups
+
+      # Your compose stacks directory. HLC reads (and optionally writes) here.
+      # Example with local path: /opt/stacks:/stacks
+      - /opt/stacks:/stacks
+
+    # ── Security ───────────────────────────────────────────────────────────────
+    # Add the docker group so HLC can access the socket without running as root.
+    # Find your Docker GID: stat -c '%g' /var/run/docker.sock
+    group_add:
+      - "999"   # replace with your actual Docker socket GID
+
+    # Optional: run as a specific UID/GID instead of the built-in hlc user.
+    # user: "1000:1000"
+
+    # ── Resource limits ────────────────────────────────────────────────────────
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 64M
+
+    # ── Health check ───────────────────────────────────────────────────────────
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/v1/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    # ── HLC Labels ─────────────────────────────────────────────────────────────
+    labels:
+      hlc.role: app
+      hlc.priority: critical
+      hlc.homepage.url: "http://homelab-commander:8080"
+      hlc.backup.strategy: full
+      hlc.update.policy: manual
+
+    # ── Logging ────────────────────────────────────────────────────────────────
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  hlc-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      # Change to your preferred host path:
+      device: /opt/hlc/data
+
+  hlc-backups:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      # Change to your preferred host path (or NAS mount point):
+      device: /opt/hlc/backups

@@ -1,0 +1,22 @@
+# Environment — contains secrets, never commit the real .env
+.env
+
+# Runtime data
+backend/data/
+backend/hlc.db
+*.db
+
+# Build outputs
+backend/hlc
+backend/hlc.exe
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Go test cache
+backend/vendor/
