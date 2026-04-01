@@ -6,6 +6,9 @@ backend/data/
 backend/hlc.db
 *.db
 
+# Local stacks directory (created at runtime for dev)
+stacks/
+
 # Build outputs
 backend/hlc
 backend/hlc.exe

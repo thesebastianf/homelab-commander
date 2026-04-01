@@ -69,6 +69,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/v1/scheduler/jobs/{id}", s.HandleSetJobEnabled)
 
 	// Backups
+	mux.HandleFunc("POST /api/v1/backup/_all", s.HandleBackupAll)
 	mux.HandleFunc("POST /api/v1/backup/{container}", s.HandleTriggerBackup)
 	mux.HandleFunc("GET /api/v1/backups", s.HandleListBackups)
 	mux.HandleFunc("GET /api/v1/backups/{container}", s.HandleListContainerBackups)
@@ -106,6 +107,17 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 
 	// SSE live updates
 	mux.HandleFunc("GET /api/v1/events", s.HandleSSE)
+
+	// UI HTML fragment endpoints (HTMX swap targets — return HTML not JSON)
+	mux.HandleFunc("GET /ui/containers", s.HandleContainersFragment)
+	mux.HandleFunc("GET /ui/stacks", s.HandleStacksFragment)
+	mux.HandleFunc("GET /ui/backups", s.HandleBackupsFragment)
+	mux.HandleFunc("GET /ui/audit", s.HandleAuditFragment)
+	mux.HandleFunc("GET /ui/settings", s.HandleSettingsFragment)
+	mux.HandleFunc("GET /ui/policies", s.HandlePoliciesFragment)
+	mux.HandleFunc("GET /ui/env-hub", s.HandleEnvHubFragment)
+	mux.HandleFunc("GET /ui/notifications/channels", s.HandleChannelsFragment)
+	mux.HandleFunc("GET /ui/notifications/history", s.HandleNotificationHistoryFragment)
 }
 
 // WrapMux applies global middlewares to a mux.

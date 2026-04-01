@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -43,15 +44,37 @@ func (s *Server) HandleGetStack(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) HandleCreateStack(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Name    string `json:"name"`
-		Compose string `json:"compose"`
+	var name, composeContent string
+
+	if isFormRequest(r) {
+		if err := r.ParseForm(); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		name = r.FormValue("name")
+		// Form provides a name; create stack with a stub compose template.
+		composeContent = "services:\n  # Add your services here\n  example:\n    image: nginx:alpine\n"
+	} else {
+		var body struct {
+			Name    string `json:"name"`
+			Compose string `json:"compose"`
+		}
+		if err := decodeJSON(r, &body); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		name = body.Name
+		composeContent = body.Compose
+		if composeContent == "" {
+			composeContent = "services:\n  # Add your services here\n"
+		}
 	}
-	if err := decodeJSON(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, err)
+
+	if name == "" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("name is required"))
 		return
 	}
-	if err := s.deps.StackOperator.CreateStack(r.Context(), body.Name, body.Compose); err != nil {
+	if err := s.deps.StackOperator.CreateStack(r.Context(), name, composeContent); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -74,19 +97,19 @@ func (s *Server) HandleGetCompose(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err)
 		return
 	}
-	writeJSON(w, map[string]string{"compose": content})
+	writeJSON(w, map[string]string{"content": content})
 }
 
 func (s *Server) HandleUpdateCompose(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	var body struct {
-		Compose string `json:"compose"`
+		Content string `json:"content"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if err := s.deps.StackOperator.WriteCompose(r.Context(), name, body.Compose); err != nil {
+	if err := s.deps.StackOperator.WriteCompose(r.Context(), name, body.Content); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}

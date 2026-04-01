@@ -35,6 +35,38 @@ func (s *Server) HandleTriggerBackup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, meta)
 }
 
+// HandleBackupAll triggers a backup for every container that has a backup
+// strategy configured (hlc.backup.strategy != "none").
+func (s *Server) HandleBackupAll(w http.ResponseWriter, r *http.Request) {
+	containers, err := s.deps.DockerClient.ListContainers(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	classified := labels.ClassifyAll(containers)
+
+	type result struct {
+		Container string `json:"container"`
+		Error     string `json:"error,omitempty"`
+	}
+	var results []result
+
+	for _, c := range classified {
+		strategy := c.Classification.BackupStrategy
+		if strategy == "none" || strategy == "" {
+			continue
+		}
+		_, err := s.deps.BackupExec.BackupContainer(r.Context(), c)
+		res := result{Container: c.Name}
+		if err != nil {
+			res.Error = err.Error()
+		}
+		results = append(results, res)
+	}
+
+	writeJSON(w, map[string]any{"triggered": len(results), "results": results})
+}
+
 func (s *Server) HandleListBackups(w http.ResponseWriter, r *http.Request) {
 	metas, err := backup.ListAllMetadata(r.Context(), s.deps.Settings.DB(), 50)
 	if err != nil {

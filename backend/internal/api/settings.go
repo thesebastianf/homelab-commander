@@ -93,24 +93,38 @@ func (s *Server) HandleSetEnv(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, fmt.Errorf("env hub not available"))
 		return
 	}
-	var body struct {
-		Key      string `json:"key"`
-		Value    string `json:"value"`
-		Category string `json:"category"`
+	var key, value, category string
+
+	if isFormRequest(r) {
+		if err := r.ParseForm(); err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("parse form: %w", err))
+			return
+		}
+		key = r.FormValue("key")
+		value = r.FormValue("value")
+		category = r.FormValue("category")
+	} else {
+		var body struct {
+			Key      string `json:"key"`
+			Value    string `json:"value"`
+			Category string `json:"category"`
+		}
+		if err := decodeJSON(r, &body); err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("invalid JSON: %w", err))
+			return
+		}
+		key, value, category = body.Key, body.Value, body.Category
 	}
-	if err := decodeJSON(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid JSON: %w", err))
-		return
-	}
-	if body.Key == "" {
+
+	if key == "" {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("key is required"))
 		return
 	}
-	if err := s.deps.EnvStore.Set(r.Context(), body.Key, body.Value, body.Category); err != nil {
+	if err := s.deps.EnvStore.Set(r.Context(), key, value, category); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, map[string]string{"key": body.Key})
+	writeJSON(w, map[string]string{"key": key})
 }
 
 func (s *Server) HandleDeleteEnv(w http.ResponseWriter, r *http.Request) {

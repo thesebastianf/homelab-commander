@@ -13,6 +13,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     image: hlc:latest
+    pull_policy: build
     container_name: homelab-commander
     restart: unless-stopped
 
@@ -40,8 +41,9 @@ services:
       # Backups destination — override to a NAS path for off-box storage
       - "${HLC_BACKUP_HOST_DIR:-hlc-backups}:/data/backups"
 
-      # Stacks directory — must match HLC_STACK_DIR
-      - "${HLC_STACK_DIR:-/opt/stacks}:/stacks:ro"
+      # Stacks directory — must match HLC_STACK_DIR inside the container
+      # Override HLC_STACK_DIR_HOST in .env to point at your real stacks path
+      - "${HLC_STACK_DIR_HOST:-./stacks}:/stacks"
 
     # HLC must be able to read the Docker socket
     group_add:

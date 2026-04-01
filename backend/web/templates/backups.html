@@ -4,7 +4,9 @@
     <div class="page-title">Backups</div>
     <div class="page-subtitle">Volume snapshots &amp; restore points</div>
   </div>
-  <button class="btn btn-primary" hx-post="/api/v1/backup/_all" hx-confirm="Trigger backup for all containers?">
+  <button class="btn btn-primary" hx-post="/api/v1/backup/_all" hx-swap="none"
+    hx-on::after-request="htmx.trigger('#backup-list','load')"
+    hx-confirm="Trigger backup for all labelled containers?">
     <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     Backup All
   </button>
@@ -12,7 +14,7 @@
 
 <div class="g-card">
   <input type="text" class="form-input" placeholder="Search backups…" style="margin-bottom:.8rem;width:100%" id="backup-search">
-  <div id="backup-list" hx-get="/api/v1/backups" hx-trigger="load" hx-swap="innerHTML">
+  <div id="backup-list" hx-get="/ui/backups" hx-trigger="load" hx-swap="innerHTML">
     <div class="loading">Loading backups…</div>
   </div>
 </div>

@@ -56,7 +56,8 @@ nav.rail {
   border-right: 1px solid var(--glass-border);
 }
 
-nav.rail .logo {
+nav.rail .logo,
+nav.rail a.logo {
   width: 38px; height: 38px;
   border-radius: 10px;
   background: linear-gradient(135deg, var(--accent), #a78bfa);
@@ -65,6 +66,8 @@ nav.rail .logo {
   margin-bottom: 1.8rem;
   box-shadow: 0 4px 20px rgba(108, 140, 255, .25);
   text-decoration: none;
+  padding: 4px;
+  overflow: hidden;
 }
 
 nav.rail a {

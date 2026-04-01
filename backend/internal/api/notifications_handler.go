@@ -37,23 +37,50 @@ func (s *Server) HandleListChannels(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) HandleCreateChannel(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Name     string            `json:"name"`
-		Config   map[string]string `json:"config"`
-		MinLevel string            `json:"min_level"`
+	var chType, name, configJSON, minLevel string
+
+	if isFormRequest(r) {
+		if err := r.ParseForm(); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		chType = r.FormValue("type")
+		name = r.FormValue("name")
+		configJSON = r.FormValue("config_json")
+		minLevel = r.FormValue("min_level")
+	} else {
+		var body struct {
+			Type     string            `json:"type"`
+			Name     string            `json:"name"`
+			Config   map[string]string `json:"config"`
+			MinLevel string            `json:"min_level"`
+		}
+		if err := decodeJSON(r, &body); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		chType = body.Type
+		name = body.Name
+		minLevel = body.MinLevel
+		if body.Config != nil {
+			b, _ := json.Marshal(body.Config)
+			configJSON = string(b)
+		}
 	}
-	if err := decodeJSON(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
+
+	if configJSON == "" {
+		configJSON = "{}"
 	}
-	cfgJSON, _ := json.Marshal(body.Config)
+	if minLevel == "" {
+		minLevel = "info"
+	}
+	if chType == "" {
+		chType = "webhook"
+	}
 	db := s.deps.Settings.DB()
-	if body.MinLevel == "" {
-		body.MinLevel = "info"
-	}
 	_, err := db.ExecContext(r.Context(),
-		`INSERT INTO notification_channels (name, enabled, config, min_level) VALUES (?, 1, ?, ?)`,
-		body.Name, string(cfgJSON), body.MinLevel)
+		`INSERT INTO notification_channels (type, name, enabled, config, min_level) VALUES (?, ?, 1, ?, ?)`,
+		chType, name, configJSON, minLevel)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
