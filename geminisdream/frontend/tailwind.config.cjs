@@ -7,7 +7,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        bg: '#020308',
+        primary: '#020308',
         card: 'rgba(15, 17, 26, 0.7)',
         border: 'rgba(255, 255, 255, 0.08)',
         text: '#f8fafc',

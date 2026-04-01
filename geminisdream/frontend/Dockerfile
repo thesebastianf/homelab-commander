@@ -8,7 +8,7 @@ RUN npm install
 COPY . .
 
 # MANUALLY BUILD TAILWIND to bypass vite/postcss async bugs
-RUN npx tailwindcss -i ./src/index.css -o ./src/style.css
+RUN npx tailwindcss -i ./src/index.css -o ./src/style.css -c tailwind.config.cjs
 
 # Now build vite (it will treat style.css as a standard asset)
 RUN npm run build
