@@ -6,8 +6,8 @@ import { createStackBody, updateStackBody } from '../validation/schemas.js';
 import { auditLog } from '../lib/audit.js';
 import { sendNotification } from '../services/notifications.js';
 import { config } from '../config.js';
-import { mkdir, writeFile, readFile } from 'fs/promises';
-import { join } from 'path';
+import { mkdir, writeFile, readFile, readdir } from 'fs/promises';
+import { join, resolve, relative, dirname } from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 
@@ -275,7 +275,181 @@ router.post('/:id/restore/:version', asyncHandler(async (req, res) => {
   res.json({ ok: true, version: newVersion });
 }));
 
-// Helpers
+// ---- File Browser ----
+
+// List all files in a stack directory
+router.get('/:id/files', asyncHandler(async (req, res) => {
+  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [req.params.id]);
+  if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
+  const files = await listFilesRecursive(stack.stack_path, stack.stack_path);
+  res.json(files);
+}));
+
+// Read a single file — path supplied as ?path=relative/path
+router.get('/:id/file', asyncHandler(async (req, res) => {
+  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [req.params.id]);
+  if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
+
+  const filePath = String(req.query.path || '');
+  if (!filePath) { res.status(400).json({ error: 'path query param required' }); return; }
+
+  const safePath = resolve(join(stack.stack_path, filePath));
+  const base = resolve(stack.stack_path);
+  if (!safePath.startsWith(base + '/') && safePath !== base) {
+    res.status(400).json({ error: 'Invalid path' }); return;
+  }
+
+  try {
+    const content = await readFile(safePath, 'utf8');
+    res.json({ content });
+  } catch {
+    res.status(404).json({ error: 'File not found' });
+  }
+}));
+
+// Write a single file — path supplied as ?path=relative/path
+router.put('/:id/file', asyncHandler(async (req, res) => {
+  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [req.params.id]);
+  if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
+
+  const filePath = String(req.query.path || '');
+  if (!filePath) { res.status(400).json({ error: 'path query param required' }); return; }
+
+  const safePath = resolve(join(stack.stack_path, filePath));
+  const base = resolve(stack.stack_path);
+  if (!safePath.startsWith(base + '/') && safePath !== base) {
+    res.status(400).json({ error: 'Invalid path' }); return;
+  }
+
+  const { content } = req.body;
+  if (typeof content !== 'string') { res.status(400).json({ error: 'content must be string' }); return; }
+
+  await mkdir(dirname(safePath), { recursive: true });
+  await writeFile(safePath, content, 'utf8');
+
+  // Sync key files to DB
+  if (filePath === 'docker-compose.yml') {
+    await pool.query('UPDATE stacks SET compose_content = $1, updated_at = NOW() WHERE id = $2', [content, req.params.id]);
+  }
+  if (filePath === '.env') {
+    await pool.query('UPDATE stacks SET env_content = $1, updated_at = NOW() WHERE id = $2', [content, req.params.id]);
+  }
+
+  await auditLog('file_update', 'stack', String(req.params.id), { filePath });
+  res.json({ ok: true });
+}));
+
+// ---- Git Sync ----
+
+// Get git sync status
+router.get('/:id/git/status', asyncHandler(async (req, res) => {
+  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [req.params.id]);
+  if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
+
+  const gitConfig = stack.git_repo_config;
+  if (!gitConfig || !gitConfig.repoUrl) {
+    res.json({ configured: false }); return;
+  }
+
+  try {
+    const [branchOut, logOut, statusOut] = await Promise.all([
+      execFileAsync('git', ['branch', '--show-current'], { cwd: stack.stack_path }).then(r => r.stdout.trim()).catch(() => ''),
+      execFileAsync('git', ['log', '-1', '--format=%h|%s'], { cwd: stack.stack_path }).then(r => r.stdout.trim()).catch(() => '|'),
+      execFileAsync('git', ['status', '--short'], { cwd: stack.stack_path }).then(r => r.stdout.trim()).catch(() => '?'),
+    ]);
+    const [hash, ...msgParts] = logOut.split('|');
+    res.json({
+      configured: true,
+      branch: branchOut,
+      lastCommit: hash || '',
+      lastCommitMessage: msgParts.join('|') || '',
+      status: statusOut && statusOut !== '?' ? 'modified' : 'in_sync',
+      lastSynced: stack.updated_at,
+    });
+  } catch {
+    res.json({ configured: true, status: 'not_initialized', branch: '', lastCommit: '', lastCommitMessage: '' });
+  }
+}));
+
+// Pull from remote (sync)
+router.post('/:id/git/sync', asyncHandler(async (req, res) => {
+  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [req.params.id]);
+  if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
+
+  const gitConfig = stack.git_repo_config;
+  if (!gitConfig || !gitConfig.repoUrl) {
+    res.status(400).json({ error: 'No git repository configured' }); return;
+  }
+
+  try {
+    const isGit = await execFileAsync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: stack.stack_path })
+      .then(() => true).catch(() => false);
+
+    if (!isGit) {
+      await execFileAsync('git', ['init'], { cwd: stack.stack_path });
+      await execFileAsync('git', ['remote', 'add', 'origin', gitConfig.repoUrl], { cwd: stack.stack_path });
+    }
+
+    await execFileAsync('git', ['pull', 'origin', gitConfig.branch || 'main'], {
+      cwd: stack.stack_path, timeout: 30000,
+    });
+
+    // Sync compose content to DB
+    const composePath = join(stack.stack_path, gitConfig.composePath || 'docker-compose.yml');
+    const compose = await readFile(composePath, 'utf8').catch(() => null);
+    if (compose) {
+      await pool.query('UPDATE stacks SET compose_content = $1, updated_at = NOW() WHERE id = $2', [compose, req.params.id]);
+    }
+
+    await auditLog('git_sync', 'stack', String(req.params.id));
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}));
+
+// Push to remote
+router.post('/:id/git/push', asyncHandler(async (req, res) => {
+  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [req.params.id]);
+  if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
+
+  try {
+    await execFileAsync('git', ['add', '.'], { cwd: stack.stack_path });
+    const message = String(req.body?.message || 'Updated via THC');
+    await execFileAsync('git', ['commit', '-m', message], { cwd: stack.stack_path }).catch(() => {/* nothing to commit */});
+    await execFileAsync('git', ['push'], { cwd: stack.stack_path, timeout: 30000 });
+
+    await auditLog('git_push', 'stack', String(req.params.id));
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}));
+
+// ---- Helpers ----
+
+async function listFilesRecursive(dir: string, base: string, depth = 0): Promise<any[]> {
+  if (depth > 5) return [];
+  try {
+    const entries = await readdir(dir, { withFileTypes: true });
+    const result: any[] = [];
+    for (const entry of entries) {
+      if (entry.name === '.git') continue;
+      const fullPath = join(dir, entry.name);
+      const relPath = relative(base, fullPath);
+      if (entry.isDirectory()) {
+        const children = await listFilesRecursive(fullPath, base, depth + 1);
+        result.push({ name: entry.name, path: relPath, type: 'directory', children });
+      } else {
+        result.push({ name: entry.name, path: relPath, type: 'file' });
+      }
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
+
 function mapStack(row: any) {
   return {
     id: row.id,

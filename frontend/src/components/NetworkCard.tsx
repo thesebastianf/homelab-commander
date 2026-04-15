@@ -1,16 +1,8 @@
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Network as NetworkIcon, MoreHorizontal, Trash2, Info, Link2 } from 'lucide-react'
+import { Network as NetworkIcon, Trash2, Info } from 'lucide-react'
 import type { Network } from '@/lib/types'
-import { cn } from '@/lib/utils'
 
 interface NetworkCardProps {
   network: Network
@@ -23,82 +15,67 @@ export function NetworkCard({ network, onRemove, onInspect }: NetworkCardProps) 
   const isSystemNetwork = ['bridge', 'host', 'none'].includes(network.name)
 
   return (
-    <Card className="p-6 hover:shadow-lg transition-all duration-200 group">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-start gap-3 flex-1">
-          <div className="p-2 rounded-lg bg-accent/10 text-accent">
-            <NetworkIcon className="w-6 h-6" />
+    <Card className="p-4 hover:shadow-lg transition-all duration-200">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <div className="p-2 rounded-lg bg-accent/10 text-accent shrink-0">
+            <NetworkIcon className="w-5 h-5" />
           </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <h3 className="font-mono font-semibold text-lg">{network.name}</h3>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <h3 className="font-mono font-semibold text-sm">{network.name}</h3>
               {isSystemNetwork && (
-                <Badge variant="outline" className="font-mono text-xs">
-                  System
-                </Badge>
+                <Badge variant="outline" className="font-mono text-xs">system</Badge>
               )}
-              {isInUse && (
-                <Badge className="bg-success/10 text-success border-success/20 gap-1">
-                  <Link2 className="w-3.5 h-3.5" />
-                  {network.containers.length} Connected
-                </Badge>
-              )}
+              <Badge variant="outline" className="font-mono text-xs">{network.driver}</Badge>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="outline" className="font-mono">
-                {network.driver}
-              </Badge>
-              <span className="text-sm text-muted-foreground">•</span>
-              <span className="text-sm text-muted-foreground capitalize">{network.scope}</span>
-            </div>
-          </div>
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <MoreHorizontal className="w-5 h-5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onInspect?.(network.id)}>
-              <Info className="w-4 h-4 mr-2" />
-              Inspect
-            </DropdownMenuItem>
-            {!isSystemNetwork && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem 
-                  onClick={() => onRemove?.(network.id)} 
-                  className={cn("text-destructive", isInUse && "opacity-50 cursor-not-allowed")}
-                  disabled={isInUse}
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Remove {isInUse && "(In Use)"}
-                </DropdownMenuItem>
-              </>
+            {(network.subnet || network.gateway) && (
+              <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
+                {network.subnet && <span>subnet: {network.subnet}</span>}
+                {network.gateway && <span>gw: {network.gateway}</span>}
+              </div>
             )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {isInUse && (
-        <div className="text-xs text-muted-foreground">
-          <span className="font-semibold">Connected containers:</span>
-          <div className="flex flex-wrap gap-2 mt-2">
-            {network.containers.map(container => (
-              <Badge key={container} variant="outline" className="font-mono">
-                {container}
-              </Badge>
-            ))}
+            {isInUse && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {network.containers.map(container => (
+                  <span
+                    key={container}
+                    className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-success/15 text-success border border-success/30"
+                  >
+                    {container}
+                  </span>
+                ))}
+              </div>
+            )}
+            {!isInUse && (
+              <p className="text-xs text-muted-foreground italic mt-1">No containers connected</p>
+            )}
           </div>
         </div>
-      )}
-
-      {!isInUse && (
-        <div className="text-xs text-muted-foreground italic">
-          No containers connected
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => onInspect?.(network.id)}
+          >
+            <Info className="w-3.5 h-3.5 mr-1" />
+            Inspect
+          </Button>
+          {!isSystemNetwork && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => onRemove?.(network.id)}
+              disabled={isInUse}
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1" />
+              Remove
+            </Button>
+          )}
         </div>
-      )}
+      </div>
     </Card>
   )
 }

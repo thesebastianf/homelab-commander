@@ -11,9 +11,34 @@ interface MetricCardProps {
   }
   className?: string
   pulse?: boolean
+  compact?: boolean
 }
 
-export function MetricCard({ label, value, icon, trend, className, pulse }: MetricCardProps) {
+export function MetricCard({ label, value, icon, trend, className, pulse, compact }: MetricCardProps) {
+  if (compact) {
+    return (
+      <Card className={cn("p-4 relative overflow-hidden hover:shadow-md transition-all duration-200", className)}>
+        <div className="flex items-center gap-3">
+          <div className={cn(
+            "p-2 rounded-lg bg-primary/10 text-primary shrink-0",
+            pulse && "animate-pulse-glow"
+          )}>
+            {icon}
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider truncate">{label}</p>
+            <p className="text-lg font-bold font-mono tabular-nums leading-tight">{value}</p>
+            {trend && (
+              <span className={cn("text-xs font-mono", trend.isPositive ? 'text-success' : 'text-destructive')}>
+                {trend.isPositive ? '↑' : '↓'}{Math.abs(trend.value)}%
+              </span>
+            )}
+          </div>
+        </div>
+      </Card>
+    )
+  }
+
   return (
     <Card className={cn("p-6 relative overflow-hidden group hover:shadow-lg transition-all duration-200", className)}>
       <div className="flex items-start justify-between">

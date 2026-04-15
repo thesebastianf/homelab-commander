@@ -42,6 +42,10 @@ export async function fetchContainerLogs(id: string, tail = 100): Promise<string
   return data.logs;
 }
 
+export async function fetchAggregatedLogs(): Promise<import('./types').LogEntry[]> {
+  return request('/containers/logs/all');
+}
+
 export async function startContainer(id: string): Promise<void> {
   await request(`/containers/${encodeURIComponent(id)}/start`, { method: 'POST' });
 }
@@ -176,6 +180,38 @@ export async function fetchStackVersions(id: string): Promise<any[]> {
 
 export async function restoreStackVersion(id: string, version: number): Promise<void> {
   await request(`/stacks/${id}/restore/${version}`, { method: 'POST' });
+}
+
+// ---- Stack Files ----
+
+export async function fetchStackFiles(id: string): Promise<any[]> {
+  return request(`/stacks/${id}/files`);
+}
+
+export async function fetchStackFileContent(id: string, filePath: string): Promise<string> {
+  const data = await request<{ content: string }>(`/stacks/${id}/file?path=${encodeURIComponent(filePath)}`);
+  return data.content;
+}
+
+export async function saveStackFileContent(id: string, filePath: string, content: string): Promise<void> {
+  await request(`/stacks/${id}/file?path=${encodeURIComponent(filePath)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ content }),
+  });
+}
+
+// ---- Git Sync ----
+
+export async function fetchGitStatus(id: string): Promise<{ configured: boolean; branch?: string; lastCommit?: string; lastCommitMessage?: string; status?: string; lastSynced?: string }> {
+  return request(`/stacks/${id}/git/status`);
+}
+
+export async function syncStackGit(id: string): Promise<void> {
+  await request(`/stacks/${id}/git/sync`, { method: 'POST' });
+}
+
+export async function pushStackGit(id: string, message?: string): Promise<void> {
+  await request(`/stacks/${id}/git/push`, { method: 'POST', body: JSON.stringify({ message }) });
 }
 
 // ---- Backups ----

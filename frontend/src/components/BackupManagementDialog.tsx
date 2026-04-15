@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,51 +17,239 @@ import { Save, Clock, HardDrive, CheckCircle, XCircle, Loader2, Play, Database, 
 import type { Stack, BackupConfig, BackupJob } from '@/lib/types'
 import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
+import * as api from '@/lib/api'
 
 interface BackupManagementDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   stacks: Stack[]
-  onUpdateStack: (stack: Stack) => void
+  onUpdateStack?: (stack: Stack) => void
   backupsBasePath: string
   onUpdateBackupsPath: (path: string) => void
+  // Legacy props kept for backward compat but no longer used:
   backupConfigs?: Record<string, BackupConfig>
   backupJobs?: Record<string, BackupJob[]>
   onUpdateBackupConfig?: (stackId: string, config: Partial<BackupConfig>) => void
   onRunBackup?: (stackId: string) => void
 }
 
+// ── per-stack self-contained components ────────────────────────────────────
+
+const DEFAULT_CONFIG: BackupConfig = {
+  enabled: false, cronSchedule: '0 2 * * *', retentionDays: 7,
+  includeStackFolder: true, includeVolumes: true, includeDatabases: false,
+  useAdvancedRetention: false,
+}
+
+function StackBackupItem({ stack }: { stack: Stack }) {
+  const qc = useQueryClient()
+  const { data: cfg = DEFAULT_CONFIG } = useQuery({
+    queryKey: ['backupConfig', stack.id],
+    queryFn: () => api.fetchBackupConfig(stack.id),
+  })
+
+  const update = useMutation({
+    mutationFn: (patch: Partial<BackupConfig>) => api.updateBackupConfig(stack.id, { ...cfg, ...patch }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['backupConfig', stack.id] }),
+    onError: (e: any) => toast.error(`Save failed: ${e.message}`),
+  })
+
+  const run = useMutation({
+    mutationFn: () => api.runBackup(stack.id),
+    onSuccess: () => {
+      toast.success(`Backup started for ${stack.name}`)
+      qc.invalidateQueries({ queryKey: ['backupJobs', stack.id] })
+    },
+    onError: (e: any) => toast.error(`Backup failed: ${e.message}`),
+  })
+
+  const u = (patch: Partial<BackupConfig>) => update.mutate(patch)
+
+  return (
+    <AccordionItem value={stack.id} className="border rounded-lg px-4">
+      <AccordionTrigger className="hover:no-underline">
+        <div className="flex items-center gap-3 flex-1">
+          <span className="font-mono text-sm">{stack.name}</span>
+          <Badge variant="outline" className="text-[10px]">{stack.services} services</Badge>
+          {cfg.enabled && <Badge className="text-[10px] bg-primary/20 text-primary">Enabled</Badge>}
+        </div>
+      </AccordionTrigger>
+      <AccordionContent className="space-y-4 pb-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <Label>Enable Backups</Label>
+            <p className="text-xs text-muted-foreground">Automated scheduled backups</p>
+          </div>
+          <Switch checked={cfg.enabled} onCheckedChange={(v) => u({ enabled: v })} />
+        </div>
+
+        {cfg.enabled && (
+          <>
+            <Card className="p-3 space-y-3">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Schedule &amp; Timing</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Schedule</Label>
+                  <Select value={cfg.cronSchedule} onValueChange={(v) => u({ cronSchedule: v })}>
+                    <SelectTrigger className="h-8 text-xs font-mono"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0 * * * *">Hourly</SelectItem>
+                      <SelectItem value="0 2 * * *">Daily at 2 AM</SelectItem>
+                      <SelectItem value="0 2 * * 0">Weekly (Sunday)</SelectItem>
+                      <SelectItem value="0 2 1 * *">Monthly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end">
+                  <Button size="sm" variant="outline" disabled={run.isPending} onClick={() => run.mutate()}>
+                    {run.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Play className="w-3 h-3 mr-1" />}
+                    Run Now
+                  </Button>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-3 space-y-3">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Retention Policy</Label>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Checkbox checked={!cfg.useAdvancedRetention} onCheckedChange={() => u({ useAdvancedRetention: false })} />
+                  <Label className="text-xs">Simple (days)</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox checked={cfg.useAdvancedRetention} onCheckedChange={() => u({ useAdvancedRetention: true })} />
+                  <Label className="text-xs">Advanced</Label>
+                </div>
+              </div>
+              {!cfg.useAdvancedRetention ? (
+                <div className="space-y-1">
+                  <Label className="text-xs">Keep backups for (days)</Label>
+                  <Input type="number" value={cfg.retentionDays} onChange={(e) => u({ retentionDays: Number(e.target.value) })} className="h-8 text-xs font-mono w-24" min={1} max={365} />
+                </div>
+              ) : (
+                <div className="grid grid-cols-4 gap-2">
+                  {(['daily', 'weekly', 'monthly', 'yearly'] as const).map(period => (
+                    <div key={period} className="space-y-1">
+                      <Label className="text-xs capitalize">{period}</Label>
+                      <Input type="number" value={cfg.retentionPolicy?.[period] ?? (period === 'daily' ? 7 : period === 'weekly' ? 4 : period === 'monthly' ? 6 : 2)}
+                        onChange={(e) => u({ retentionPolicy: { ...{ daily: 7, weekly: 4, monthly: 6, yearly: 2, ...cfg.retentionPolicy }, [period]: Number(e.target.value) } })}
+                        className="h-8 text-xs font-mono" min={0} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            <Card className="p-3 space-y-3">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Backup Contents</Label>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox checked={cfg.includeStackFolder} onCheckedChange={(v) => u({ includeStackFolder: !!v })} />
+                  <Label className="text-xs">Stack folder (compose + env)</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox checked={cfg.includeVolumes} onCheckedChange={(v) => u({ includeVolumes: !!v })} />
+                  <Label className="text-xs">Docker volumes</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox checked={cfg.includeDatabases} onCheckedChange={(v) => u({ includeDatabases: !!v })} />
+                  <Label className="text-xs">Database dumps</Label>
+                </div>
+              </div>
+              {cfg.includeDatabases && (
+                <div className="ml-5 p-2 bg-muted/50 rounded space-y-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Database Type</Label>
+                    <Select value={cfg.databaseType || 'postgres'} onValueChange={(v) => u({ databaseType: v })}>
+                      <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="postgres">PostgreSQL</SelectItem>
+                        <SelectItem value="mysql">MySQL / MariaDB</SelectItem>
+                        <SelectItem value="mongo">MongoDB</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Container Name</Label>
+                    <Input value={cfg.databaseConfig?.containerName || ''} onChange={(e) => u({ databaseConfig: { ...cfg.databaseConfig, containerName: e.target.value } })} className="h-7 text-xs font-mono" placeholder="postgres-db" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Database Name</Label>
+                    <Input value={cfg.databaseConfig?.databaseName || ''} onChange={(e) => u({ databaseConfig: { ...cfg.databaseConfig, databaseName: e.target.value } })} className="h-7 text-xs font-mono" placeholder="mydb" />
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            <Card className="p-3 space-y-3">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Advanced Options</Label>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2"><FileArchive className="w-3.5 h-3.5 text-muted-foreground" /><Label className="text-xs">Compression Level (1-9)</Label></div>
+                  <Input type="number" value={cfg.compressionLevel ?? 6} onChange={(e) => u({ compressionLevel: Number(e.target.value) })} className="h-7 text-xs font-mono w-16" min={1} max={9} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2"><ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" /><Label className="text-xs">Encrypt Backup</Label></div>
+                  <Switch checked={cfg.encrypted ?? false} onCheckedChange={(v) => u({ encrypted: v })} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2"><HardDrive className="w-3.5 h-3.5 text-muted-foreground" /><Label className="text-xs">Incremental Backup</Label></div>
+                  <Switch checked={cfg.incremental ?? false} onCheckedChange={(v) => u({ incremental: v })} />
+                </div>
+              </div>
+            </Card>
+          </>
+        )}
+      </AccordionContent>
+    </AccordionItem>
+  )
+}
+
+function StackJobHistoryItems({ stack }: { stack: Stack }) {
+  const { data: jobs = [] } = useQuery({
+    queryKey: ['backupJobs', stack.id],
+    queryFn: () => api.fetchBackupJobs(stack.id),
+  })
+  if (jobs.length === 0) return null
+  return (
+    <>
+      {jobs.map((job: BackupJob) => (
+        <div key={job.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
+          <div className="flex items-center gap-3">
+            {job.status === 'completed' ? (
+              <CheckCircle className="w-4 h-4 text-green-500" />
+            ) : job.status === 'failed' ? (
+              <XCircle className="w-4 h-4 text-destructive" />
+            ) : (
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+            )}
+            <div>
+              <span className="text-sm font-mono">{stack.name}</span>
+              <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(job.startedAt), { addSuffix: true })}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant={job.status === 'completed' ? 'default' : job.status === 'failed' ? 'destructive' : 'outline'} className="text-[10px]">{job.status}</Badge>
+            {job.sizeBytes > 0 && <span className="text-xs text-muted-foreground font-mono">{(job.sizeBytes / 1024 / 1024).toFixed(1)} MB</span>}
+          </div>
+        </div>
+      ))}
+    </>
+  )
+}
+
 export function BackupManagementDialog({
   open,
   onOpenChange,
   stacks,
-  onUpdateStack,
   backupsBasePath,
   onUpdateBackupsPath,
-  backupConfigs = {},
-  backupJobs = {},
-  onUpdateBackupConfig,
-  onRunBackup,
 }: BackupManagementDialogProps) {
   const [localBackupsPath, setLocalBackupsPath] = useState(backupsBasePath)
 
   useEffect(() => {
     setLocalBackupsPath(backupsBasePath)
   }, [backupsBasePath])
-
-  const getConfig = (stackId: string): BackupConfig => backupConfigs[stackId] || {
-    enabled: false,
-    cronSchedule: '0 2 * * *',
-    retentionDays: 7,
-    includeStackFolder: true,
-    includeVolumes: true,
-    includeDatabases: false,
-    useAdvancedRetention: false,
-  }
-
-  const updateConfig = (stackId: string, patch: Partial<BackupConfig>) => {
-    onUpdateBackupConfig?.(stackId, patch)
-  }
 
   const nasScript = `#!/bin/bash
 # NAS Pull Script — run from your NAS via cron
@@ -100,226 +289,9 @@ echo "Backup sync completed at $(date)"
           <TabsContent value="stacks" className="mt-4">
             <ScrollArea className="h-[500px]">
               <Accordion type="multiple" className="space-y-2">
-                {stacks.map((stack) => {
-                  const cfg = getConfig(stack.id)
-                  return (
-                    <AccordionItem key={stack.id} value={stack.id} className="border rounded-lg px-4">
-                      <AccordionTrigger className="hover:no-underline">
-                        <div className="flex items-center gap-3 flex-1">
-                          <span className="font-mono text-sm">{stack.name}</span>
-                          <Badge variant="outline" className="text-[10px]">{stack.services} services</Badge>
-                          {cfg.enabled && <Badge className="text-[10px] bg-primary/20 text-primary">Enabled</Badge>}
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="space-y-4 pb-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <Label>Enable Backups</Label>
-                            <p className="text-xs text-muted-foreground">Automated scheduled backups</p>
-                          </div>
-                          <Switch
-                            checked={cfg.enabled}
-                            onCheckedChange={(v) => updateConfig(stack.id, { enabled: v })}
-                          />
-                        </div>
-
-                        {cfg.enabled && (
-                          <>
-                            {/* Schedule & Timing */}
-                            <Card className="p-3 space-y-3">
-                              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Schedule & Timing</Label>
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1">
-                                  <Label className="text-xs">Schedule</Label>
-                                  <Select
-                                    value={cfg.cronSchedule}
-                                    onValueChange={(v) => updateConfig(stack.id, { cronSchedule: v })}
-                                  >
-                                    <SelectTrigger className="h-8 text-xs font-mono">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="0 * * * *">Hourly</SelectItem>
-                                      <SelectItem value="0 2 * * *">Daily at 2 AM</SelectItem>
-                                      <SelectItem value="0 2 * * 0">Weekly (Sunday)</SelectItem>
-                                      <SelectItem value="0 2 1 * *">Monthly</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="flex items-end">
-                                  <Button size="sm" variant="outline" onClick={() => onRunBackup?.(stack.id)}>
-                                    <Play className="w-3 h-3 mr-1" /> Run Now
-                                  </Button>
-                                </div>
-                              </div>
-                            </Card>
-
-                            {/* Retention Policy */}
-                            <Card className="p-3 space-y-3">
-                              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Retention Policy</Label>
-                              <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-2">
-                                  <Checkbox
-                                    checked={!cfg.useAdvancedRetention}
-                                    onCheckedChange={() => updateConfig(stack.id, { useAdvancedRetention: false })}
-                                  />
-                                  <Label className="text-xs">Simple (days)</Label>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Checkbox
-                                    checked={cfg.useAdvancedRetention}
-                                    onCheckedChange={() => updateConfig(stack.id, { useAdvancedRetention: true })}
-                                  />
-                                  <Label className="text-xs">Advanced</Label>
-                                </div>
-                              </div>
-                              {!cfg.useAdvancedRetention ? (
-                                <div className="space-y-1">
-                                  <Label className="text-xs">Keep backups for (days)</Label>
-                                  <Input
-                                    type="number"
-                                    value={cfg.retentionDays}
-                                    onChange={(e) => updateConfig(stack.id, { retentionDays: Number(e.target.value) })}
-                                    className="h-8 text-xs font-mono w-24"
-                                    min={1}
-                                    max={365}
-                                  />
-                                </div>
-                              ) : (
-                                <div className="grid grid-cols-4 gap-2">
-                                  {(['daily', 'weekly', 'monthly', 'yearly'] as const).map(period => (
-                                    <div key={period} className="space-y-1">
-                                      <Label className="text-xs capitalize">{period}</Label>
-                                      <Input
-                                        type="number"
-                                        value={cfg.retentionPolicy?.[period] ?? (period === 'daily' ? 7 : period === 'weekly' ? 4 : period === 'monthly' ? 6 : 2)}
-                                        onChange={(e) => updateConfig(stack.id, {
-                                          retentionPolicy: {
-                                            ...{ daily: 7, weekly: 4, monthly: 6, yearly: 2, ...cfg.retentionPolicy },
-                                            [period]: Number(e.target.value)
-                                          }
-                                        })}
-                                        className="h-8 text-xs font-mono"
-                                        min={0}
-                                      />
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </Card>
-
-                            {/* Backup Contents */}
-                            <Card className="p-3 space-y-3">
-                              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Backup Contents</Label>
-                              <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <Checkbox
-                                    checked={cfg.includeStackFolder}
-                                    onCheckedChange={(v) => updateConfig(stack.id, { includeStackFolder: !!v })}
-                                  />
-                                  <Label className="text-xs">Stack folder (compose + env)</Label>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Checkbox
-                                    checked={cfg.includeVolumes}
-                                    onCheckedChange={(v) => updateConfig(stack.id, { includeVolumes: !!v })}
-                                  />
-                                  <Label className="text-xs">Docker volumes</Label>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Checkbox
-                                    checked={cfg.includeDatabases}
-                                    onCheckedChange={(v) => updateConfig(stack.id, { includeDatabases: !!v })}
-                                  />
-                                  <Label className="text-xs">Database dumps</Label>
-                                </div>
-                              </div>
-                              {cfg.includeDatabases && (
-                                <div className="ml-5 p-2 bg-muted/50 rounded space-y-2">
-                                  <div className="space-y-1">
-                                    <Label className="text-xs">Database Type</Label>
-                                    <Select
-                                      value={cfg.databaseType || 'postgres'}
-                                      onValueChange={(v) => updateConfig(stack.id, { databaseType: v })}
-                                    >
-                                      <SelectTrigger className="h-7 text-xs">
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="postgres">PostgreSQL</SelectItem>
-                                        <SelectItem value="mysql">MySQL / MariaDB</SelectItem>
-                                        <SelectItem value="mongo">MongoDB</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Label className="text-xs">Container Name</Label>
-                                    <Input
-                                      value={cfg.databaseConfig?.containerName || ''}
-                                      onChange={(e) => updateConfig(stack.id, { databaseConfig: { ...cfg.databaseConfig, containerName: e.target.value } })}
-                                      className="h-7 text-xs font-mono"
-                                      placeholder="postgres-db"
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Label className="text-xs">Database Name</Label>
-                                    <Input
-                                      value={cfg.databaseConfig?.databaseName || ''}
-                                      onChange={(e) => updateConfig(stack.id, { databaseConfig: { ...cfg.databaseConfig, databaseName: e.target.value } })}
-                                      className="h-7 text-xs font-mono"
-                                      placeholder="mydb"
-                                    />
-                                  </div>
-                                </div>
-                              )}
-                            </Card>
-
-                            {/* Advanced Options */}
-                            <Card className="p-3 space-y-3">
-                              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Advanced Options</Label>
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <FileArchive className="w-3.5 h-3.5 text-muted-foreground" />
-                                    <Label className="text-xs">Compression Level (1-9)</Label>
-                                  </div>
-                                  <Input
-                                    type="number"
-                                    value={cfg.compressionLevel ?? 6}
-                                    onChange={(e) => updateConfig(stack.id, { compressionLevel: Number(e.target.value) })}
-                                    className="h-7 text-xs font-mono w-16"
-                                    min={1}
-                                    max={9}
-                                  />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
-                                    <Label className="text-xs">Encrypt Backup</Label>
-                                  </div>
-                                  <Switch
-                                    checked={cfg.encrypted ?? false}
-                                    onCheckedChange={(v) => updateConfig(stack.id, { encrypted: v })}
-                                  />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <HardDrive className="w-3.5 h-3.5 text-muted-foreground" />
-                                    <Label className="text-xs">Incremental Backup</Label>
-                                  </div>
-                                  <Switch
-                                    checked={cfg.incremental ?? false}
-                                    onCheckedChange={(v) => updateConfig(stack.id, { incremental: v })}
-                                  />
-                                </div>
-                              </div>
-                            </Card>
-                          </>
-                        )}
-                      </AccordionContent>
-                    </AccordionItem>
-                  )
-                })}
+                {stacks.map((stack) => (
+                  <StackBackupItem key={stack.id} stack={stack} />
+                ))}
               </Accordion>
             </ScrollArea>
           </TabsContent>
@@ -327,40 +299,9 @@ echo "Backup sync completed at $(date)"
           <TabsContent value="history" className="mt-4">
             <ScrollArea className="h-[500px]">
               <div className="space-y-2">
-                {stacks.flatMap(stack =>
-                  (backupJobs[stack.id] || []).map(job => (
-                    <div key={job.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
-                      <div className="flex items-center gap-3">
-                        {job.status === 'completed' ? (
-                          <CheckCircle className="w-4 h-4 text-green-500" />
-                        ) : job.status === 'failed' ? (
-                          <XCircle className="w-4 h-4 text-destructive" />
-                        ) : (
-                          <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                        )}
-                        <div>
-                          <span className="text-sm font-mono">{stack.name}</span>
-                          <p className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(new Date(job.startedAt), { addSuffix: true })}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Badge variant={job.status === 'completed' ? 'default' : job.status === 'failed' ? 'destructive' : 'outline'} className="text-[10px]">
-                          {job.status}
-                        </Badge>
-                        {job.sizeBytes > 0 && (
-                          <span className="text-xs text-muted-foreground font-mono">
-                            {(job.sizeBytes / 1024 / 1024).toFixed(1)} MB
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-                {stacks.every(s => !(backupJobs[s.id]?.length)) && (
-                  <p className="text-sm text-muted-foreground text-center py-12">No backup history yet</p>
-                )}
+                {stacks.map((stack) => (
+                  <StackJobHistoryItems key={stack.id} stack={stack} />
+                ))}
               </div>
             </ScrollArea>
           </TabsContent>

@@ -5,7 +5,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Play, Square, RotateCw, Trash2, MoreHorizontal, Terminal, FileText, Box, CloudDownload, Zap, RefreshCw } from 'lucide-react'
@@ -26,139 +25,134 @@ interface ContainerCardProps {
 export function ContainerCard({
   container, onStart, onStop, onRestart, onRemove, onViewLogs, onOpenTerminal, smartStartEnabled,
 }: ContainerCardProps) {
-  const getStatusColor = (status: Container['status']) => {
-    switch (status) {
-      case 'running': return 'bg-success text-success-foreground'
-      case 'stopped': return 'bg-muted text-muted-foreground'
-      case 'paused': return 'bg-warning text-warning-foreground'
-      case 'restarting': return 'bg-info text-info-foreground'
-      default: return 'bg-muted text-muted-foreground'
-    }
+  const isRunning = container.status === 'running'
+  const isStopped = container.status === 'stopped'
+
+  const statusColor =
+    container.status === 'running' ? 'bg-success/15 text-success border-success/30' :
+    container.status === 'stopped' ? 'bg-muted/50 text-muted-foreground border-border' :
+    container.status === 'paused' ? 'bg-warning/15 text-warning border-warning/30' :
+    'bg-info/15 text-info border-info/30'
+
+  const formatBytes = (bytes: number) => {
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`
+    return `${bytes} B`
   }
 
-  const isRunning = container.status === 'running'
+  const formatNet = (kbps: number) => {
+    const mbps = kbps / 1024
+    return mbps >= 1 ? `${mbps.toFixed(1)} MB/s` : `${kbps.toFixed(0)} KB/s`
+  }
 
   return (
-    <Card className="p-6 hover:shadow-lg transition-all duration-200 group relative overflow-hidden border-l-4" style={{
-      borderLeftColor: isRunning ? 'var(--success)' : 'var(--border)'
-    }}>
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-start gap-3">
-          <div className="p-2 rounded-lg bg-primary/10 text-primary">
-            <Box className="w-6 h-6" />
+    <Card className={cn(
+      "px-5 py-4 hover:shadow-md transition-all duration-200 border-l-4",
+      isRunning ? "border-l-success" : isStopped ? "border-l-border" : "border-l-warning"
+    )}>
+      {/* Top row: name + status + badges + actions */}
+      <div className="flex items-center gap-3 justify-between">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="p-1.5 rounded-md bg-primary/10 text-primary shrink-0">
+            <Box className="w-4 h-4" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-mono font-semibold text-lg">{container.name}</h3>
-              {container.updateAvailable && (
-                <Badge variant="outline" className="border-warning text-warning">
-                  <CloudDownload className="w-3 h-3 mr-1" />
-                  Update
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-mono font-semibold text-base leading-tight truncate">{container.name}</h3>
+              <Badge className={cn("text-xs px-2 py-0 border", statusColor)}>
+                {container.status}
+              </Badge>
+              {container.restartPolicy && container.restartPolicy !== 'no' && (
+                <Badge variant="outline" className="text-xs font-mono gap-1 px-1.5 py-0">
+                  <RefreshCw className="w-2.5 h-2.5" />
+                  {container.restartPolicy}
                 </Badge>
               )}
-              {container.autoUpdate && (
-                <Badge variant="secondary" className="text-xs">Auto-Update</Badge>
+              {smartStartEnabled && (
+                <Badge variant="outline" className="text-xs border-warning text-warning gap-1 px-1.5 py-0">
+                  <Zap className="w-2.5 h-2.5" />
+                  Smart Start
+                </Badge>
+              )}
+              {container.updateAvailable && (
+                <Badge variant="outline" className="text-xs border-warning text-warning gap-1 px-1.5 py-0">
+                  <CloudDownload className="w-2.5 h-2.5" />
+                  Update avail.
+                </Badge>
               )}
             </div>
-            <p className="text-sm text-muted-foreground font-mono">{container.image}</p>
+            <p className="text-xs text-muted-foreground font-mono mt-0.5 truncate">{container.image}</p>
           </div>
         </div>
-        <Badge className={cn(getStatusColor(container.status), isRunning && "animate-pulse-glow")}>
-          {container.status}
-        </Badge>
+
+        {/* Action buttons right-aligned */}
+        <div className="flex items-center gap-1 shrink-0">
+          {!isRunning && (
+            <Button onClick={() => onStart(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-success hover:text-success hover:bg-success/10">
+              <Play className="w-4 h-4" />
+            </Button>
+          )}
+          {isRunning && (
+            <>
+              <Button onClick={() => onStop(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive">
+                <Square className="w-4 h-4" />
+              </Button>
+              <Button onClick={() => onRestart(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
+                <RotateCw className="w-4 h-4" />
+              </Button>
+              <Button onClick={() => onViewLogs(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
+                <FileText className="w-4 h-4" />
+              </Button>
+              <Button onClick={() => onOpenTerminal(container.id)} size="sm" variant="ghost"
+                className="h-8 w-8 p-0 text-primary hover:text-primary hover:bg-primary/10 border border-primary/30">
+                <Terminal className="w-4 h-4" />
+              </Button>
+            </>
+          )}
+          {isStopped && (
+            <Button onClick={() => onRemove(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive">
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground">
+                <MoreHorizontal className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {isRunning && (
+                <DropdownMenuItem onClick={() => onViewLogs(container.id)}>
+                  <FileText className="w-4 h-4 mr-2" /> View Logs
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={() => onRemove(container.id)} className="text-destructive">
+                <Trash2 className="w-4 h-4 mr-2" /> Remove
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
-      {/* Restart policy & Smart Start indicators */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        {container.restartPolicy && container.restartPolicy !== 'no' && (
-          <Badge variant="outline" className="text-xs font-mono gap-1">
-            <RefreshCw className="w-3 h-3" />
-            {container.restartPolicy}
-          </Badge>
-        )}
-        {smartStartEnabled && (
-          <Badge variant="outline" className="text-xs border-warning text-warning gap-1">
-            <Zap className="w-3 h-3" />
-            Smart Start
-          </Badge>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
-        <div>
-          <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">CPU</p>
-          <div className="flex items-baseline gap-1">
-            <span className="font-mono font-semibold text-lg">{container.cpu.toFixed(1)}</span>
-            <span className="text-muted-foreground">%</span>
-          </div>
-        </div>
-        <div>
-          <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Memory</p>
-          <div className="flex items-baseline gap-1">
-            <span className="font-mono font-semibold text-lg">{container.memory.toFixed(0)}</span>
-            <span className="text-muted-foreground">MB</span>
-          </div>
-        </div>
-        <div>
-          <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Network RX</p>
-          <div className="flex items-baseline gap-1">
-            <span className="font-mono font-semibold text-lg">{(container.network.rx / 1024).toFixed(1)}</span>
-            <span className="text-muted-foreground">KB/s</span>
-          </div>
-        </div>
-        <div>
-          <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Network TX</p>
-          <div className="flex items-baseline gap-1">
-            <span className="font-mono font-semibold text-lg">{(container.network.tx / 1024).toFixed(1)}</span>
-            <span className="text-muted-foreground">KB/s</span>
-          </div>
-        </div>
-      </div>
-
-      {container.ports.length > 0 && (
-        <div className="mb-4 pb-4 border-b border-border">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Ports</p>
-          <div className="flex flex-wrap gap-2">
-            {container.ports.map((port, idx) => (
-              <Badge key={idx} variant="outline" className="font-mono text-xs">{port}</Badge>
-            ))}
-          </div>
+      {/* Metrics row (only for running containers) */}
+      {isRunning && (
+        <div className="flex items-center gap-4 mt-2 text-xs font-mono text-muted-foreground flex-wrap">
+          <span>CPU <span className="text-foreground font-semibold">{container.cpu.toFixed(1)}%</span></span>
+          <span>MEM <span className="text-foreground font-semibold">{container.memory.toFixed(0)} MB</span></span>
+          <span>NET ↓ <span className="text-foreground font-semibold">{formatNet(container.network.rx / 1024)}</span></span>
+          <span>NET ↑ <span className="text-foreground font-semibold">{formatNet(container.network.tx / 1024)}</span></span>
         </div>
       )}
 
-      <div className="flex items-center gap-2 flex-wrap">
-        {!isRunning && (
-          <Button onClick={() => onStart(container.id)} size="sm" variant="outline">
-            <Play className="w-4 h-4 mr-2" /> Start
-          </Button>
-        )}
-        {isRunning && (
-          <>
-            <Button onClick={() => onStop(container.id)} size="sm" variant="outline">
-              <Square className="w-4 h-4 mr-2" /> Stop
-            </Button>
-            <Button onClick={() => onRestart(container.id)} size="sm" variant="outline">
-              <RotateCw className="w-4 h-4 mr-2" /> Restart
-            </Button>
-          </>
-        )}
-        <Button onClick={() => onViewLogs(container.id)} size="sm" variant="outline">
-          <FileText className="w-4 h-4 mr-2" /> Logs
-        </Button>
-        <Button onClick={() => onOpenTerminal(container.id)} size="sm" variant="outline" disabled={!isRunning}>
-          <Terminal className="w-4 h-4 mr-2" /> Terminal
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm"><MoreHorizontal className="w-5 h-5" /></Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onRemove(container.id)} className="text-destructive">
-              <Trash2 className="w-4 h-4 mr-2" /> Remove
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      {/* Ports */}
+      {container.ports.length > 0 && (
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+          <span className="text-xs text-muted-foreground">Ports:</span>
+          {container.ports.map((port, idx) => (
+            <Badge key={idx} variant="outline" className="font-mono text-xs px-1.5 py-0">{port}</Badge>
+          ))}
+        </div>
+      )}
     </Card>
   )
 }

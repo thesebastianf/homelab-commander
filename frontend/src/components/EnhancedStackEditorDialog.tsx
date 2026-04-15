@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,9 +11,10 @@ import { Switch } from '@/components/ui/switch'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { FileCode, File, Clock, GitBranch, Diff, Copy, RefreshCw } from 'lucide-react'
+import { FileCode, File, Clock, GitBranch, Diff, Copy, RefreshCw, FolderOpen, FileText, Save, Loader2, GitCommit, CheckCircle2 } from 'lucide-react'
 import type { Stack } from '@/lib/types'
 import { toast } from 'sonner'
+import * as api from '@/lib/api'
 
 interface EnhancedStackEditorDialogProps {
   open: boolean
@@ -41,6 +43,79 @@ export function EnhancedStackEditorDialog({
   const [gitComposePath, setGitComposePath] = useState('docker-compose.yml')
   const [gitAutoSync, setGitAutoSync] = useState(false)
   const [compareVersion, setCompareVersion] = useState<number | null>(null)
+  const [activeTab, setActiveTab] = useState('compose')
+  const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const [fileContent, setFileContent] = useState('')
+  const [fileDirty, setFileDirty] = useState(false)
+  const [pushMessage, setPushMessage] = useState('')
+
+  const qc = useQueryClient()
+
+  const { data: stackFiles = [] } = useQuery({
+    queryKey: ['stackFiles', stack?.id],
+    queryFn: () => api.fetchStackFiles(stack!.id),
+    enabled: open && activeTab === 'files' && !!stack,
+  })
+
+  const { data: rawFileContent } = useQuery({
+    queryKey: ['stackFileContent', stack?.id, selectedFile],
+    queryFn: () => api.fetchStackFileContent(stack!.id, selectedFile!),
+    enabled: open && !!stack && !!selectedFile,
+  })
+
+  useEffect(() => {
+    if (rawFileContent !== undefined) {
+      setFileContent(rawFileContent)
+      setFileDirty(false)
+    }
+  }, [rawFileContent])
+
+  const { data: gitStatus } = useQuery({
+    queryKey: ['gitStatus', stack?.id],
+    queryFn: () => api.fetchGitStatus(stack!.id),
+    enabled: open && activeTab === 'git' && !!stack,
+    refetchInterval: 30000,
+  })
+
+  const saveFile = useMutation({
+    mutationFn: () => api.saveStackFileContent(stack!.id, selectedFile!, fileContent),
+    onSuccess: () => {
+      toast.success('File saved')
+      setFileDirty(false)
+      qc.invalidateQueries({ queryKey: ['stacks'] })
+    },
+    onError: (e: any) => toast.error(`Save failed: ${e.message}`),
+  })
+
+  const syncGit = useMutation({
+    mutationFn: () => api.syncStackGit(stack!.id),
+    onSuccess: () => {
+      toast.success('Git sync complete')
+      qc.invalidateQueries({ queryKey: ['stacks'] })
+      qc.invalidateQueries({ queryKey: ['gitStatus', stack?.id] })
+    },
+    onError: (e: any) => toast.error(`Sync failed: ${e.message}`),
+  })
+
+  const pushGit = useMutation({
+    mutationFn: () => api.pushStackGit(stack!.id, pushMessage || undefined),
+    onSuccess: () => {
+      toast.success('Changes pushed to remote')
+      setPushMessage('')
+      qc.invalidateQueries({ queryKey: ['gitStatus', stack?.id] })
+    },
+    onError: (e: any) => toast.error(`Push failed: ${e.message}`),
+  })
+
+  const restoreVersion = useMutation({
+    mutationFn: (version: number) => api.restoreStackVersion(stack!.id, version),
+    onSuccess: () => {
+      toast.success('Stack restored')
+      qc.invalidateQueries({ queryKey: ['stacks'] })
+      onOpenChange(false)
+    },
+    onError: (e: any) => toast.error(`Restore failed: ${e.message}`),
+  })
 
   useEffect(() => {
     if (stack) {
@@ -119,8 +194,8 @@ export function EnhancedStackEditorDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="compose" className="mt-4">
-          <TabsList className="grid w-full grid-cols-5">
+        <Tabs defaultValue="compose" className="mt-4" onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="compose" className="gap-2">
               <FileCode className="w-4 h-4" />
               Compose
@@ -128,6 +203,10 @@ export function EnhancedStackEditorDialog({
             <TabsTrigger value="env" className="gap-2">
               <File className="w-4 h-4" />
               .env
+            </TabsTrigger>
+            <TabsTrigger value="files" className="gap-2">
+              <FolderOpen className="w-4 h-4" />
+              Files
             </TabsTrigger>
             <TabsTrigger value="git" className="gap-2">
               <GitBranch className="w-4 h-4" />
@@ -167,6 +246,59 @@ export function EnhancedStackEditorDialog({
               className="min-h-[300px] font-mono text-sm"
               placeholder="KEY=value"
             />
+          </TabsContent>
+
+          <TabsContent value="files" className="mt-4">
+            <div className="flex gap-3 h-[420px]">
+              {/* File Tree */}
+              <div className="w-56 shrink-0 rounded-lg border border-border/60 overflow-hidden flex flex-col">
+                <div className="px-3 py-2 bg-muted/30 border-b border-border/60">
+                  <p className="text-xs font-mono text-muted-foreground">Stack Directory</p>
+                </div>
+                <ScrollArea className="flex-1">
+                  <div className="py-1">
+                    {stackFiles.length === 0 && (
+                      <p className="text-xs text-muted-foreground text-center py-4 px-2">No files found</p>
+                    )}
+                    {(stackFiles as any[]).map((f: any) => (
+                      <button
+                        key={f.path}
+                        onClick={() => f.type !== 'dir' && setSelectedFile(f.path)}
+                        className={`w-full flex items-center gap-1.5 text-left py-1.5 text-xs font-mono hover:bg-muted/40 transition-colors ${
+                          selectedFile === f.path ? 'bg-primary/10 text-primary' : 'text-foreground/80'
+                        } ${f.type === 'dir' ? 'cursor-default' : 'cursor-pointer'}`}
+                        style={{ paddingLeft: `${(f.depth ?? 0) * 12 + 12}px` }}>
+                        {f.type === 'dir'
+                          ? <FolderOpen className="w-3 h-3 shrink-0 text-muted-foreground" />
+                          : <FileText className="w-3 h-3 shrink-0" />}
+                        <span className="truncate">{f.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+              {/* Editor */}
+              <div className="flex-1 flex flex-col gap-2 min-w-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono text-muted-foreground truncate">{selectedFile ?? 'Select a file to edit'}</span>
+                  <Button
+                    size="sm"
+                    disabled={!fileDirty || saveFile.isPending || !selectedFile}
+                    onClick={() => saveFile.mutate()}
+                    className="h-7 text-xs gap-1.5 shrink-0">
+                    {saveFile.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                    Save
+                  </Button>
+                </div>
+                <Textarea
+                  value={fileContent}
+                  onChange={(e) => { setFileContent(e.target.value); setFileDirty(true) }}
+                  className="flex-1 font-mono text-xs resize-none"
+                  placeholder={selectedFile ? 'Loading...' : 'Select a file from the tree'}
+                  disabled={!selectedFile}
+                />
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="git" className="mt-4 space-y-4">
@@ -217,13 +349,44 @@ export function EnhancedStackEditorDialog({
                     </div>
                     <Switch checked={gitAutoSync} onCheckedChange={setGitAutoSync} />
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => toast.info('Syncing...')}>
-                      <RefreshCw className="w-4 h-4 mr-2" /> Sync Now
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => toast.info('Pushing...')}>
-                      <GitBranch className="w-4 h-4 mr-2" /> Push Changes
-                    </Button>
+                  {gitStatus && (
+                    <div className="rounded-lg border border-border/60 bg-muted/10 px-3 py-2 flex items-center gap-4 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
+                        <span className="font-mono">{gitStatus.branch ?? 'unknown'}</span>
+                      </div>
+                      {gitStatus.lastCommit && (
+                        <div className="flex items-center gap-1.5">
+                          <GitCommit className="w-3.5 h-3.5 text-muted-foreground" />
+                          <span className="font-mono text-muted-foreground">{gitStatus.lastCommit.slice(0, 7)}</span>
+                          <span className="text-muted-foreground truncate max-w-48">{gitStatus.lastCommitMessage}</span>
+                        </div>
+                      )}
+                      <Badge className={`ml-auto text-[10px] shrink-0 ${gitStatus.status === 'clean' ? 'bg-success/10 text-success border-success/30' : 'bg-warning/10 text-warning border-warning/30'}`}>
+                        {gitStatus.status === 'clean' && <CheckCircle2 className="w-3 h-3 mr-1" />}
+                        {gitStatus.status ?? 'unknown'}
+                      </Badge>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" disabled={syncGit.isPending} onClick={() => syncGit.mutate()}>
+                        {syncGit.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                        Sync Now
+                      </Button>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <Input
+                        value={pushMessage}
+                        onChange={(e) => setPushMessage(e.target.value)}
+                        placeholder="Commit message (optional)"
+                        className="font-mono text-sm h-8"
+                      />
+                      <Button variant="outline" size="sm" disabled={pushGit.isPending} onClick={() => pushGit.mutate()}>
+                        {pushGit.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <GitBranch className="w-4 h-4 mr-2" />}
+                        Push Changes
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -255,9 +418,7 @@ export function EnhancedStackEditorDialog({
                           Compare
                         </Button>
                         {version.version !== stack.version && (
-                          <Button size="sm" variant="outline" onClick={() => {
-                            toast.info(`Restoring to v${version.version}`)
-                          }}>
+                          <Button size="sm" variant="outline" disabled={restoreVersion.isPending} onClick={() => restoreVersion.mutate(version.version)}>
                             Restore
                           </Button>
                         )}

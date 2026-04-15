@@ -37,15 +37,21 @@ import {
   Snowflake,
   Save,
   Zap,
-  ListOrdered
+  ListOrdered,
+  Cpu,
+  MemoryStick,
+  Database,
+  Container,
+  Play,
+  StopCircle
 } from 'lucide-react'
-import { useContainers, useStartContainer, useStopContainer, useRestartContainer, useRemoveContainer } from '@/hooks/useContainers'
+import { useContainers, useStartContainer, useStopContainer, useRestartContainer, useRemoveContainer, useAggregatedLogs } from '@/hooks/useContainers'
 import { useImages } from '@/hooks/useImages'
 import { useStacks, useDeployStack, useStopStack, useRestartStack } from '@/hooks/useStacks'
 import { useVolumes } from '@/hooks/useVolumes'
 import { useNetworks } from '@/hooks/useNetworks'
 import { useSettings, useSystemInfo, useUpdateSettings, usePruneSystem } from '@/hooks/useSettings'
-import type { Stack, AppSettings, LogEntry } from '@/lib/types'
+import type { Stack, AppSettings } from '@/lib/types'
 import { toast } from 'sonner'
 
 const defaultSettings: AppSettings = {
@@ -86,6 +92,7 @@ function App() {
   const { data: networks = [] } = useNetworks()
   const { data: settings } = useSettings()
   const { data: systemInfo } = useSystemInfo()
+  const { data: aggregatedLogs = [] } = useAggregatedLogs()
 
   const startContainer = useStartContainer()
   const stopContainer = useStopContainer()
@@ -119,7 +126,6 @@ function App() {
   const [portRegistryOpen, setPortRegistryOpen] = useState(false)
   const [selectedStackForView, setSelectedStackForView] = useState<Stack | null>(null)
   const [selectedStackForEdit, setSelectedStackForEdit] = useState<Stack | null>(null)
-  const [logs] = useState<LogEntry[]>([])
 
   const systemStats = {
     containers: {
@@ -130,11 +136,12 @@ function App() {
     images: images.length,
     volumes: volumes.length,
     networks: networks.length,
+    stacks: stacks.length,
     cpuUsage: 0,
-    memoryUsage: 0,
-    memoryTotal: systemInfo?.memory || '0 GB',
-    diskUsage: 0,
-    diskTotal: '0 GB',
+    memoryUsage: systemInfo?.memoryUsedPercent ?? 0,
+    memoryTotal: systemInfo?.memoryTotal ?? systemInfo?.memory ?? '0 GB',
+    diskUsage: systemInfo?.diskUsedPercent ?? 0,
+    diskTotal: systemInfo?.diskTotal ?? '0 GB',
   }
 
   const handleStartContainer = (id: string) => {
@@ -198,13 +205,8 @@ function App() {
     setSelectedStackForView(stack)
   }
 
-  const handlePurgeImages = async () => {
-    pruneSystem.mutateAsync()
-  }
-
-  const handlePruneSystems = async () => {
-    pruneSystem.mutateAsync()
-  }
+  const handlePurgeImages = async () => { await pruneSystem.mutateAsync(); }
+  const handlePruneSystems = async () => { await pruneSystem.mutateAsync(); }
 
   const containersWithUpdates = containers.filter(c => c.updateAvailable).length
   const autoUpdateEnabled = currentSettings.autoUpdate
@@ -218,149 +220,199 @@ function App() {
     <div className="min-h-screen bg-background">
       <Toaster position="top-right" richColors />
       <header className="border-b border-border bg-card sticky top-0 z-50 backdrop-blur-sm bg-card/80">
-        <div className="container mx-auto px-6 py-4">
+        <div className="px-6 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-gradient-to-br from-primary to-accent">
-                <Box className="w-7 h-7 text-primary-foreground" />
+                <Box className="w-6 h-6 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold font-mono tracking-tight">Homelab Commander</h1>
-                <p className="text-xs text-muted-foreground">Docker Management Dashboard</p>
+                <h1 className="text-xl font-bold font-mono tracking-tight">THC</h1>
+                <p className="text-xs text-muted-foreground">The Homelab Commander · highly addictive.</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+
+            {/* Status badges */}
+            <div className="flex items-center gap-2">
               {currentSettings.globalUpdateFreeze && (
                 <Badge variant="destructive" className="gap-1 px-3 animate-pulse">
-                  <Snowflake className="w-3.5 h-3.5" />
+                  <Snowflake className="w-3 h-3" />
                   UPDATE FREEZE
                 </Badge>
               )}
               {autoUpdateEnabled && !currentSettings.globalUpdateFreeze && (
-                <Badge variant="secondary" className="gap-1 px-3">
-                  <CloudDownload className="w-3.5 h-3.5" />
+                <Badge variant="secondary" className="gap-1 px-3 font-mono text-xs">
                   Auto-Update ON
                 </Badge>
               )}
               {containersWithUpdates > 0 && (
-                <Badge variant="outline" className="border-warning text-warning gap-1">
-                  <CloudDownload className="w-3.5 h-3.5" />
+                <Badge variant="outline" className="border-warning text-warning gap-1 font-mono text-xs">
+                  <CloudDownload className="w-3 h-3" />
                   {containersWithUpdates} Updates
                 </Badge>
               )}
-              <Button variant="ghost" size="icon" onClick={() => setPortRegistryOpen(true)} title="Port Registry">
-                <ListOrdered className="w-5 h-5" />
+            </div>
+
+            {/* Action buttons with labels */}
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" onClick={() => setPortRegistryOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
+                <ListOrdered className="w-4 h-4" />
+                <span className="text-[10px] font-mono">Ports</span>
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => setSmartStartupOpen(true)} title="Smart Startup">
-                <Zap className="w-5 h-5" />
+              <Button variant="ghost" size="sm" onClick={() => setSmartStartupOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
+                <Zap className="w-4 h-4" />
+                <span className="text-[10px] font-mono">Startup</span>
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => setBackupManagementOpen(true)} title="Backup Management">
-                <Save className="w-5 h-5" />
+              <Button variant="ghost" size="sm" onClick={() => setBackupManagementOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
+                <Save className="w-4 h-4" />
+                <span className="text-[10px] font-mono">Backup</span>
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => setNotificationServicesOpen(true)} title="Notifications">
-                <Bell className="w-5 h-5" />
+              <Button variant="ghost" size="sm" onClick={() => setNotificationServicesOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
+                <Bell className="w-4 h-4" />
+                <span className="text-[10px] font-mono">Alerts</span>
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => setMaintenanceOpen(true)} title="Maintenance">
-                <Paintbrush className="w-5 h-5" />
+              <Button variant="ghost" size="sm" onClick={() => setMaintenanceOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
+                <Paintbrush className="w-4 h-4" />
+                <span className="text-[10px] font-mono">Cleanup</span>
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)} title="Settings">
-                <Settings className="w-5 h-5" />
+              <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
+                <Settings className="w-4 h-4" />
+                <span className="text-[10px] font-mono">Settings</span>
               </Button>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="container mx-auto px-6 py-8">
+      <main className="px-6 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-8">
+          <TabsList className="mb-6">
             <TabsTrigger value="dashboard" className="gap-2">
-              <Home className="w-[18px] h-[18px]" />
+              <Home className="w-4 h-4" />
               Dashboard
             </TabsTrigger>
             <TabsTrigger value="stacks" className="gap-2">
-              <Layers className="w-[18px] h-[18px]" />
+              <Layers className="w-4 h-4" />
               Stacks
-              <span className="ml-1 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-mono">
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-mono">
                 {stacks.length}
               </span>
             </TabsTrigger>
             <TabsTrigger value="containers" className="gap-2">
-              <Box className="w-[18px] h-[18px]" />
+              <Box className="w-4 h-4" />
               Containers
-              <span className="ml-1 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-mono">
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-mono">
                 {systemStats.containers.total}
               </span>
             </TabsTrigger>
             <TabsTrigger value="volumes" className="gap-2">
-              <HardDrive className="w-[18px] h-[18px]" />
+              <HardDrive className="w-4 h-4" />
               Volumes
             </TabsTrigger>
             <TabsTrigger value="images" className="gap-2">
-              <ImageIcon className="w-[18px] h-[18px]" />
+              <ImageIcon className="w-4 h-4" />
               Images
             </TabsTrigger>
             <TabsTrigger value="networks" className="gap-2">
-              <Network className="w-[18px] h-[18px]" />
+              <Network className="w-4 h-4" />
               Networks
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="dashboard" className="space-y-6">
+          {/* ═══ DASHBOARD ═══ */}
+          <TabsContent value="dashboard" className="space-y-4">
+
+            {/* Row 1: Resource Usage — 6 compact cards */}
             <div>
-              <h2 className="text-xl font-semibold mb-4 font-mono">Resource Usage</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <p className="text-xs font-mono text-muted-foreground font-semibold tracking-widest mb-2 uppercase">Resource Usage</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
                 <MetricCard
-                  label="CPU Usage"
+                  label="CPU"
                   value={`${systemStats.cpuUsage.toFixed(1)}%`}
-                  icon={<TrendingUp className="w-6 h-6" />}
+                  icon={<Cpu className="w-5 h-5" />}
+                  compact
                 />
                 <MetricCard
                   label="Memory"
                   value={`${systemStats.memoryUsage.toFixed(1)}%`}
-                  icon={<TrendingUp className="w-6 h-6" />}
+                  icon={<MemoryStick className="w-5 h-5" />}
+                  compact
                 />
                 <MetricCard
                   label="Disk"
                   value={`${systemStats.diskUsage.toFixed(1)}%`}
-                  icon={<TrendingUp className="w-6 h-6" />}
+                  icon={<Database className="w-5 h-5" />}
+                  compact
+                />
+                <MetricCard
+                  label="Memory Total"
+                  value={systemStats.memoryTotal}
+                  icon={<MemoryStick className="w-5 h-5" />}
+                  compact
+                />
+                <MetricCard
+                  label="Disk Total"
+                  value={systemStats.diskTotal}
+                  icon={<HardDrive className="w-5 h-5" />}
+                  compact
+                />
+                <MetricCard
+                  label="Networks"
+                  value={systemStats.networks}
+                  icon={<Network className="w-5 h-5" />}
+                  compact
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div>
-                <h2 className="text-xl font-semibold mb-4 font-mono">System Overview</h2>
-                <div className="grid grid-cols-2 gap-4">
-                  <MetricCard
-                    label="Containers"
-                    value={systemStats.containers.total}
-                    icon={<Box className="w-6 h-6" />}
-                    pulse={systemStats.containers.running > 0}
-                  />
-                  <MetricCard
-                    label="Running"
-                    value={systemStats.containers.running}
-                    icon={<TrendingUp className="w-6 h-6" />}
-                    className="border-l-4 border-l-success"
-                  />
-                  <MetricCard
-                    label="Images"
-                    value={images.length}
-                    icon={<ImageIcon className="w-6 h-6" />}
-                  />
-                  <MetricCard
-                    label="Volumes"
-                    value={volumes.length}
-                    icon={<HardDrive className="w-6 h-6" />}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <AggregatedLogs logs={logs} />
+            {/* Row 2: System Overview — 6 compact cards */}
+            <div>
+              <p className="text-xs font-mono text-muted-foreground font-semibold tracking-widest mb-2 uppercase">System Overview</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+                <MetricCard
+                  label="Containers"
+                  value={systemStats.containers.total}
+                  icon={<Container className="w-5 h-5" />}
+                  compact
+                  pulse={systemStats.containers.running > 0}
+                />
+                <MetricCard
+                  label="Running"
+                  value={systemStats.containers.running}
+                  icon={<Play className="w-5 h-5" />}
+                  compact
+                  className="border-l-4 border-l-success"
+                />
+                <MetricCard
+                  label="Stopped"
+                  value={systemStats.containers.stopped}
+                  icon={<StopCircle className="w-5 h-5" />}
+                  compact
+                  className={systemStats.containers.stopped > 0 ? "border-l-4 border-l-destructive" : ""}
+                />
+                <MetricCard
+                  label="Images"
+                  value={systemStats.images}
+                  icon={<ImageIcon className="w-5 h-5" />}
+                  compact
+                />
+                <MetricCard
+                  label="Volumes"
+                  value={systemStats.volumes}
+                  icon={<HardDrive className="w-5 h-5" />}
+                  compact
+                />
+                <MetricCard
+                  label="Stacks"
+                  value={systemStats.stacks}
+                  icon={<Layers className="w-5 h-5" />}
+                  compact
+                />
               </div>
             </div>
+
+            {/* Full-width Aggregated Logs */}
+            <AggregatedLogs logs={aggregatedLogs} />
           </TabsContent>
 
           <TabsContent value="containers" className="space-y-6">
@@ -414,7 +466,6 @@ function App() {
                   image={image}
                   onPull={() => toast.info(`Pulling latest ${image.repository}:${image.tag}`)}
                   onRemove={() => toast.success(`Removed ${image.repository}:${image.tag}`)}
-                  onTag={() => toast.info(`Tag image ${image.repository}`)}
                 />
               ))}
             </div>
@@ -507,8 +558,6 @@ function App() {
       <MaintenanceDialog
         open={maintenanceOpen}
         onOpenChange={setMaintenanceOpen}
-        onPurgeUnusedImages={handlePurgeImages}
-        onPruneSystems={handlePruneSystems}
       />
 
       <NotificationServicesDialog
@@ -548,7 +597,6 @@ function App() {
         open={backupManagementOpen}
         onOpenChange={setBackupManagementOpen}
         stacks={stacks}
-        onUpdateStack={() => {}}
         backupsBasePath={currentSettings.backupsBasePath || '/mnt/backups'}
         onUpdateBackupsPath={(path) => {
           updateSettings.mutate({ ...currentSettings, backupsBasePath: path })
@@ -560,8 +608,6 @@ function App() {
         onOpenChange={setSmartStartupOpen}
         stacks={stacks}
         containers={containers}
-        onUpdateStack={() => {}}
-        onUpdateContainer={() => {}}
       />
 
       <PortRegistryDialog

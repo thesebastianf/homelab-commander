@@ -86,6 +86,8 @@ export interface Network {
   driver: string
   scope: string
   containers: string[]
+  subnet?: string
+  gateway?: string
 }
 
 export interface SystemInfo {
@@ -100,6 +102,10 @@ export interface SystemInfo {
   arch: string
   cpus: number
   memory: string
+  memoryTotal: string
+  memoryUsedPercent: number
+  diskTotal: string
+  diskUsedPercent: number
 }
 
 export type LogLevel = 'info' | 'warn' | 'error' | 'debug'

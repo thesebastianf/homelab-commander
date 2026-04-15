@@ -1,4 +1,6 @@
 import Dockerode from 'dockerode';
+import os from 'os';
+import { statfs } from 'fs/promises';
 import { logger } from '../logger.js';
 
 const docker = new Dockerode({ socketPath: '/var/run/docker.sock' });
@@ -143,6 +145,8 @@ export async function listNetworks() {
     driver: net.Driver || '',
     scope: net.Scope || '',
     containers: Object.values(net.Containers || {}).map((c: any) => c.Name || ''),
+    subnet: (net as any).IPAM?.Config?.[0]?.Subnet || '',
+    gateway: (net as any).IPAM?.Config?.[0]?.Gateway || '',
   }));
 }
 
@@ -161,6 +165,23 @@ export async function removeNetwork(id: string) {
 export async function getSystemInfo() {
   const info = await docker.info();
   const version = await docker.version();
+
+  // Host memory via os module (reads /proc/meminfo — reflects host on Linux)
+  const memTotal = os.totalmem();
+  const memFree = os.freemem();
+  const memUsed = memTotal - memFree;
+  const memUsedPercent = parseFloat(((memUsed / memTotal) * 100).toFixed(1));
+
+  // Disk via statfs on / (container root — best available without host mount)
+  let diskTotal = 0;
+  let diskUsedPercent = 0;
+  try {
+    const st = await statfs('/');
+    diskTotal = st.blocks * st.bsize;
+    const diskUsed = (st.blocks - st.bfree) * st.bsize;
+    diskUsedPercent = parseFloat(((diskUsed / (diskTotal || 1)) * 100).toFixed(1));
+  } catch { /* non-critical */ }
+
   return {
     containers: {
       running: info.ContainersRunning || 0,
@@ -172,7 +193,11 @@ export async function getSystemInfo() {
     os: info.OperatingSystem,
     arch: info.Architecture,
     cpus: info.NCPU,
-    memory: formatBytes(info.MemTotal || 0),
+    memory: formatBytes(memTotal),
+    memoryTotal: formatBytes(memTotal),
+    memoryUsedPercent: memUsedPercent,
+    diskTotal: formatBytes(diskTotal),
+    diskUsedPercent,
   };
 }
 

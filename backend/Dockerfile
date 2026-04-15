@@ -18,7 +18,7 @@ COPY . .
 RUN npm run build
 
 FROM base AS production
-RUN apk add --no-cache docker-cli wget
+RUN apk add --no-cache docker-cli wget git
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./

@@ -34,6 +34,14 @@ export function useContainerLogs(id: string, tail = 100) {
   });
 }
 
+export function useAggregatedLogs() {
+  return useQuery({
+    queryKey: ['containers', 'logs', 'all'],
+    queryFn: api.fetchAggregatedLogs,
+    refetchInterval: 10000,
+  });
+}
+
 export function useStartContainer() {
   const qc = useQueryClient();
   return useMutation({
