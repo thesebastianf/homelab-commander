@@ -16,13 +16,59 @@ const router = Router();
 
 // List all stacks
 router.get('/', asyncHandler(async (_req, res) => {
-  const { rows } = await pool.query('SELECT * FROM stacks ORDER BY name');
+  const { rows } = await pool.query(`
+    SELECT 
+      s.*,
+      bc.id as backup_config_id,
+      bc.enabled as backup_enabled,
+      bc.cron_schedule,
+      bc.retention_days,
+      bc.include_stack_folder,
+      bc.include_volumes,
+      bc.include_databases,
+      bc.database_type,
+      bc.compression_level,
+      bc.use_advanced_retention,
+      bc.retention_policy,
+      sc.id as smart_startup_id,
+      sc.enabled as smart_startup_enabled,
+      sc.trigger_type,
+      sc.auto_start,
+      sc.start_delay
+    FROM stacks s
+    LEFT JOIN backup_configs bc ON s.id = bc.stack_id
+    LEFT JOIN smart_startup_configs sc ON s.id::text = sc.target_id AND sc.target_type = 'stack'
+    ORDER BY s.name
+  `);
   res.json(rows.map(mapStack));
 }));
 
 // Get single stack
 router.get('/:id', asyncHandler(async (req, res) => {
-  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [req.params.id]);
+  const { rows: [stack] } = await pool.query(`
+    SELECT 
+      s.*,
+      bc.id as backup_config_id,
+      bc.enabled as backup_enabled,
+      bc.cron_schedule,
+      bc.retention_days,
+      bc.include_stack_folder,
+      bc.include_volumes,
+      bc.include_databases,
+      bc.database_type,
+      bc.compression_level,
+      bc.use_advanced_retention,
+      bc.retention_policy,
+      sc.id as smart_startup_id,
+      sc.enabled as smart_startup_enabled,
+      sc.trigger_type,
+      sc.auto_start,
+      sc.start_delay
+    FROM stacks s
+    LEFT JOIN backup_configs bc ON s.id = bc.stack_id
+    LEFT JOIN smart_startup_configs sc ON s.id::text = sc.target_id AND sc.target_type = 'stack'
+    WHERE s.id = $1
+  `, [req.params.id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
   // Get versions
@@ -246,6 +292,24 @@ function mapStack(row: any) {
     gitRepoConfig: row.git_repo_config,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    backupConfig: row.backup_config_id ? {
+      enabled: row.backup_enabled || false,
+      schedule: row.cron_schedule,
+      retention: row.retention_days,
+      includeStackFolder: row.include_stack_folder,
+      includeVolumes: row.include_volumes,
+      includeDatabases: row.include_databases,
+      databaseType: row.database_type,
+      compressionLevel: row.compression_level,
+      useAdvancedRetention: row.use_advanced_retention,
+      retentionPolicy: row.retention_policy,
+    } : undefined,
+    smartStartup: row.smart_startup_id ? {
+      enabled: row.smart_startup_enabled || false,
+      triggerType: row.trigger_type,
+      autoStart: row.auto_start,
+      startDelay: row.start_delay,
+    } : undefined,
   };
 }
 

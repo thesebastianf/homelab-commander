@@ -97,7 +97,15 @@ function App() {
   const updateSettings = useUpdateSettings()
   const pruneSystem = usePruneSystem()
 
-  const currentSettings = settings || defaultSettings
+  const currentSettings: AppSettings = {
+    ...defaultSettings,
+    ...settings,
+    notifications: {
+      ...defaultSettings.notifications,
+      ...(settings?.notifications || {}),
+    },
+    homeAssistant: settings?.homeAssistant ?? defaultSettings.homeAssistant,
+  }
 
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState('dashboard')

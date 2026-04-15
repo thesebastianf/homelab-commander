@@ -22,6 +22,5 @@ RUN apk add --no-cache docker-cli wget
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
-USER node
 EXPOSE 3001
 CMD ["node", "dist/index.js"]

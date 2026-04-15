@@ -35,7 +35,7 @@ export const updateSettingsBody = z.object({
   stacksBasePath: z.string().min(1).max(500).optional(),
   volumesBasePath: z.string().min(1).max(500).optional(),
   backupsBasePath: z.string().min(1).max(500).optional(),
-  notificationConfig: z.object({
+  notifications: z.object({
     enabled: z.boolean(),
     events: z.record(z.boolean()).optional(),
     thresholds: z.object({
@@ -43,7 +43,7 @@ export const updateSettingsBody = z.object({
       memoryPercent: z.number().min(0).max(100),
     }).optional(),
   }).optional(),
-  homeAssistantConfig: z.object({
+  homeAssistant: z.object({
     enabled: z.boolean(),
     baseUrl: z.string().max(500).optional(),
     accessToken: z.string().max(500).optional(),
