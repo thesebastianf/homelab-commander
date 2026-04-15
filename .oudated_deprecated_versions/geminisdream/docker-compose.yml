@@ -1,0 +1,25 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: hlc-dream-backend
+    ports:
+      - "8081:8081"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_PIPE:-//./pipe/docker_engine}:${DOCKER_PIPE:-//./pipe/docker_engine}
+      - ${STACK_PATH:-c:/DEV/homelab-commander/stacks}:/stacks
+    environment:
+      - DOCKER_HOST=${DOCKER_HOST:-unix:///var/run/docker.sock}
+      - STACK_PATH=/stacks
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: hlc-dream-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

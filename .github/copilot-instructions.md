@@ -1,125 +1,195 @@
-# HomeLab Commander V2 — Copilot Instructions
+# Homelab Commander — Copilot Instructions
 
-## Mental Model
+## Project Identity
 
-You are building an **intelligent operator system**, not a CRUD app.
-HLC is a policy-driven, event-driven, NAS-aware operator for Docker-based homelabs.
-It replaces Portainer (management), Dockge (stacks), and Dozzle (logs) while adding
-resilience, backup-first safety, and migration readiness.
+- **Name:** Homelab Commander
+- **Type:** Self-hosted Docker management dashboard for homelab operators
+- **Monorepo path:** `DOCKERVERSION/iteration0/`
+- **Three services:** frontend (React/Vite/NGINX), backend (Node/Express), db (PostgreSQL 16)
 
-## Architecture Principles
+## Quick Reference
 
-- **Event-driven over polling** — the Event Bus is the central nervous system.
-- **Explicit over implicit** — no magic defaults; every behavior must be traceable to a policy or label.
-- **Every action must be reversible** — backup before mutation; rollback on failure.
-- **Backup-first philosophy** — never update or mutate without a verified backup path.
-- **Label-driven intelligence** — container behavior is driven by `hlc.*` Docker labels.
-- **NAS-aware** — stacks declare mount conditions; nothing starts until mounts are verified.
-- **Stack-first management** — compose files are first-class entities, discovered from filesystem.
-- **Global env propagation** — shared variables managed centrally, injected into stack `.env` files.
+| Item | Value |
+|------|-------|
+| Frontend port | 3210 (host) → 80 (nginx) |
+| Backend port | 3001 |
+| Frontend URL | `http://host:3210` |
+| Dev frontend URL | `http://localhost:5173` |
+| DB credentials | `hlc` / see `.env` |
+| Frontend type-check | `cd frontend && ./node_modules/.bin/tsc --noEmit` |
+| Build frontend | `cd frontend && npm run build` |
+| Build backend | `cd backend && npm run build` |
+| Run full stack | `docker compose up -d --build` |
+| Run dev mode | `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build` |
 
-## Tech Stack
+## Architecture Rules
 
-- **Backend:** Go (standard library preferred, minimal dependencies)
-- **Database:** SQLite (via `modernc.org/sqlite` — pure Go, no CGO)
-- **Frontend:** HTML + HTMX for most views; Monaco Editor (CDN) for YAML editing
-- **Docker:** Socket API via `net/http` unix transport for container ops
-- **Compose:** `docker compose` CLI for stack operations (single exception to "no shelling out")
-- **Theme:** Tactical dark blue (Slate-900 / Zinc palette)
+### Backend (`backend/src/`)
 
-## Project Structure
+- **Runtime:** Node.js 22, Express 5, TypeScript (strict), ESM (`"type": "module"`)
+- **Entry point:** `index.ts` — registers middleware stack then 12 route modules
+- **Route pattern:** Every route handler MUST be wrapped in `asyncHandler()` from `lib/asyncHandler.ts`
+- **Validation:** Request bodies validated with Zod schemas (`validation/schemas.ts`) via `validate()` middleware (`middleware/validate.ts`)
+- **Database:** Raw SQL via `pg` Pool (imported from `database.ts`). Always use parameterized queries (`$1`, `$2`). NEVER concatenate user input into SQL strings.
+- **Docker:** All Docker operations go through `services/docker.ts` which wraps Dockerode. Never import Dockerode directly in routes.
+- **Logging:** Use `logger` from `logger.ts` (Pino). Never `console.log`.
+- **Audit:** Call `auditLog(action, resourceType, resourceId?, details?)` from `lib/audit.ts` for write operations.
+- **Config:** All env vars accessed through `config.ts`. Never read `process.env` directly elsewhere.
+- **File naming:** Routes → `routes/resourceName.ts`, Services → `services/serviceName.ts`
+- **Response format:** `res.json(data)` for success, `res.status(code).json({ error: 'message' })` for errors
 
-```
-backend/
-  cmd/hlc/               # main entrypoint
-  internal/
-    core/                # Event Bus, Policy Engine
-    docker/              # Docker socket HTTP client, container discovery
-    db/                  # SQLite setup, migrations, queries
-    envhub/              # Global Env Store, Path Presets, env injection
-    labels/              # hlc.* label parser & classification
-    stacks/              # Compose file scanning, stack CRUD, stack ops
-    nas/                 # NAS Gatekeeper, mount condition checker, boot sequencer
-    scheduler/           # Native Go cron, periodic task runner
-    backup/              # Backup Engine (volumes, DB dumps, tar/gzip)
-    update/              # Update Engine (digest comparison, rollback)
-    observability/       # CPU/RAM snapshots, restart/uptime tracking
-    audit/               # Persistent audit log, event types
-    auth/                # Token auth, read-only mode, safe mode
-    notification/        # Multi-channel dispatcher (Telegram, Discord, Gotify, Ntfy, Email, Webhook)
-    migrate/             # Export/import wizard for server migration
-    api/                 # HTTP handlers, SSE, routes
-  web/
-    templates/           # Go html/template files
-    static/              # CSS, htmx.min.js, monaco loader
-  data/                  # Runtime mount: hlc.db, configs
-```
+### Frontend (`frontend/src/`)
 
-## Critical Systems (in dependency order)
+- **Runtime:** React 19, Vite 7, TypeScript (strictNullChecks), TailwindCSS 4
+- **State management:** `@tanstack/react-query` v5 — no Redux, no Zustand, no Context for server state
+- **Path alias:** `@/` maps to `src/`. Always use `@/` in imports.
+- **Component library:** shadcn/ui components in `components/ui/`. Do NOT modify files in `ui/` — they are generated.
+- **Icons:** Import from `lucide-react`. Do NOT use other icon libraries.
+- **Toasts:** Use `toast.success()` / `toast.error()` / `toast.info()` from `sonner`. Never `alert()` or `window.confirm()`.
+- **Types:** All shared interfaces live in `lib/types.ts`. Export interfaces, not types, for objects.
+- **API layer:** All fetch calls in `lib/api.ts`. These are plain async functions, NOT hooks.
+- **Hooks layer:** React Query hooks in `hooks/use*.ts`. One file per resource domain. Pattern:
+  ```ts
+  export function useThings() {
+    return useQuery({ queryKey: ['things'], queryFn: api.fetchThings });
+  }
+  export function useCreateThing() {
+    const qc = useQueryClient();
+    return useMutation({
+      mutationFn: api.createThing,
+      onSuccess: () => qc.invalidateQueries({ queryKey: ['things'] }),
+    });
+  }
+  ```
+- **File naming:** Components → PascalCase (`ContainerCard.tsx`), hooks → camelCase (`useContainers.ts`), libs → camelCase (`api.ts`)
 
-1. **Event Bus** (`internal/core/event_bus.go`) — pub/sub for internal events
-2. **Policy Engine** (`internal/core/policy_engine.go`) — decision-making, MSM, quiet hours
-3. **Global Env Hub** (`internal/envhub/`) — central variable store, path presets, env injection
-4. **NAS Gatekeeper** (`internal/nas/`) — mount condition verification, boot sequencing
-5. **Stack Manager** (`internal/stacks/`) — compose file CRUD, stack operations
-6. **Backup Engine** (`internal/backup/`) — volume snapshots, DB-aware dumps, metadata
-7. **Update Engine** (`internal/update/`) — digest comparison, backup→update→healthcheck→rollback
+### Database (`db/init.sql`)
 
-## Development Rules
+- All tables use `UUID` primary keys via `gen_random_uuid()` (pgcrypto extension)
+- `settings` table is singleton (id=1, CHECK constraint)
+- Foreign keys use `ON DELETE CASCADE`
+- Timestamps are `TIMESTAMPTZ DEFAULT NOW()`
+- JSONB columns for flexible config (notification_config, home_assistant_config, git_repo_config, etc.)
+- Enums are enforced via CHECK constraints, not PostgreSQL ENUM types
 
-- Follow ROADMAP phases **sequentially** (Phase 1 → Phase 14).
-- **DO NOT** build UI before backend logic is solid.
-- **DO NOT** skip Backup Engine before Update Engine.
-- **DO NOT** start stacks without checking mount conditions first.
-- Every public function needs a clear, single responsibility.
-- Use Go interfaces for testability (mock Docker socket, mock DB, mock filesystem).
-- Errors are values — wrap with context using `fmt.Errorf("...: %w", err)`.
-- Use structured logging (`log/slog`).
+## Key Patterns
 
-## Code Style
+### Adding a New Feature End-to-End
 
-- Go standard formatting (`gofmt`).
-- Package names: short, lowercase, singular (`backup` not `backups`).
-- Interfaces: define at the consumer, not the producer.
-- No init() functions — explicit initialization in main.
-- Context propagation: pass `context.Context` as the first parameter.
-- Table-driven tests preferred.
+1. **Schema:** Add table to `db/init.sql` with UUID PK, timestamps, and appropriate constraints
+2. **Types:** Add interface to `frontend/src/lib/types.ts`
+3. **Zod schema:** Add validation to `backend/src/validation/schemas.ts`
+4. **Service:** If it needs Docker or complex logic, add to `backend/src/services/`
+5. **Route:** Create `backend/src/routes/newFeature.ts` — use `asyncHandler`, `validate`, `auditLog`
+6. **Register route:** Mount in `backend/src/index.ts`: `app.use('/api/new-feature', newFeatureRoutes)`
+7. **API functions:** Add to `frontend/src/lib/api.ts`
+8. **Hook:** Create `frontend/src/hooks/useNewFeature.ts` with React Query hooks
+9. **Component:** Create UI in `frontend/src/components/NewFeatureDialog.tsx`
+10. **Wire up:** Import and render component in `App.tsx`
 
-## Naming Conventions
+### Component Structure
 
-- Docker labels: `hlc.<category>.<key>` (e.g., `hlc.backup.strategy=full`)
-- API routes: `/api/v1/<resource>` (RESTful)
-- Event types: `PascalCase` constants (e.g., `ContainerStarted`, `MountReady`, `BackupCompleted`)
-- Policy names: `snake_case` (e.g., `max_stability_mode`, `quiet_hours`)
-- Global env keys: `UPPER_SNAKE_CASE` (e.g., `TZ`, `PUID`, `BASE_STACK`)
-- Path presets: `{{BASE_STACK}}`, `{{BASE_VOL}}` — resolved at runtime
+Dialogs follow this pattern:
+```tsx
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { toast } from 'sonner'
 
-## Label Schema (V2)
+interface MyDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  // domain props
+}
 
-| Label | Values | Description |
-|-------|--------|-------------|
-| `hlc.role` | `db`, `stateless`, `cache`, `proxy`, `app` | Container's functional role |
-| `hlc.update.policy` | `auto`, `manual`, `pin` | How updates are handled |
-| `hlc.update.schedule` | cron expression | When auto-updates run |
-| `hlc.backup.strategy` | `full`, `db-dump`, `none` | Backup approach |
-| `hlc.backup.stop` | `true`, `false` | Stop container before backup |
-| `hlc.backup.db-type` | `postgres`, `mariadb`, `mysql`, `redis` | DB type for dump |
-| `hlc.stack` | string | Logical stack grouping |
-| `hlc.priority` | `critical`, `normal`, `low` | Operational priority |
-| `hlc.wait_for_mount` | path(s) | Mount(s) that must be ready before start |
-| `hlc.startup.order` | integer | Boot sequence order within stack |
-| `hlc.homepage.url` | URL | Link to this service's web UI |
-
-## Homepage Integration
-
-- Configurable `homepage_url` setting — link in nav header to gethomepage instance.
-- Status API endpoint: `GET /api/v1/status` returns:
-```json
-{
-  "msm_active": true,
-  "containers": { "running": 9, "stopped": 2, "unhealthy": 1 },
-  "backups": { "last_success": "2026-03-30T01:00:00Z", "pending_failures": 0 },
-  "updates": { "available": 3 },
-  "mounts": { "healthy": 2, "degraded": 0, "offline": 0 }
+export function MyDialog({ open, onOpenChange, ...props }: MyDialogProps) {
+  // local state
+  // handlers
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>...</DialogTitle>
+          <DialogDescription>...</DialogDescription>
+        </DialogHeader>
+        {/* content */}
+      </DialogContent>
+    </Dialog>
+  )
 }
 ```
+
+### Backend Route Pattern
+
+```ts
+import { Router } from 'express';
+import { pool } from '../database.js';
+import { asyncHandler } from '../lib/asyncHandler.js';
+import { auditLog } from '../lib/audit.js';
+import { validate } from '../middleware/validate.js';
+import { mySchema } from '../validation/schemas.js';
+
+const router = Router();
+
+router.get('/', asyncHandler(async (_req, res) => {
+  const { rows } = await pool.query('SELECT * FROM my_table ORDER BY created_at DESC');
+  res.json(rows.map(mapRow));
+}));
+
+router.post('/', validate(mySchema), asyncHandler(async (req, res) => {
+  const { rows: [row] } = await pool.query(
+    'INSERT INTO my_table (col1, col2) VALUES ($1, $2) RETURNING *',
+    [req.body.col1, req.body.col2]
+  );
+  await auditLog('my_table.create', 'my_table', row.id);
+  res.status(201).json(mapRow(row));
+}));
+
+export default router;
+```
+
+## Styling Conventions
+
+- **Theme:** Dark theme with oklch colors, defined via CSS variables in `index.css`
+- **Fonts:** JetBrains Mono (monospace/code), Roboto (body text)
+- **Layout:** Single-page tabbed interface. No router — tabs managed via shadcn `<Tabs>` component.
+- **Cards:** Use `<Card>` from shadcn/ui for resource items with consistent padding
+- **Badges:** Status badges use semantic variants: `default` (active), `outline` (inactive), `destructive` (error/conflict)
+- **Spacing:** Use Tailwind classes. Standard gaps: `gap-2` (tight), `gap-3` (normal), `gap-4` (loose)
+- **Typography:** `font-mono` for technical values (ports, paths, versions). `text-sm` for card content. `text-xs` for metadata.
+- **Responsive:** Not a priority (homelab dashboard is desktop-oriented), but avoid hardcoded pixel widths.
+
+## Security Requirements
+
+- All SQL queries MUST be parameterized — never interpolate variables into query strings
+- User input MUST be validated with Zod schemas before use
+- Container/resource IDs MUST be encoded with `encodeURIComponent()` in API URLs
+- Auth header comparison MUST use `timingSafeEqual` (already implemented in basicAuth.ts)
+- Never expose database credentials, auth tokens, or internal paths in API responses
+- Docker socket access is required but inherently privileged — document this tradeoff
+
+## File Locations Reference
+
+| What | Where |
+|------|-------|
+| Database schema | `db/init.sql` |
+| All TypeScript interfaces | `frontend/src/lib/types.ts` |
+| All API fetch functions | `frontend/src/lib/api.ts` |
+| All Zod schemas | `backend/src/validation/schemas.ts` |
+| Backend config | `backend/src/config.ts` |
+| Environment variables | `.env` / `.env.example` |
+| Docker setup | `docker-compose.yml` |
+| Frontend entry | `frontend/src/App.tsx` |
+| Backend entry | `backend/src/index.ts` |
+| nginx config | `frontend/nginx.conf` |
+| Project docs | `DOCUMENTATION.md` |
+
+## Things NOT to Do
+
+- Do NOT add a client-side router (React Router, etc.) — the app uses tab-based navigation
+- Do NOT use `console.log` in backend — use `logger.info/warn/error/debug`
+- Do NOT modify `components/ui/*.tsx` files — these are shadcn/ui generated
+- Do NOT add new npm packages without justification — the stack is deliberately minimal
+- Do NOT add Redux, Zustand, Jotai, or other client state libraries — React Query handles it
+- Do NOT create ORM models — we use raw SQL with `pg` for full control
+- Do NOT add a separate migration tool — schema is managed via `init.sql` (init on first boot)
+- Do NOT store secrets in code — use environment variables via `.env`
+- Do NOT use `any` in TypeScript — use proper types or `unknown` with narrowing

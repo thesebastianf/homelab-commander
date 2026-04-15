@@ -1,55 +1,27 @@
-# ─── Build Stage ───────────────────────────────────────────────────────────────
-FROM golang:1.25-alpine AS builder
-
-WORKDIR /src
-
-# Install build dependencies (git needed for module download)
-RUN apk add --no-cache git
-
-# Copy dependency files first for layer-cache efficiency
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Copy source and build a statically-linked binary
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w" \
-    -o /hlc ./cmd/hlc
-
-# ─── Runtime Stage ─────────────────────────────────────────────────────────────
-FROM alpine:3.20
-
-# ca-certificates: needed for outbound HTTPS (registry checks, notifications)
-# tzdata: allows TZ env var to work correctly
-RUN apk add --no-cache ca-certificates tzdata docker-cli docker-cli-compose
-
+FROM node:22-alpine AS base
 WORKDIR /app
 
-# Copy the binary
-COPY --from=builder /hlc /app/hlc
+FROM base AS development
+COPY package.json package-lock.json* ./
+RUN npm install
+COPY . .
+CMD ["npm", "run", "dev"]
 
-# Copy web assets (templates + static files)
-COPY web/ /app/web/
+FROM base AS deps
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev
 
-# Runtime data directory (mount a volume here)
-VOLUME ["/data"]
+FROM base AS build
+COPY package.json package-lock.json* ./
+RUN npm ci
+COPY . .
+RUN npm run build
 
-# Default env (overridable at runtime / docker-compose)
-ENV HLC_LISTEN=:8080 \
-    HLC_DATA_DIR=/data \
-    HLC_DB_PATH=/data/hlc.db \
-    HLC_BACKUP_DIR=/data/backups \
-    HLC_STACK_DIR=/opt/stacks \
-    HLC_NAS_ANCHOR=.nas-ready \
-    DOCKER_SOCKET=/var/run/docker.sock
-
-EXPOSE 8080
-
-# Non-root user for runtime security
-RUN addgroup -S hlc && adduser -S hlc -G hlc && \
-    mkdir -p /data /opt/stacks && \
-    chown -R hlc:hlc /data /opt/stacks /app
-
-USER hlc
-
-ENTRYPOINT ["/app/hlc"]
+FROM base AS production
+RUN apk add --no-cache docker-cli wget
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY package.json ./
+USER node
+EXPOSE 3001
+CMD ["node", "dist/index.js"]

@@ -1,67 +1,80 @@
-##############################################################################
-# HomeLab Commander V2 — docker-compose.yml
-#
-# Quick-start:
-#   cp .env.example .env       # Edit values to match your paths
-#   docker compose up -d
-#   open http://localhost:8080
-##############################################################################
-
 services:
-  hlc:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-3210}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: hlc:latest
-    pull_policy: build
-    container_name: homelab-commander
-    restart: unless-stopped
-
     ports:
-      - "${HLC_HOST_PORT:-8080}:8080"
-
+      - "${BACKEND_PORT:-3001}:3001"
     environment:
-      HLC_LISTEN: ":8080"
-      HLC_DATA_DIR: /data
-      HLC_DB_PATH: /data/hlc.db
-      HLC_BACKUP_DIR: /data/backups
-      HLC_STACK_DIR: /stacks
-      HLC_NAS_ANCHOR: "${HLC_NAS_ANCHOR:-.nas-ready}"
-      DOCKER_SOCKET: /var/run/docker.sock
-      HLC_ADMIN_TOKEN: "${HLC_ADMIN_TOKEN:-}"
-      TZ: "${TZ:-Europe/London}"
-
+      - NODE_ENV=${NODE_ENV:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hlc}:${POSTGRES_PASSWORD:-hlc_secret_change_me}@db:5432/${POSTGRES_DB:-hlc}
+      - STACKS_PATH=${STACKS_PATH:-/data/stacks}
+      - BACKUPS_PATH=${BACKUPS_PATH:-/data/backups}
+      - AUTH_USER=${AUTH_USER:-}
+      - AUTH_PASS=${AUTH_PASS:-}
+      - CORS_ORIGIN=${CORS_ORIGIN:-}
     volumes:
-      # Docker socket — required for container management
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-
-      # Persistent data (database, session state)
-      - hlc-data:/data
-
-      # Backups destination — override to a NAS path for off-box storage
-      - "${HLC_BACKUP_HOST_DIR:-hlc-backups}:/data/backups"
-
-      # Stacks directory — must match HLC_STACK_DIR inside the container
-      # Override HLC_STACK_DIR_HOST in .env to point at your real stacks path
-      - "${HLC_STACK_DIR_HOST:-./stacks}:/stacks"
-
-    # HLC must be able to read the Docker socket
-    group_add:
-      - "${DOCKER_GID:-999}"
-
+      - /var/run/docker.sock:/var/run/docker.sock
+      - stacks_data:/data/stacks
+      - backups_data:/data/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/v1/status"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/healthz"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
       start_period: 10s
 
-    labels:
-      hlc.role: app
-      hlc.homepage.url: "http://localhost:${HLC_HOST_PORT:-8080}"
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-hlc}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-hlc_secret_change_me}
+      - POSTGRES_DB=${POSTGRES_DB:-hlc}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    shm_size: "256mb"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hlc}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
-  hlc-data:
-    driver: local
-  hlc-backups:
-    driver: local
+  pg_data:
+  stacks_data:
+  backups_data:

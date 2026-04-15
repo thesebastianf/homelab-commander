@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" width="1440" height="900">
+  <defs>
+    <style>
+      .bg { fill: #0a0a0f; }
+      .overlay { fill: rgba(0,0,0,0.7); }
+      .dialog { fill: #13131a; stroke: #23233a; stroke-width: 1; rx: 16; }
+      .card { fill: #0a0a0f; stroke: #23233a; stroke-width: 1; rx: 10; }
+      .text-mono { fill: #e4e4e7; font-family: 'JetBrains Mono', monospace; }
+      .text-body { fill: #e4e4e7; font-family: 'Roboto', sans-serif; }
+      .text-muted { fill: #71717a; font-family: 'Roboto', sans-serif; }
+      .text-muted-mono { fill: #71717a; font-family: 'JetBrains Mono', monospace; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1440" height="900"/>
+  <rect class="overlay" width="1440" height="900"/>
+
+  <!-- Dialog Panel -->
+  <rect class="dialog" x="220" y="40" width="1000" height="820"/>
+
+  <!-- Header -->
+  <text x="260" y="80" class="text-mono" font-size="20" font-weight="700">🔧 System Maintenance</text>
+  <text x="260" y="102" class="text-muted" font-size="12">Clean up unused resources and monitor system health</text>
+  <text x="1180" y="78" class="text-muted" font-size="20" style="cursor:pointer">✕</text>
+
+  <!-- System Health Card -->
+  <rect x="260" y="120" width="920" height="170" rx="12" fill="rgba(34,197,94,0.04)" stroke="rgba(34,197,94,0.3)"/>
+  <text x="292" y="152" class="text-mono" font-size="16" font-weight="600">System Health</text>
+  <rect x="410" y="136" width="66" height="22" rx="4" fill="rgba(34,197,94,0.12)"/>
+  <text x="420" y="151" fill="#22c55e" font-size="10" font-family="JetBrains Mono" font-weight="500">Healthy</text>
+
+  <!-- Disk Usage -->
+  <text x="292" y="180" class="text-muted" font-size="10">Disk Usage</text>
+  <rect x="292" y="188" width="400" height="10" rx="5" fill="#23233a"/>
+  <rect x="292" y="188" width="155" height="10" rx="5" fill="#22c55e"/>
+  <text x="700" y="196" class="text-mono" font-size="11">38.7%</text>
+  <text x="292" y="215" class="text-muted" font-size="10">127.3 GB used of 328.8 GB</text>
+
+  <!-- Reclaimable -->
+  <text x="292" y="240" class="text-muted" font-size="10">Estimated Reclaimable Space</text>
+  <text x="292" y="262" class="text-mono" font-size="22" font-weight="700" fill="#f59e0b">~3.25 GB</text>
+  <text x="440" y="262" class="text-muted" font-size="10">from unused images, volumes, and stopped containers</text>
+
+  <!-- Docker Info Mini Stats -->
+  <text x="710" y="180" class="text-muted" font-size="10">Docker Version</text>
+  <text x="710" y="196" class="text-mono" font-size="12">24.0.7</text>
+  <text x="710" y="220" class="text-muted" font-size="10">Storage Driver</text>
+  <text x="710" y="236" class="text-mono" font-size="12">overlay2</text>
+  <text x="710" y="260" class="text-muted" font-size="10">Total Containers</text>
+  <text x="710" y="276" class="text-mono" font-size="12">12 (9 running, 3 stopped)</text>
+  <text x="900" y="180" class="text-muted" font-size="10">Images</text>
+  <text x="900" y="196" class="text-mono" font-size="12">18</text>
+  <text x="900" y="220" class="text-muted" font-size="10">Volumes</text>
+  <text x="900" y="236" class="text-mono" font-size="12">14</text>
+  <text x="900" y="260" class="text-muted" font-size="10">Networks</text>
+  <text x="900" y="276" class="text-mono" font-size="12">7</text>
+
+  <!-- Action Card 1: Purge Unused Images -->
+  <rect class="card" x="260" y="310" width="440" height="220"/>
+  <rect x="260" y="310" width="6" height="220" rx="3" fill="#3b82f6"/>
+  <text x="292" y="344" class="text-mono" font-size="15" font-weight="600">🗂 Purge Unused Images</text>
+  <text x="292" y="364" class="text-muted" font-size="11">Remove images not associated with any container</text>
+
+  <text x="292" y="394" class="text-muted" font-size="10">Images to Remove</text>
+  <text x="292" y="414" class="text-mono" font-size="18" font-weight="700" fill="#3b82f6">7 images</text>
+
+  <text x="292" y="440" class="text-muted" font-size="10">Space to Reclaim</text>
+  <text x="292" y="460" class="text-mono" font-size="18" font-weight="700" fill="#f59e0b">~2.4 GB</text>
+
+  <!-- Image list preview -->
+  <text x="292" y="485" class="text-muted-mono" font-size="9">nginx:1.24-alpine (42 MB)</text>
+  <text x="292" y="497" class="text-muted-mono" font-size="9">postgres:15 (379 MB)</text>
+  <text x="292" y="509" class="text-muted-mono" font-size="9">+ 5 more images...</text>
+
+  <rect x="292" y="518" width="140" height="28" rx="6" fill="#3b82f6"/>
+  <text x="320" y="537" fill="#fff" font-family="Roboto" font-size="11" font-weight="500">Purge Images</text>
+
+  <!-- Action Card 2: Prune Unused Volumes -->
+  <rect class="card" x="740" y="310" width="440" height="220"/>
+  <rect x="740" y="310" width="6" height="220" rx="3" fill="#6d5acd"/>
+  <text x="772" y="344" class="text-mono" font-size="15" font-weight="600">💾 Prune Unused Volumes</text>
+  <text x="772" y="364" class="text-muted" font-size="11">Remove volumes not referenced by any container</text>
+
+  <text x="772" y="394" class="text-muted" font-size="10">Volumes to Remove</text>
+  <text x="772" y="414" class="text-mono" font-size="18" font-weight="700" fill="#6d5acd">4 volumes</text>
+
+  <text x="772" y="440" class="text-muted" font-size="10">Space to Reclaim</text>
+  <text x="772" y="460" class="text-mono" font-size="18" font-weight="700" fill="#f59e0b">~850 MB</text>
+
+  <!-- Volume list preview -->
+  <text x="772" y="485" class="text-muted-mono" font-size="9">old_postgres_data (312 MB)</text>
+  <text x="772" y="497" class="text-muted-mono" font-size="9">temp_build_cache (228 MB)</text>
+  <text x="772" y="509" class="text-muted-mono" font-size="9">+ 2 more volumes...</text>
+
+  <rect x="772" y="518" width="140" height="28" rx="6" fill="#6d5acd"/>
+  <text x="796" y="537" fill="#fff" font-family="Roboto" font-size="11" font-weight="500">Prune Volumes</text>
+
+  <!-- Action Card 3: Remove Stopped Containers -->
+  <rect class="card" x="260" y="550" width="440" height="200"/>
+  <rect x="260" y="550" width="6" height="200" rx="3" fill="#f59e0b"/>
+  <text x="292" y="584" class="text-mono" font-size="15" font-weight="600">📦 Remove Stopped Containers</text>
+  <text x="292" y="604" class="text-muted" font-size="11">Clean up containers in stopped/exited state</text>
+
+  <text x="292" y="634" class="text-muted" font-size="10">Containers to Remove</text>
+  <text x="292" y="654" class="text-mono" font-size="18" font-weight="700" fill="#f59e0b">3 containers</text>
+
+  <!-- Container list -->
+  <rect x="292" y="672" width="380" height="24" rx="4" fill="rgba(245,158,11,0.04)" stroke="rgba(245,158,11,0.15)"/>
+  <circle cx="306" cy="684" r="4" fill="#ef4444"/>
+  <text x="316" y="688" class="text-muted-mono" font-size="9">test-nginx  Exited (0) 3 days ago</text>
+  <rect x="292" y="700" width="380" height="24" rx="4" fill="rgba(245,158,11,0.04)" stroke="rgba(245,158,11,0.15)"/>
+  <circle cx="306" cy="712" r="4" fill="#ef4444"/>
+  <text x="316" y="716" class="text-muted-mono" font-size="9">old-app-debug  Exited (137) 5 days ago</text>
+  <rect x="292" y="728" width="380" height="24" rx="4" fill="rgba(245,158,11,0.04)" stroke="rgba(245,158,11,0.15)"/>
+  <circle cx="306" cy="740" r="4" fill="#ef4444"/>
+  <text x="316" y="744" class="text-muted-mono" font-size="9">migration-runner  Exited (0) 7 days ago</text>
+
+  <!-- Action Card 4: Danger Zone -->
+  <rect x="740" y="550" width="440" height="200" rx="10" fill="rgba(239,68,68,0.03)" stroke="rgba(239,68,68,0.3)"/>
+  <rect x="740" y="550" width="6" height="200" rx="3" fill="#ef4444"/>
+  <text x="772" y="584" class="text-mono" font-size="15" font-weight="600" fill="#ef4444">⚠ Full System Prune</text>
+  <text x="772" y="604" class="text-muted" font-size="11">Remove ALL unused images, volumes, containers, and networks</text>
+
+  <text x="772" y="634" class="text-muted" font-size="10">Total Space to Reclaim</text>
+  <text x="772" y="654" class="text-mono" font-size="22" font-weight="700" fill="#ef4444">~3.25 GB</text>
+
+  <text x="772" y="678" class="text-muted" font-size="10">⚠ This action is irreversible and will remove all unused resources.</text>
+  <text x="772" y="694" class="text-muted" font-size="10">Running containers and their resources will not be affected.</text>
+
+  <rect x="772" y="716" width="180" height="30" rx="6" fill="transparent" stroke="#ef4444"/>
+  <text x="808" y="736" fill="#ef4444" font-family="Roboto" font-size="11" font-weight="500">Full System Prune</text>
+
+  <!-- Last Cleanup -->
+  <text x="260" y="796" class="text-muted" font-size="10">Last cleanup: 3 days ago — Removed 2 images, 1 volume (saved 1.2 GB)</text>
+
+  <text x="1180" y="845" class="text-muted" font-size="9" text-anchor="end">HLC — System Maintenance</text>
+</svg>

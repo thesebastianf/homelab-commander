@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" width="1440" height="900">
+  <defs>
+    <style>
+      .bg { fill: #0a0a0f; }
+      .card { fill: #13131a; stroke: #23233a; stroke-width: 1; rx: 12; }
+      .header-bg { fill: #13131a; opacity: 0.9; }
+      .text-primary { fill: #e4e4e7; font-family: 'JetBrains Mono', monospace; }
+      .text-muted { fill: #71717a; font-family: 'Roboto', sans-serif; }
+      .text-mono { fill: #e4e4e7; font-family: 'JetBrains Mono', monospace; }
+      .text-muted-mono { fill: #71717a; font-family: 'JetBrains Mono', monospace; }
+      .tab-active { fill: #1a1a2e; rx: 8; }
+    </style>
+    <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6d5acd"/>
+      <stop offset="100%" style="stop-color:#3b82f6"/>
+    </linearGradient>
+  </defs>
+
+  <rect class="bg" width="1440" height="900"/>
+  <rect class="header-bg" x="0" y="0" width="1440" height="72"/>
+  <line x1="0" y1="72" x2="1440" y2="72" stroke="#23233a"/>
+  <rect x="40" y="16" width="40" height="40" rx="10" fill="url(#headerGrad)"/>
+  <text x="52" y="42" fill="#fff" font-family="JetBrains Mono" font-size="16" font-weight="700">⬡</text>
+  <text x="92" y="36" class="text-mono" font-size="22" font-weight="700">HLC</text>
+  <text x="92" y="52" class="text-muted" font-size="11">Homelab Command</text>
+
+  <!-- Tabs -->
+  <text x="60" y="115" class="text-muted" font-size="13">🏠 Dashboard</text>
+  <text x="170" y="115" class="text-muted" font-size="13">📦 Stacks</text>
+  <text x="272" y="115" class="text-muted" font-size="13">📦 Containers</text>
+  <text x="400" y="115" class="text-muted" font-size="13">💽 Volumes</text>
+  <text x="502" y="115" class="text-muted" font-size="13">🖼 Images</text>
+
+  <rect class="tab-active" x="576" y="92" width="96" height="36"/>
+  <text x="590" y="115" fill="#e4e4e7" font-family="Roboto" font-size="13" font-weight="500">🌐 Networks</text>
+
+  <!-- Title -->
+  <text x="40" y="168" class="text-mono" font-size="18" font-weight="600">Docker Networks</text>
+  <text x="40" y="186" class="text-muted" font-size="12">Network connectivity for containers</text>
+
+  <!-- Network Card 1: bridge (default system) -->
+  <rect class="card" x="40" y="210" width="1360" height="110"/>
+  <text x="72" y="244" class="text-mono" font-size="16" font-weight="600">bridge</text>
+  <rect x="130" y="230" width="54" height="20" rx="6" fill="rgba(113,113,122,0.15)" stroke="#23233a"/>
+  <text x="138" y="244" class="text-muted-mono" font-size="10">system</text>
+  <rect x="196" y="230" width="52" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="204" y="244" class="text-muted-mono" font-size="10">bridge</text>
+  <rect x="260" y="230" width="46" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="268" y="244" class="text-muted-mono" font-size="10">local</text>
+  <text x="72" y="270" class="text-muted" font-size="10">Subnet: 172.17.0.0/16 · Gateway: 172.17.0.1</text>
+  <text x="72" y="292" class="text-muted" font-size="10">Connected: 0 containers</text>
+  <rect x="1190" y="232" width="80" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1200" y="250" class="text-muted" font-size="10">🔍 Inspect</text>
+
+  <!-- Network Card 2: monitoring_net -->
+  <rect class="card" x="40" y="334" width="1360" height="120"/>
+  <text x="72" y="368" class="text-mono" font-size="16" font-weight="600">monitoring_net</text>
+  <rect x="218" y="354" width="52" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="226" y="368" class="text-muted-mono" font-size="10">bridge</text>
+  <rect x="282" y="354" width="46" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="290" y="368" class="text-muted-mono" font-size="10">local</text>
+  <text x="72" y="394" class="text-muted" font-size="10">Subnet: 172.20.0.0/16 · Gateway: 172.20.0.1</text>
+  <text x="72" y="414" class="text-muted" font-size="10">Connected:</text>
+  <rect x="134" y="403" width="60" height="18" rx="4" fill="rgba(34,197,94,0.08)" stroke="rgba(34,197,94,0.3)"/>
+  <text x="142" y="416" fill="#22c55e" font-size="9" font-family="JetBrains Mono">grafana</text>
+  <rect x="202" y="403" width="80" height="18" rx="4" fill="rgba(34,197,94,0.08)" stroke="rgba(34,197,94,0.3)"/>
+  <text x="210" y="416" fill="#22c55e" font-size="9" font-family="JetBrains Mono">prometheus</text>
+  <rect x="290" y="403" width="90" height="18" rx="4" fill="rgba(34,197,94,0.08)" stroke="rgba(34,197,94,0.3)"/>
+  <text x="298" y="416" fill="#22c55e" font-size="9" font-family="JetBrains Mono">alertmanager</text>
+  <rect x="1190" y="356" width="80" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1200" y="374" class="text-muted" font-size="10">🔍 Inspect</text>
+  <rect x="1280" y="356" width="80" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1290" y="374" class="text-muted" font-size="10">🗑 Remove</text>
+
+  <!-- Network Card 3: traefik_proxy -->
+  <rect class="card" x="40" y="468" width="1360" height="120"/>
+  <text x="72" y="502" class="text-mono" font-size="16" font-weight="600">traefik_proxy</text>
+  <rect x="204" y="488" width="52" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="212" y="502" class="text-muted-mono" font-size="10">bridge</text>
+  <rect x="268" y="488" width="46" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="276" y="502" class="text-muted-mono" font-size="10">local</text>
+  <text x="72" y="528" class="text-muted" font-size="10">Subnet: 172.21.0.0/16 · Gateway: 172.21.0.1</text>
+  <text x="72" y="548" class="text-muted" font-size="10">Connected:</text>
+  <rect x="134" y="537" width="50" height="18" rx="4" fill="rgba(34,197,94,0.08)" stroke="rgba(34,197,94,0.3)"/>
+  <text x="142" y="550" fill="#22c55e" font-size="9" font-family="JetBrains Mono">traefik</text>
+  <rect x="192" y="537" width="66" height="18" rx="4" fill="rgba(34,197,94,0.08)" stroke="rgba(34,197,94,0.3)"/>
+  <text x="200" y="550" fill="#22c55e" font-size="9" font-family="JetBrains Mono">portainer</text>
+  <rect x="266" y="537" width="60" height="18" rx="4" fill="rgba(34,197,94,0.08)" stroke="rgba(34,197,94,0.3)"/>
+  <text x="274" y="550" fill="#22c55e" font-size="9" font-family="JetBrains Mono">grafana</text>
+  <rect x="334" y="537" width="46" height="18" rx="4" fill="rgba(34,197,94,0.08)" stroke="rgba(34,197,94,0.3)"/>
+  <text x="342" y="550" fill="#22c55e" font-size="9" font-family="JetBrains Mono">pihole</text>
+  <rect x="1190" y="490" width="80" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1200" y="508" class="text-muted" font-size="10">🔍 Inspect</text>
+  <rect x="1280" y="490" width="80" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1290" y="508" class="text-muted" font-size="10">🗑 Remove</text>
+
+  <!-- Network Card 4: host (system) -->
+  <rect class="card" x="40" y="602" width="1360" height="90"/>
+  <text x="72" y="636" class="text-mono" font-size="16" font-weight="600">host</text>
+  <rect x="108" y="622" width="54" height="20" rx="6" fill="rgba(113,113,122,0.15)" stroke="#23233a"/>
+  <text x="116" y="636" class="text-muted-mono" font-size="10">system</text>
+  <rect x="174" y="622" width="42" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="182" y="636" class="text-muted-mono" font-size="10">host</text>
+  <rect x="228" y="622" width="46" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="236" y="636" class="text-muted-mono" font-size="10">local</text>
+  <text x="72" y="662" class="text-muted" font-size="10">Host network mode — no isolation</text>
+  <rect x="1190" y="624" width="80" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1200" y="642" class="text-muted" font-size="10">🔍 Inspect</text>
+
+  <!-- Network Card 5: none (system) -->
+  <rect class="card" x="40" y="706" width="1360" height="90"/>
+  <text x="72" y="740" class="text-mono" font-size="16" font-weight="600">none</text>
+  <rect x="110" y="726" width="54" height="20" rx="6" fill="rgba(113,113,122,0.15)" stroke="#23233a"/>
+  <text x="118" y="740" class="text-muted-mono" font-size="10">system</text>
+  <rect x="176" y="726" width="40" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="184" y="740" class="text-muted-mono" font-size="10">null</text>
+  <rect x="228" y="726" width="46" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="236" y="740" class="text-muted-mono" font-size="10">local</text>
+  <text x="72" y="766" class="text-muted" font-size="10">No networking — complete isolation</text>
+  <rect x="1190" y="728" width="80" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1200" y="746" class="text-muted" font-size="10">🔍 Inspect</text>
+
+  <text x="1350" y="880" class="text-muted" font-size="10" text-anchor="end">HLC — Networks</text>
+</svg>

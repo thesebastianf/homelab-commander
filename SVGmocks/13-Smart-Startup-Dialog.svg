@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" width="1440" height="900">
+  <defs>
+    <style>
+      .bg { fill: #0a0a0f; }
+      .overlay { fill: rgba(0,0,0,0.7); }
+      .dialog { fill: #13131a; stroke: #23233a; stroke-width: 1; rx: 16; }
+      .card { fill: #0a0a0f; stroke: #23233a; stroke-width: 1; rx: 10; }
+      .text-mono { fill: #e4e4e7; font-family: 'JetBrains Mono', monospace; }
+      .text-muted { fill: #71717a; font-family: 'Roboto', sans-serif; }
+      .text-muted-mono { fill: #71717a; font-family: 'JetBrains Mono', monospace; }
+      .input-bg { fill: #0a0a0f; stroke: #23233a; stroke-width: 1; rx: 8; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1440" height="900"/>
+  <rect class="overlay" width="1440" height="900"/>
+
+  <rect class="dialog" x="170" y="10" width="1100" height="880"/>
+
+  <!-- Header -->
+  <text x="210" y="48" class="text-mono" font-size="20" font-weight="700">🚀 Smart Startup</text>
+  <text x="210" y="68" class="text-muted" font-size="12">Auto-start stacks and containers when devices come online</text>
+  <text x="1230" y="46" class="text-muted" font-size="20">✕</text>
+
+  <!-- Info card -->
+  <rect x="210" y="82" width="1020" height="44" rx="8" fill="rgba(59,130,246,0.04)" stroke="rgba(59,130,246,0.2)"/>
+  <text x="236" y="100" fill="#3b82f6" font-family="Roboto" font-size="10">💡 Smart Startup monitors network devices and automatically starts/stops stacks when</text>
+  <text x="236" y="116" fill="#3b82f6" font-family="Roboto" font-size="10">trigger devices come online or go offline. Supports NAS, IP, Ping, and network device detection.</text>
+
+  <rect x="210" y="136" width="1020" height="1" fill="#23233a"/>
+
+  <!-- ========== STACK TRIGGERS ========== -->
+  <text x="210" y="164" class="text-mono" font-size="14" font-weight="700">Stack Triggers</text>
+
+  <!-- Stack 1: web-stack (enabled, NAS trigger) -->
+  <rect class="card" x="210" y="178" width="1020" height="106"/>
+  <rect x="210" y="178" width="4" height="106" rx="2" fill="#22c55e"/>
+  <text x="236" y="202" class="text-mono" font-size="13" font-weight="600">web-stack</text>
+  <rect x="328" y="188" width="48" height="18" rx="6" fill="rgba(34,197,94,0.1)" stroke="rgba(34,197,94,0.3)"/>
+  <text x="338" y="201" fill="#22c55e" font-size="9" font-family="JetBrains Mono">Active</text>
+  <text x="390" y="202" class="text-muted" font-size="10">3 services</text>
+
+  <rect x="1140" y="188" width="40" height="22" rx="11" fill="#6d5acd"/>
+  <circle cx="1170" cy="199" r="8" fill="#fff"/>
+
+  <text x="236" y="226" class="text-muted" font-size="10">Trigger Type</text>
+  <rect class="input-bg" x="236" y="232" width="140" height="24"/>
+  <text x="250" y="249" class="text-mono" font-size="9">NAS Device</text>
+  <text x="366" y="249" class="text-muted" font-size="10">▼</text>
+
+  <text x="400" y="226" class="text-muted" font-size="10">Device Name/IP</text>
+  <rect class="input-bg" x="400" y="232" width="200" height="24"/>
+  <text x="414" y="249" class="text-mono" font-size="9">nas.local</text>
+
+  <text x="620" y="226" class="text-muted" font-size="10">Start Delay (s)</text>
+  <rect class="input-bg" x="620" y="232" width="60" height="24"/>
+  <text x="634" y="249" class="text-mono" font-size="9">30</text>
+
+  <text x="700" y="226" class="text-muted" font-size="10">Auto-start containers</text>
+  <rect x="700" y="236" width="32" height="16" rx="8" fill="#6d5acd"/>
+  <circle cx="724" cy="244" r="5" fill="#fff"/>
+
+  <text x="236" y="272" class="text-muted-mono" font-size="9">Status: NAS online — stack running ✓</text>
+
+  <!-- Stack 2: monitoring-stack (enabled) -->
+  <rect class="card" x="210" y="296" width="1020" height="80"/>
+  <rect x="210" y="296" width="4" height="80" rx="2" fill="#22c55e"/>
+  <text x="236" y="320" class="text-mono" font-size="13" font-weight="600">monitoring-stack</text>
+  <rect x="370" y="306" width="48" height="18" rx="6" fill="rgba(34,197,94,0.1)" stroke="rgba(34,197,94,0.3)"/>
+  <text x="380" y="319" fill="#22c55e" font-size="9" font-family="JetBrains Mono">Active</text>
+  <text x="432" y="320" class="text-muted" font-size="10">4 services</text>
+  <rect x="1140" y="306" width="40" height="22" rx="11" fill="#6d5acd"/>
+  <circle cx="1170" cy="317" r="8" fill="#fff"/>
+
+  <text x="236" y="346" class="text-muted" font-size="10">NAS Device · nas.local · Delay: 30s · Auto-start: Yes</text>
+  <text x="236" y="364" class="text-muted-mono" font-size="9">Status: NAS online — stack running ✓</text>
+
+  <!-- Stack 3: media-stack (disabled) -->
+  <rect class="card" x="210" y="388" width="1020" height="50"/>
+  <text x="236" y="418" class="text-mono" font-size="13" font-weight="600" fill="#71717a">media-stack</text>
+  <rect x="328" y="404" width="58" height="18" rx="6" fill="rgba(113,113,122,0.1)" stroke="#23233a"/>
+  <text x="338" y="417" class="text-muted-mono" font-size="9">Inactive</text>
+  <text x="400" y="418" class="text-muted" font-size="10">3 services</text>
+  <rect x="1140" y="404" width="40" height="22" rx="11" fill="#23233a"/>
+  <circle cx="1152" cy="415" r="8" fill="#71717a"/>
+
+  <rect x="210" y="452" width="1020" height="1" fill="#23233a"/>
+
+  <!-- ========== CONTAINER TRIGGERS ========== -->
+  <text x="210" y="480" class="text-mono" font-size="14" font-weight="700">Container Triggers</text>
+
+  <!-- Container 1: nginx-proxy (enabled) -->
+  <rect class="card" x="210" y="494" width="1020" height="80"/>
+  <rect x="210" y="494" width="4" height="80" rx="2" fill="#22c55e"/>
+  <text x="236" y="518" class="text-mono" font-size="13" font-weight="600">nginx-proxy</text>
+  <text x="346" y="518" class="text-muted-mono" font-size="10">nginx:latest</text>
+  <rect x="446" y="504" width="48" height="18" rx="6" fill="rgba(34,197,94,0.1)" stroke="rgba(34,197,94,0.3)"/>
+  <text x="456" y="517" fill="#22c55e" font-size="9" font-family="JetBrains Mono">Active</text>
+  <rect x="1140" y="504" width="40" height="22" rx="11" fill="#6d5acd"/>
+  <circle cx="1170" cy="515" r="8" fill="#fff"/>
+
+  <text x="236" y="544" class="text-muted" font-size="10">NAS Device · nas.local · Delay: 30s · Auto-start: Yes</text>
+  <text x="236" y="562" class="text-muted-mono" font-size="9">Status: NAS online — container running ✓</text>
+
+  <!-- Container 2: app-backend (enabled) -->
+  <rect class="card" x="210" y="586" width="1020" height="80"/>
+  <rect x="210" y="586" width="4" height="80" rx="2" fill="#22c55e"/>
+  <text x="236" y="610" class="text-mono" font-size="13" font-weight="600">app-backend</text>
+  <text x="346" y="610" class="text-muted-mono" font-size="10">node:20-alpine</text>
+  <rect x="466" y="596" width="48" height="18" rx="6" fill="rgba(34,197,94,0.1)" stroke="rgba(34,197,94,0.3)"/>
+  <text x="476" y="609" fill="#22c55e" font-size="9" font-family="JetBrains Mono">Active</text>
+  <rect x="1140" y="596" width="40" height="22" rx="11" fill="#6d5acd"/>
+  <circle cx="1170" cy="607" r="8" fill="#fff"/>
+
+  <text x="236" y="636" class="text-muted" font-size="10">Network Device · 192.168.1.100 · Delay: 10s · Auto-start: Yes</text>
+  <text x="236" y="654" class="text-muted-mono" font-size="9">Status: Device online — container running ✓</text>
+
+  <!-- Container 3: postgres-db (disabled) -->
+  <rect class="card" x="210" y="678" width="1020" height="50"/>
+  <text x="236" y="708" class="text-mono" font-size="13" font-weight="600" fill="#71717a">postgres-db</text>
+  <text x="336" y="708" class="text-muted-mono" font-size="10">postgres:15-alpine</text>
+  <rect x="1140" y="694" width="40" height="22" rx="11" fill="#23233a"/>
+  <circle cx="1152" cy="705" r="8" fill="#71717a"/>
+
+  <!-- Container 4: redis-cache (disabled) -->
+  <rect class="card" x="210" y="740" width="1020" height="50"/>
+  <text x="236" y="770" class="text-mono" font-size="13" font-weight="600" fill="#71717a">redis-cache</text>
+  <text x="336" y="770" class="text-muted-mono" font-size="10">redis:7-alpine</text>
+  <rect x="1140" y="756" width="40" height="22" rx="11" fill="#23233a"/>
+  <circle cx="1152" cy="767" r="8" fill="#71717a"/>
+
+  <!-- Container 5: monitoring-grafana (disabled) -->
+  <rect class="card" x="210" y="802" width="1020" height="50"/>
+  <text x="236" y="832" class="text-mono" font-size="13" font-weight="600" fill="#71717a">monitoring-grafana</text>
+  <text x="386" y="832" class="text-muted-mono" font-size="10">grafana/grafana:latest</text>
+  <rect x="1140" y="818" width="40" height="22" rx="11" fill="#23233a"/>
+  <circle cx="1152" cy="829" r="8" fill="#71717a"/>
+
+  <text x="1230" y="880" class="text-muted" font-size="9" text-anchor="end">HLC — Smart Startup Dialog</text>
+</svg>

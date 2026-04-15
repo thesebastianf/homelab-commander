@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" width="1440" height="900">
+  <defs>
+    <style>
+      .bg { fill: #0a0a0f; }
+      .overlay { fill: rgba(0,0,0,0.7); }
+      .dialog { fill: #13131a; stroke: #23233a; stroke-width: 1; rx: 16; }
+      .text-mono { fill: #e4e4e7; font-family: 'JetBrains Mono', monospace; }
+      .text-muted { fill: #71717a; font-family: 'Roboto', sans-serif; }
+      .text-muted-mono { fill: #71717a; font-family: 'JetBrains Mono', monospace; }
+      .input-bg { fill: #0a0a0f; stroke: #23233a; stroke-width: 1; rx: 8; }
+      .code-bg { fill: #080810; stroke: #23233a; stroke-width: 1; rx: 8; }
+      .card { fill: #0a0a0f; stroke: #23233a; stroke-width: 1; rx: 10; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1440" height="900"/>
+  <rect class="overlay" width="1440" height="900"/>
+
+  <rect class="dialog" x="80" y="20" width="1280" height="860"/>
+
+  <!-- Header -->
+  <text x="120" y="58" class="text-mono" font-size="20" font-weight="700">✏️ Edit Stack — monitoring</text>
+  <text x="120" y="78" class="text-muted" font-size="12">Modify compose configuration, environment, and stack settings</text>
+  <text x="1320" y="56" class="text-muted" font-size="20">✕</text>
+
+  <!-- Paths -->
+  <text x="120" y="102" class="text-muted" font-size="10">📁 /opt/stacks/monitoring 📋  💽 /mnt/docker-volumes/monitoring 📋</text>
+
+  <!-- 5 Tabs — .env active -->
+  <rect x="120" y="120" width="1200" height="1" fill="#23233a"/>
+  <text x="128" y="142" class="text-muted-mono" font-size="11">docker-compose.yml</text>
+  <rect x="260" y="120" width="30" height="2" fill="#6d5acd"/>
+  <text x="264" y="142" class="text-mono" font-size="11" font-weight="500" fill="#e4e4e7">.env</text>
+  <text x="310" y="142" class="text-muted-mono" font-size="11">GitHub Sync</text>
+  <text x="412" y="142" class="text-muted-mono" font-size="11">Versions</text>
+  <text x="490" y="142" class="text-muted-mono" font-size="11">Compare</text>
+
+  <!-- Split: Env editor (left) + AI Suggestions (right) -->
+  <!-- Left: .env editor -->
+  <rect class="code-bg" x="120" y="158" width="720" height="580"/>
+  <text x="136" y="182" class="text-muted-mono" font-size="10">1</text>
+  <text x="170" y="182" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">GF_PASS</text>
+  <text x="222" y="182" class="text-muted-mono" font-size="10">=</text>
+  <text x="234" y="182" fill="#22c55e" font-family="JetBrains Mono" font-size="10">super_secret_grafana_pass</text>
+  <text x="136" y="198" class="text-muted-mono" font-size="10">2</text>
+  <text x="170" y="198" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">GF_INSTALL_PLUGINS</text>
+  <text x="334" y="198" class="text-muted-mono" font-size="10">=</text>
+  <text x="346" y="198" fill="#22c55e" font-family="JetBrains Mono" font-size="10">grafana-clock-panel</text>
+  <text x="136" y="214" class="text-muted-mono" font-size="10">3</text>
+  <text x="170" y="214" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">PROMETHEUS_RETENTION</text>
+  <text x="352" y="214" class="text-muted-mono" font-size="10">=</text>
+  <text x="364" y="214" fill="#22c55e" font-family="JetBrains Mono" font-size="10">30d</text>
+  <text x="136" y="230" class="text-muted-mono" font-size="10">4</text>
+  <text x="170" y="230" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">ALERTMANAGER_WEBHOOK</text>
+  <text x="358" y="230" class="text-muted-mono" font-size="10">=</text>
+  <text x="370" y="230" fill="#22c55e" font-family="JetBrains Mono" font-size="10">https://n8n.local/webhook/alerts</text>
+
+  <!-- Right: AI Environment Suggestions panel -->
+  <rect class="card" x="860" y="158" width="460" height="580"/>
+  <text x="884" y="186" fill="#6d5acd" font-family="JetBrains Mono" font-size="13" font-weight="600">✨ AI Environment Suggestions</text>
+  <rect x="884" y="198" width="140" height="28" rx="6" fill="#6d5acd"/>
+  <text x="904" y="217" fill="#fff" font-family="Roboto" font-size="11" font-weight="500">🔮 Generate</text>
+
+  <!-- Generated suggestions -->
+  <rect x="884" y="240" width="416" height="1" fill="#23233a"/>
+
+  <!-- Suggestion 1 -->
+  <rect x="884" y="254" width="416" height="86" rx="6" fill="rgba(13,13,26,0.5)" stroke="#23233a"/>
+  <text x="900" y="274" fill="#6d5acd" font-family="JetBrains Mono" font-size="11">GF_SERVER_ROOT_URL</text>
+  <rect x="1068" y="262" width="50" height="16" rx="4" fill="rgba(239,68,68,0.1)" stroke="rgba(239,68,68,0.3)"/>
+  <text x="1078" y="274" fill="#ef4444" font-size="8" font-family="JetBrains Mono">Required</text>
+  <rect x="1126" y="262" width="66" height="16" rx="4" fill="rgba(34,197,94,0.1)" stroke="rgba(34,197,94,0.3)"/>
+  <text x="1136" y="274" fill="#22c55e" font-size="8" font-family="JetBrains Mono">Network</text>
+  <text x="900" y="294" class="text-muted" font-size="9">Public URL for Grafana reverse proxy routing</text>
+  <text x="900" y="312" class="text-muted-mono" font-size="9">Example: https://grafana.homelab.local</text>
+  <text x="1222" y="330" fill="#3b82f6" font-size="9" font-family="Roboto">📋 Copy</text>
+  <text x="1268" y="330" fill="#3b82f6" font-size="9" font-family="Roboto">➕ Insert</text>
+
+  <!-- Suggestion 2 -->
+  <rect x="884" y="350" width="416" height="86" rx="6" fill="rgba(13,13,26,0.5)" stroke="#23233a"/>
+  <text x="900" y="370" fill="#6d5acd" font-family="JetBrains Mono" font-size="11">GF_AUTH_ANONYMOUS_ENABLED</text>
+  <rect x="1146" y="358" width="56" height="16" rx="4" fill="rgba(109,90,205,0.1)" stroke="rgba(109,90,205,0.3)"/>
+  <text x="1156" y="370" fill="#6d5acd" font-size="8" font-family="JetBrains Mono">Security</text>
+  <text x="900" y="390" class="text-muted" font-size="9">Allow anonymous access for dashboards</text>
+  <text x="900" y="408" class="text-muted-mono" font-size="9">Example: false</text>
+  <text x="1222" y="426" fill="#3b82f6" font-size="9" font-family="Roboto">📋 Copy</text>
+  <text x="1268" y="426" fill="#3b82f6" font-size="9" font-family="Roboto">➕ Insert</text>
+
+  <!-- Suggestion 3 -->
+  <rect x="884" y="446" width="416" height="86" rx="6" fill="rgba(13,13,26,0.5)" stroke="#23233a"/>
+  <text x="900" y="466" fill="#6d5acd" font-family="JetBrains Mono" font-size="11">PROMETHEUS_EXTERNAL_URL</text>
+  <rect x="1122" y="454" width="66" height="16" rx="4" fill="rgba(34,197,94,0.1)" stroke="rgba(34,197,94,0.3)"/>
+  <text x="1132" y="466" fill="#22c55e" font-size="8" font-family="JetBrains Mono">Network</text>
+  <text x="900" y="486" class="text-muted" font-size="9">External URL for Prometheus web interface</text>
+  <text x="900" y="504" class="text-muted-mono" font-size="9">Example: https://prometheus.homelab.local</text>
+  <text x="1222" y="522" fill="#3b82f6" font-size="9" font-family="Roboto">📋 Copy</text>
+  <text x="1268" y="522" fill="#3b82f6" font-size="9" font-family="Roboto">➕ Insert</text>
+
+  <!-- Footer -->
+  <rect x="120" y="758" width="1200" height="1" fill="#23233a"/>
+  <rect x="120" y="778" width="80" height="36" rx="8" stroke="#23233a" fill="transparent"/>
+  <text x="138" y="801" class="text-muted" font-size="12">Cancel</text>
+  <rect x="1220" y="778" width="120" height="36" rx="8" fill="#6d5acd"/>
+  <text x="1238" y="801" fill="#fff" font-family="Roboto" font-size="12" font-weight="500">Save Changes</text>
+
+  <text x="1320" y="868" class="text-muted" font-size="9" text-anchor="end">HLC — Enhanced Stack Editor (.env + AI Suggestions)</text>
+</svg>
