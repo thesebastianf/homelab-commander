@@ -20,9 +20,10 @@ router.post('/pull', validateBody(pullImageBody), asyncHandler(async (req, res) 
 }));
 
 router.delete('/:id', asyncHandler(async (req, res) => {
-  const force = req.query.force === 'true';
-  await dockerService.removeImage(req.params.id, force);
-  await auditLog('remove', 'image', req.params.id);
+  const id = String(req.params.id);
+  const force = String(req.query.force || '') === 'true';
+  await dockerService.removeImage(id, force);
+  await auditLog('remove', 'image', id);
   res.json({ ok: true });
 }));
 

@@ -1,8 +1,8 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { IncomingMessage, Server } from 'http';
 import { URL } from 'url';
-import * as dockerService from '../services/docker.js';
-import { logger } from '../logger.js';
+import * as dockerService from './services/docker.js';
+import { logger } from './logger.js';
 
 export function setupWebSocket(server: Server): void {
   const wss = new WebSocketServer({ noServer: true });

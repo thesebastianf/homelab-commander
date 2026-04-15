@@ -20,51 +20,58 @@ router.get('/', asyncHandler(async (_req, res) => {
 
 // Get single container
 router.get('/:id', asyncHandler(async (req, res) => {
-  const container = await dockerService.getContainer(req.params.id);
+  const id = String(req.params.id);
+  const container = await dockerService.getContainer(id);
   res.json(container);
 }));
 
 // Get container stats
 router.get('/:id/stats', asyncHandler(async (req, res) => {
-  const stats = await dockerService.getContainerStats(req.params.id);
+  const id = String(req.params.id);
+  const stats = await dockerService.getContainerStats(id);
   res.json(stats);
 }));
 
 // Get container logs
 router.get('/:id/logs', asyncHandler(async (req, res) => {
-  const tail = parseInt(req.query.tail as string) || 100;
-  const logs = await dockerService.getContainerLogs(req.params.id, tail);
+  const id = String(req.params.id);
+  const tail = parseInt(String(req.query.tail || '100')) || 100;
+  const logs = await dockerService.getContainerLogs(id, tail);
   res.json({ logs });
 }));
 
 // Start container
 router.post('/:id/start', asyncHandler(async (req, res) => {
-  await dockerService.startContainer(req.params.id);
-  await auditLog('start', 'container', req.params.id);
-  await sendNotification('containerStarted', { containerId: req.params.id });
+  const id = String(req.params.id);
+  await dockerService.startContainer(id);
+  await auditLog('start', 'container', id);
+  await sendNotification('containerStarted', { containerId: id });
   res.json({ ok: true });
 }));
 
 // Stop container
 router.post('/:id/stop', asyncHandler(async (req, res) => {
-  await dockerService.stopContainer(req.params.id);
-  await auditLog('stop', 'container', req.params.id);
-  await sendNotification('containerStopped', { containerId: req.params.id });
+  const id = String(req.params.id);
+  await dockerService.stopContainer(id);
+  await auditLog('stop', 'container', id);
+  await sendNotification('containerStopped', { containerId: id });
   res.json({ ok: true });
 }));
 
 // Restart container
 router.post('/:id/restart', asyncHandler(async (req, res) => {
-  await dockerService.restartContainer(req.params.id);
-  await auditLog('restart', 'container', req.params.id);
+  const id = String(req.params.id);
+  await dockerService.restartContainer(id);
+  await auditLog('restart', 'container', id);
   res.json({ ok: true });
 }));
 
 // Remove container
 router.delete('/:id', asyncHandler(async (req, res) => {
-  const force = req.query.force === 'true';
-  await dockerService.removeContainer(req.params.id, force);
-  await auditLog('remove', 'container', req.params.id);
+  const id = String(req.params.id);
+  const force = String(req.query.force || '') === 'true';
+  await dockerService.removeContainer(id, force);
+  await auditLog('remove', 'container', id);
   res.json({ ok: true });
 }));
 

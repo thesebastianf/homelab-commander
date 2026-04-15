@@ -20,8 +20,9 @@ router.post('/', validateBody(createVolumeBody), asyncHandler(async (req, res) =
 }));
 
 router.delete('/:name', asyncHandler(async (req, res) => {
-  await dockerService.removeVolume(req.params.name);
-  await auditLog('remove', 'volume', req.params.name);
+  const name = String(req.params.name);
+  await dockerService.removeVolume(name);
+  await auditLog('remove', 'volume', name);
   res.json({ ok: true });
 }));
 

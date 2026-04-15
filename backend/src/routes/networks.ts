@@ -20,8 +20,9 @@ router.post('/', validateBody(createNetworkBody), asyncHandler(async (req, res) 
 }));
 
 router.delete('/:id', asyncHandler(async (req, res) => {
-  await dockerService.removeNetwork(req.params.id);
-  await auditLog('remove', 'network', req.params.id);
+  const id = String(req.params.id);
+  await dockerService.removeNetwork(id);
+  await auditLog('remove', 'network', id);
   res.json({ ok: true });
 }));
 

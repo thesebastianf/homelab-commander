@@ -74,7 +74,8 @@ router.get('/:stackId/jobs', asyncHandler(async (req, res) => {
 
 // Run backup now
 router.post('/:stackId/run', asyncHandler(async (req, res) => {
-  await runBackup(req.params.stackId);
+  const stackId = String(req.params.stackId);
+  await runBackup(stackId);
   res.json({ ok: true });
 }));
 

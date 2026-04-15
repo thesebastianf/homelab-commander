@@ -113,34 +113,37 @@ router.put('/:id', validateBody(updateStackBody), asyncHandler(async (req, res) 
   }
 
   const { rows: [updated] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [req.params.id]);
-  await auditLog('update', 'stack', req.params.id);
+  const id = String(req.params.id);
+  await auditLog('update', 'stack', id);
   res.json(mapStack(updated));
 }));
 
 // Delete stack
 router.delete('/:id', asyncHandler(async (req, res) => {
-  await pool.query('DELETE FROM stacks WHERE id = $1', [req.params.id]);
-  await auditLog('delete', 'stack', req.params.id);
+  const id = String(req.params.id);
+  await pool.query('DELETE FROM stacks WHERE id = $1', [id]);
+  await auditLog('delete', 'stack', id);
   res.json({ ok: true });
 }));
 
 // Deploy stack (docker compose up)
 router.post('/:id/deploy', asyncHandler(async (req, res) => {
-  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [req.params.id]);
+  const id = String(req.params.id);
+  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
-  await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [req.params.id]);
+  await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [id]);
 
   try {
     await execFileAsync('docker', ['compose', '-f', join(stack.stack_path, 'docker-compose.yml'), 'up', '-d'],
       { cwd: stack.stack_path, timeout: 120000 }
     );
-    await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [req.params.id]);
+    await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
     await sendNotification('stackDeployed', { name: stack.name });
-    await auditLog('deploy', 'stack', req.params.id);
+    await auditLog('deploy', 'stack', id);
     res.json({ ok: true });
   } catch (err: any) {
-    await pool.query("UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1", [req.params.id]);
+    await pool.query("UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1", [id]);
     await sendNotification('stackFailed', { name: stack.name, error: err.message });
     res.status(500).json({ error: err.message });
   }
@@ -148,15 +151,16 @@ router.post('/:id/deploy', asyncHandler(async (req, res) => {
 
 // Stop stack
 router.post('/:id/stop', asyncHandler(async (req, res) => {
-  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [req.params.id]);
+  const id = String(req.params.id);
+  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
   try {
     await execFileAsync('docker', ['compose', '-f', join(stack.stack_path, 'docker-compose.yml'), 'down'],
       { cwd: stack.stack_path, timeout: 120000 }
     );
-    await pool.query("UPDATE stacks SET status = 'stopped', updated_at = NOW() WHERE id = $1", [req.params.id]);
-    await auditLog('stop', 'stack', req.params.id);
+    await pool.query("UPDATE stacks SET status = 'stopped', updated_at = NOW() WHERE id = $1", [id]);
+    await auditLog('stop', 'stack', id);
     res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -165,15 +169,16 @@ router.post('/:id/stop', asyncHandler(async (req, res) => {
 
 // Restart stack
 router.post('/:id/restart', asyncHandler(async (req, res) => {
-  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [req.params.id]);
+  const id = String(req.params.id);
+  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
   try {
     await execFileAsync('docker', ['compose', '-f', join(stack.stack_path, 'docker-compose.yml'), 'restart'],
       { cwd: stack.stack_path, timeout: 120000 }
     );
-    await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [req.params.id]);
-    await auditLog('restart', 'stack', req.params.id);
+    await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
+    await auditLog('restart', 'stack', id);
     res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -182,23 +187,25 @@ router.post('/:id/restart', asyncHandler(async (req, res) => {
 
 // Get stack versions
 router.get('/:id/versions', asyncHandler(async (req, res) => {
+  const id = String(req.params.id);
   const { rows } = await pool.query(
     'SELECT * FROM stack_versions WHERE stack_id = $1 ORDER BY version DESC',
-    [req.params.id]
+    [id]
   );
   res.json(rows.map(mapVersion));
 }));
 
 // Restore stack to a version
 router.post('/:id/restore/:version', asyncHandler(async (req, res) => {
-  const version = parseInt(req.params.version);
+  const id = String(req.params.id);
+  const version = parseInt(String(req.params.version));
   const { rows: [versionRow] } = await pool.query(
     'SELECT * FROM stack_versions WHERE stack_id = $1 AND version = $2',
-    [req.params.id, version]
+    [id, version]
   );
   if (!versionRow) { res.status(404).json({ error: 'Version not found' }); return; }
 
-  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [req.params.id]);
+  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
   await writeFile(join(stack.stack_path, 'docker-compose.yml'), versionRow.compose_content);
@@ -209,16 +216,16 @@ router.post('/:id/restore/:version', asyncHandler(async (req, res) => {
   const newVersion = stack.version + 1;
   await pool.query(
     `UPDATE stacks SET compose_content = $1, env_content = $2, version = $3, updated_at = NOW() WHERE id = $4`,
-    [versionRow.compose_content, versionRow.env_content || '', newVersion, req.params.id]
+    [versionRow.compose_content, versionRow.env_content || '', newVersion, id]
   );
 
   await pool.query(
     `INSERT INTO stack_versions (stack_id, version, compose_content, env_content, description)
      VALUES ($1, $2, $3, $4, $5)`,
-    [req.params.id, newVersion, versionRow.compose_content, versionRow.env_content || '', `Restored from v${version}`]
+    [id, newVersion, versionRow.compose_content, versionRow.env_content || '', `Restored from v${version}`]
   );
 
-  await auditLog('restore', 'stack', req.params.id, { fromVersion: version, toVersion: newVersion });
+  await auditLog('restore', 'stack', id, { fromVersion: version, toVersion: newVersion });
   res.json({ ok: true, version: newVersion });
 }));
 
