@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" width="1440" height="900">
+  <defs>
+    <style>
+      .bg { fill: #0a0a0f; }
+      .card { fill: #13131a; stroke: #23233a; stroke-width: 1; rx: 12; }
+      .header-bg { fill: #13131a; opacity: 0.9; }
+      .text-primary { fill: #e4e4e7; font-family: 'JetBrains Mono', monospace; }
+      .text-muted { fill: #71717a; font-family: 'Roboto', sans-serif; }
+      .text-mono { fill: #e4e4e7; font-family: 'JetBrains Mono', monospace; }
+      .text-muted-mono { fill: #71717a; font-family: 'JetBrains Mono', monospace; }
+      .tab-active { fill: #1a1a2e; rx: 8; }
+      .badge-primary { fill: #6d5acd; rx: 9; }
+    </style>
+    <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6d5acd"/>
+      <stop offset="100%" style="stop-color:#3b82f6"/>
+    </linearGradient>
+  </defs>
+
+  <rect class="bg" width="1440" height="900"/>
+  <rect class="header-bg" x="0" y="0" width="1440" height="72"/>
+  <line x1="0" y1="72" x2="1440" y2="72" stroke="#23233a"/>
+  <rect x="40" y="16" width="40" height="40" rx="10" fill="url(#headerGrad)"/>
+  <text x="52" y="42" fill="#fff" font-family="JetBrains Mono" font-size="16" font-weight="700">⬡</text>
+  <text x="92" y="36" class="text-mono" font-size="22" font-weight="700">HLC</text>
+  <text x="92" y="52" class="text-muted" font-size="11">Homelab Command</text>
+
+  <!-- Tabs -->
+  <text x="60" y="115" class="text-muted" font-size="13">🏠 Dashboard</text>
+  <text x="170" y="115" class="text-muted" font-size="13">📦 Stacks</text>
+  <text x="272" y="115" class="text-muted" font-size="13">📦 Containers</text>
+  <text x="408" y="115" class="text-muted" font-size="13">💽 Volumes</text>
+
+  <rect class="tab-active" x="490" y="92" width="80" height="36"/>
+  <text x="502" y="115" fill="#e4e4e7" font-family="Roboto" font-size="13" font-weight="500">🖼 Images</text>
+
+  <text x="586" y="115" class="text-muted" font-size="13">🌐 Networks</text>
+
+  <!-- Title -->
+  <text x="40" y="168" class="text-mono" font-size="18" font-weight="600">Docker Images</text>
+  <text x="40" y="186" class="text-muted" font-size="12">Manage your Docker images and tags</text>
+
+  <!-- Image Card 1 -->
+  <rect class="card" x="40" y="210" width="1360" height="90"/>
+  <text x="72" y="240" fill="#6d5acd" font-size="16">🖼</text>
+  <text x="100" y="238" class="text-mono" font-size="15" font-weight="600">traefik</text>
+  <rect x="172" y="224" width="36" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="178" y="238" fill="#6d5acd" font-family="JetBrains Mono" font-size="10">v3.0</text>
+  <text x="100" y="258" class="text-muted-mono" font-size="11">Size: 148 MB</text>
+  <text x="260" y="258" class="text-muted-mono" font-size="11">Created: 3 days ago</text>
+  <rect x="100" y="268" width="40" height="16" rx="4" fill="rgba(34,197,94,0.15)"/>
+  <text x="108" y="280" fill="#22c55e" font-family="JetBrains Mono" font-size="9">In use</text>
+  <rect x="1260" y="230" width="60" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1270" y="249" class="text-muted" font-size="10">⬇ Pull</text>
+  <rect x="1330" y="230" width="40" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1340" y="249" class="text-muted" font-size="10">🗑</text>
+
+  <!-- Image Card 2 -->
+  <rect class="card" x="40" y="314" width="1360" height="90"/>
+  <text x="72" y="344" fill="#6d5acd" font-size="16">🖼</text>
+  <text x="100" y="342" class="text-mono" font-size="15" font-weight="600">grafana/grafana</text>
+  <rect x="236" y="328" width="36" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="242" y="342" fill="#6d5acd" font-family="JetBrains Mono" font-size="10">10.4</text>
+  <text x="100" y="362" class="text-muted-mono" font-size="11">Size: 412 MB</text>
+  <text x="260" y="362" class="text-muted-mono" font-size="11">Created: 1 week ago</text>
+  <rect x="100" y="372" width="40" height="16" rx="4" fill="rgba(34,197,94,0.15)"/>
+  <text x="108" y="384" fill="#22c55e" font-family="JetBrains Mono" font-size="9">In use</text>
+  <rect x="1260" y="334" width="60" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1270" y="353" class="text-muted" font-size="10">⬇ Pull</text>
+  <rect x="1330" y="334" width="40" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1340" y="353" class="text-muted" font-size="10">🗑</text>
+
+  <!-- Image Card 3 -->
+  <rect class="card" x="40" y="418" width="1360" height="90"/>
+  <text x="72" y="448" fill="#6d5acd" font-size="16">🖼</text>
+  <text x="100" y="446" class="text-mono" font-size="15" font-weight="600">prom/prometheus</text>
+  <rect x="240" y="432" width="44" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="246" y="446" fill="#6d5acd" font-family="JetBrains Mono" font-size="10">v2.51</text>
+  <text x="100" y="466" class="text-muted-mono" font-size="11">Size: 265 MB</text>
+  <text x="260" y="466" class="text-muted-mono" font-size="11">Created: 2 weeks ago</text>
+  <rect x="100" y="476" width="40" height="16" rx="4" fill="rgba(34,197,94,0.15)"/>
+  <text x="108" y="488" fill="#22c55e" font-family="JetBrains Mono" font-size="9">In use</text>
+  <rect x="1260" y="438" width="60" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1270" y="457" class="text-muted" font-size="10">⬇ Pull</text>
+  <rect x="1330" y="438" width="40" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1340" y="457" class="text-muted" font-size="10">🗑</text>
+
+  <!-- Image Card 4 -->
+  <rect class="card" x="40" y="522" width="1360" height="90"/>
+  <text x="72" y="552" fill="#6d5acd" font-size="16">🖼</text>
+  <text x="100" y="550" class="text-mono" font-size="15" font-weight="600">pihole/pihole</text>
+  <rect x="220" y="536" width="46" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="226" y="550" fill="#6d5acd" font-family="JetBrains Mono" font-size="10">latest</text>
+  <text x="100" y="570" class="text-muted-mono" font-size="11">Size: 503 MB</text>
+  <text x="260" y="570" class="text-muted-mono" font-size="11">Created: 5 days ago</text>
+  <rect x="100" y="580" width="40" height="16" rx="4" fill="rgba(34,197,94,0.15)"/>
+  <text x="108" y="592" fill="#22c55e" font-family="JetBrains Mono" font-size="9">In use</text>
+  <rect x="1260" y="542" width="60" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1270" y="561" class="text-muted" font-size="10">⬇ Pull</text>
+  <rect x="1330" y="542" width="40" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1340" y="561" class="text-muted" font-size="10">🗑</text>
+
+  <!-- Image Card 5: dangling -->
+  <rect class="card" x="40" y="626" width="1360" height="90"/>
+  <text x="72" y="656" fill="#71717a" font-size="16">🖼</text>
+  <text x="100" y="654" class="text-mono" font-size="15" font-weight="600" fill="#71717a">nginx</text>
+  <rect x="152" y="640" width="46" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="158" y="654" class="text-muted-mono" font-size="10">1.25.4</text>
+  <text x="100" y="674" class="text-muted-mono" font-size="11">Size: 187 MB</text>
+  <text x="260" y="674" class="text-muted-mono" font-size="11">Created: 1 month ago</text>
+  <rect x="100" y="684" width="50" height="16" rx="4" fill="rgba(113,113,122,0.1)"/>
+  <text x="106" y="696" class="text-muted-mono" font-size="9">Unused</text>
+  <rect x="1260" y="646" width="60" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1270" y="665" class="text-muted" font-size="10">⬇ Pull</text>
+  <rect x="1330" y="646" width="40" height="28" rx="6" stroke="rgba(239,68,68,0.3)" fill="rgba(239,68,68,0.05)"/>
+  <text x="1340" y="665" fill="#ef4444" font-size="10">🗑</text>
+
+  <text x="1350" y="880" class="text-muted" font-size="10" text-anchor="end">HLC — Images</text>
+</svg>

@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" width="1440" height="900">
+  <defs>
+    <style>
+      .bg { fill: #0a0a0f; }
+      .overlay { fill: rgba(0,0,0,0.7); }
+      .dialog { fill: #13131a; stroke: #23233a; stroke-width: 1; rx: 16; }
+      .text-mono { fill: #e4e4e7; font-family: 'JetBrains Mono', monospace; }
+      .text-muted { fill: #71717a; font-family: 'Roboto', sans-serif; }
+      .text-muted-mono { fill: #71717a; font-family: 'JetBrains Mono', monospace; }
+      .input-bg { fill: #0a0a0f; stroke: #23233a; stroke-width: 1; rx: 8; }
+      .code-bg { fill: #080810; stroke: #23233a; stroke-width: 1; rx: 8; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1440" height="900"/>
+  <rect class="overlay" width="1440" height="900"/>
+
+  <rect class="dialog" x="120" y="20" width="1200" height="860"/>
+
+  <!-- Header -->
+  <text x="160" y="58" class="text-mono" font-size="20" font-weight="700">📦 New Stack</text>
+  <text x="160" y="78" class="text-muted" font-size="12">Create a new Docker Compose stack</text>
+  <text x="1280" y="56" class="text-muted" font-size="20">✕</text>
+
+  <!-- Stack Name + Template -->
+  <text x="160" y="108" class="text-muted" font-size="11">Stack Name *</text>
+  <rect class="input-bg" x="160" y="116" width="300" height="34"/>
+  <text x="176" y="138" class="text-mono" font-size="12">my-awesome-stack</text>
+
+  <text x="490" y="108" class="text-muted" font-size="11">Template</text>
+  <rect class="input-bg" x="490" y="116" width="260" height="34"/>
+  <text x="506" y="138" class="text-mono" font-size="12">WordPress + MySQL</text>
+  <text x="726" y="138" class="text-muted" font-size="10">▼</text>
+
+  <!-- Paths -->
+  <text x="160" y="170" class="text-muted" font-size="10">Stack Path:</text>
+  <text x="226" y="170" class="text-muted-mono" font-size="10">/opt/stacks/my-awesome-stack</text>
+  <text x="458" y="170" fill="#3b82f6" font-size="10" font-family="Roboto">📋</text>
+  <text x="520" y="170" class="text-muted" font-size="10">Volume Path:</text>
+  <text x="594" y="170" class="text-muted-mono" font-size="10">/mnt/docker-volumes/my-awesome-stack</text>
+  <text x="860" y="170" fill="#3b82f6" font-size="10" font-family="Roboto">📋</text>
+
+  <!-- Port Conflict -->
+  <rect x="160" y="184" width="1120" height="36" rx="8" fill="rgba(245,158,11,0.06)" stroke="rgba(245,158,11,0.3)"/>
+  <text x="186" y="207" fill="#f59e0b" font-family="JetBrains Mono" font-size="11">⚠ Port 80 conflicts with nginx-proxy (web-stack) — Suggested: 8080</text>
+  <rect x="1130" y="191" width="110" height="22" rx="6" fill="rgba(245,158,11,0.12)" stroke="rgba(245,158,11,0.4)"/>
+  <text x="1148" y="206" fill="#f59e0b" font-family="Roboto" font-size="10">Auto-Resolve</text>
+
+  <!-- 4 Tabs -->
+  <rect x="160" y="232" width="1120" height="1" fill="#23233a"/>
+  <rect x="160" y="232" width="120" height="2" fill="#6d5acd"/>
+  <text x="168" y="254" class="text-mono" font-size="11" font-weight="500" fill="#e4e4e7">docker-compose.yml</text>
+  <text x="310" y="254" class="text-muted-mono" font-size="11">.env</text>
+  <text x="370" y="254" class="text-muted-mono" font-size="11">GitHub Sync</text>
+  <text x="476" y="254" class="text-muted-mono" font-size="11">Backup Config</text>
+
+  <!-- Compose Editor -->
+  <rect class="code-bg" x="160" y="268" width="1120" height="488"/>
+  <rect x="160" y="274" width="180" height="18" rx="4" fill="rgba(59,130,246,0.08)"/>
+  <text x="170" y="287" fill="#3b82f6" font-size="9" font-family="Roboto">💡 Right-click to insert paths</text>
+  <rect x="1080" y="274" width="170" height="22" rx="6" fill="rgba(109,90,205,0.15)" stroke="rgba(109,90,205,0.4)"/>
+  <text x="1098" y="290" fill="#6d5acd" font-family="Roboto" font-size="10">✨ Generate with AI</text>
+
+  <!-- Code lines -->
+  <text x="176" y="318" class="text-muted-mono" font-size="10"> 1</text>
+  <text x="210" y="318" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">version:</text>
+  <text x="268" y="318" fill="#22c55e" font-family="JetBrains Mono" font-size="10">"3.8"</text>
+  <text x="176" y="334" class="text-muted-mono" font-size="10"> 2</text>
+  <text x="176" y="350" class="text-muted-mono" font-size="10"> 3</text>
+  <text x="210" y="350" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">services:</text>
+  <text x="176" y="366" class="text-muted-mono" font-size="10"> 4</text>
+  <text x="210" y="366" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">  wordpress:</text>
+  <text x="176" y="382" class="text-muted-mono" font-size="10"> 5</text>
+  <text x="210" y="382" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">    image:</text>
+  <text x="260" y="382" fill="#22c55e" font-family="JetBrains Mono" font-size="10">wordpress:latest</text>
+  <text x="176" y="398" class="text-muted-mono" font-size="10"> 6</text>
+  <text x="210" y="398" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">    ports:</text>
+  <text x="176" y="414" class="text-muted-mono" font-size="10"> 7</text>
+  <text x="210" y="414" fill="#22c55e" font-family="JetBrains Mono" font-size="10">      - "80:80"</text>
+  <text x="176" y="430" class="text-muted-mono" font-size="10"> 8</text>
+  <text x="210" y="430" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">    environment:</text>
+  <text x="176" y="446" class="text-muted-mono" font-size="10"> 9</text>
+  <text x="210" y="446" fill="#22c55e" font-family="JetBrains Mono" font-size="10">      WORDPRESS_DB_HOST: db</text>
+  <text x="176" y="462" class="text-muted-mono" font-size="10">10</text>
+  <text x="210" y="462" fill="#22c55e" font-family="JetBrains Mono" font-size="10">      WORDPRESS_DB_USER: ${DB_USER}</text>
+  <text x="176" y="478" class="text-muted-mono" font-size="10">11</text>
+  <text x="210" y="478" fill="#22c55e" font-family="JetBrains Mono" font-size="10">      WORDPRESS_DB_PASSWORD: ${DB_PASS}</text>
+  <text x="176" y="494" class="text-muted-mono" font-size="10">12</text>
+  <text x="210" y="494" fill="#22c55e" font-family="JetBrains Mono" font-size="10">      WORDPRESS_DB_NAME: ${DB_NAME}</text>
+  <text x="176" y="510" class="text-muted-mono" font-size="10">13</text>
+  <text x="210" y="510" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">    volumes:</text>
+  <text x="176" y="526" class="text-muted-mono" font-size="10">14</text>
+  <text x="210" y="526" fill="#22c55e" font-family="JetBrains Mono" font-size="10">      - wp_data:/var/www/html</text>
+  <text x="176" y="542" class="text-muted-mono" font-size="10">15</text>
+  <text x="210" y="542" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">    restart:</text>
+  <text x="270" y="542" fill="#22c55e" font-family="JetBrains Mono" font-size="10">unless-stopped</text>
+  <text x="176" y="558" class="text-muted-mono" font-size="10">16</text>
+  <text x="176" y="574" class="text-muted-mono" font-size="10">17</text>
+  <text x="210" y="574" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">  db:</text>
+  <text x="176" y="590" class="text-muted-mono" font-size="10">18</text>
+  <text x="210" y="590" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">    image:</text>
+  <text x="260" y="590" fill="#22c55e" font-family="JetBrains Mono" font-size="10">mysql:8.0</text>
+  <text x="176" y="606" class="text-muted-mono" font-size="10">19</text>
+  <text x="210" y="606" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">    environment:</text>
+  <text x="176" y="622" class="text-muted-mono" font-size="10">20</text>
+  <text x="210" y="622" fill="#22c55e" font-family="JetBrains Mono" font-size="10">      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS}</text>
+  <text x="176" y="638" class="text-muted-mono" font-size="10">21</text>
+  <text x="210" y="638" fill="#22c55e" font-family="JetBrains Mono" font-size="10">      MYSQL_DATABASE: ${DB_NAME}</text>
+  <text x="176" y="654" class="text-muted-mono" font-size="10">22</text>
+  <text x="210" y="654" fill="#22c55e" font-family="JetBrains Mono" font-size="10">      MYSQL_USER: ${DB_USER}</text>
+  <text x="176" y="670" class="text-muted-mono" font-size="10">23</text>
+  <text x="210" y="670" fill="#22c55e" font-family="JetBrains Mono" font-size="10">      MYSQL_PASSWORD: ${DB_PASS}</text>
+  <text x="176" y="686" class="text-muted-mono" font-size="10">24</text>
+  <text x="210" y="686" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">    volumes:</text>
+  <text x="176" y="702" class="text-muted-mono" font-size="10">25</text>
+  <text x="210" y="702" fill="#22c55e" font-family="JetBrains Mono" font-size="10">      - db_data:/var/lib/mysql</text>
+  <text x="176" y="718" class="text-muted-mono" font-size="10">26</text>
+  <text x="210" y="718" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">    restart:</text>
+  <text x="270" y="718" fill="#22c55e" font-family="JetBrains Mono" font-size="10">unless-stopped</text>
+  <text x="176" y="734" class="text-muted-mono" font-size="10">27</text>
+  <text x="210" y="734" fill="#f59e0b" font-family="JetBrains Mono" font-size="10">volumes:</text>
+
+  <!-- Footer -->
+  <rect x="160" y="776" width="1120" height="1" fill="#23233a"/>
+  <rect x="160" y="796" width="80" height="36" rx="8" stroke="#23233a" fill="transparent"/>
+  <text x="178" y="819" class="text-muted" font-size="12">Cancel</text>
+  <rect x="1100" y="796" width="140" height="36" rx="8" fill="#6d5acd"/>
+  <text x="1116" y="819" fill="#fff" font-family="Roboto" font-size="12" font-weight="500">☁ Create Stack</text>
+
+  <text x="1280" y="868" class="text-muted" font-size="9" text-anchor="end">HLC — New Stack Dialog</text>
+</svg>

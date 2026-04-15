@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" width="1440" height="900">
+  <defs>
+    <style>
+      .bg { fill: #0a0a0f; }
+      .card { fill: #13131a; stroke: #23233a; stroke-width: 1; rx: 12; }
+      .header-bg { fill: #13131a; opacity: 0.9; }
+      .text-primary { fill: #e4e4e7; font-family: 'JetBrains Mono', monospace; }
+      .text-muted { fill: #71717a; font-family: 'Roboto', sans-serif; }
+      .text-mono { fill: #e4e4e7; font-family: 'JetBrains Mono', monospace; }
+      .text-muted-mono { fill: #71717a; font-family: 'JetBrains Mono', monospace; }
+      .tab-active { fill: #1a1a2e; rx: 8; }
+    </style>
+    <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6d5acd"/>
+      <stop offset="100%" style="stop-color:#3b82f6"/>
+    </linearGradient>
+  </defs>
+
+  <rect class="bg" width="1440" height="900"/>
+  <rect class="header-bg" x="0" y="0" width="1440" height="72"/>
+  <line x1="0" y1="72" x2="1440" y2="72" stroke="#23233a"/>
+  <rect x="40" y="16" width="40" height="40" rx="10" fill="url(#headerGrad)"/>
+  <text x="52" y="42" fill="#fff" font-family="JetBrains Mono" font-size="16" font-weight="700">⬡</text>
+  <text x="92" y="36" class="text-mono" font-size="22" font-weight="700">HLC</text>
+  <text x="92" y="52" class="text-muted" font-size="11">Homelab Command</text>
+
+  <!-- Tabs -->
+  <text x="60" y="115" class="text-muted" font-size="13">🏠 Dashboard</text>
+  <text x="170" y="115" class="text-muted" font-size="13">📦 Stacks</text>
+  <text x="272" y="115" class="text-muted" font-size="13">📦 Containers</text>
+
+  <rect class="tab-active" x="392" y="92" width="86" height="36"/>
+  <text x="408" y="115" fill="#e4e4e7" font-family="Roboto" font-size="13" font-weight="500">💽 Volumes</text>
+
+  <text x="502" y="115" class="text-muted" font-size="13">🖼 Images</text>
+  <text x="586" y="115" class="text-muted" font-size="13">🌐 Networks</text>
+
+  <!-- Title -->
+  <text x="40" y="168" class="text-mono" font-size="18" font-weight="600">Docker Volumes</text>
+  <text x="40" y="186" class="text-muted" font-size="12">Persistent data storage for containers</text>
+
+  <!-- Volume Card 1 -->
+  <rect class="card" x="40" y="210" width="1360" height="110"/>
+  <text x="72" y="244" class="text-mono" font-size="16" font-weight="600">grafana_data</text>
+  <rect x="200" y="230" width="44" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="210" y="244" class="text-muted-mono" font-size="10">local</text>
+  <text x="260" y="244" class="text-muted-mono" font-size="11">2.4 GB</text>
+  <text x="72" y="270" class="text-muted" font-size="10" text-transform="uppercase">Used by</text>
+  <rect x="72" y="278" width="60" height="18" rx="4" fill="rgba(113,113,122,0.1)" stroke="#23233a"/>
+  <text x="80" y="291" class="text-muted-mono" font-size="9">grafana</text>
+  <rect x="1190" y="232" width="80" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1200" y="250" class="text-muted" font-size="10">🔍 Inspect</text>
+  <rect x="1280" y="232" width="80" height="28" rx="6" stroke="#23233a" fill="transparent" opacity="0.4"/>
+  <text x="1290" y="250" class="text-muted" font-size="10" opacity="0.4">🗑 Remove</text>
+
+  <!-- Volume Card 2 -->
+  <rect class="card" x="40" y="334" width="1360" height="110"/>
+  <text x="72" y="368" class="text-mono" font-size="16" font-weight="600">prometheus_data</text>
+  <rect x="232" y="354" width="44" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="242" y="368" class="text-muted-mono" font-size="10">local</text>
+  <text x="292" y="368" class="text-muted-mono" font-size="11">5.1 GB</text>
+  <text x="72" y="394" class="text-muted" font-size="10">Used by</text>
+  <rect x="72" y="402" width="80" height="18" rx="4" fill="rgba(113,113,122,0.1)" stroke="#23233a"/>
+  <text x="80" y="415" class="text-muted-mono" font-size="9">prometheus</text>
+  <rect x="1190" y="356" width="80" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1200" y="374" class="text-muted" font-size="10">🔍 Inspect</text>
+  <rect x="1280" y="356" width="80" height="28" rx="6" stroke="#23233a" fill="transparent" opacity="0.4"/>
+  <text x="1290" y="374" class="text-muted" font-size="10" opacity="0.4">🗑 Remove</text>
+
+  <!-- Volume Card 3 -->
+  <rect class="card" x="40" y="458" width="1360" height="110"/>
+  <text x="72" y="492" class="text-mono" font-size="16" font-weight="600">pihole_data</text>
+  <rect x="190" y="478" width="44" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="200" y="492" class="text-muted-mono" font-size="10">local</text>
+  <text x="250" y="492" class="text-muted-mono" font-size="11">128 MB</text>
+  <text x="72" y="518" class="text-muted" font-size="10">Used by</text>
+  <rect x="72" y="526" width="50" height="18" rx="4" fill="rgba(113,113,122,0.1)" stroke="#23233a"/>
+  <text x="80" y="539" class="text-muted-mono" font-size="9">pihole</text>
+  <rect x="1190" y="480" width="80" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1200" y="498" class="text-muted" font-size="10">🔍 Inspect</text>
+  <rect x="1280" y="480" width="80" height="28" rx="6" stroke="#23233a" fill="transparent" opacity="0.4"/>
+  <text x="1290" y="498" class="text-muted" font-size="10" opacity="0.4">🗑 Remove</text>
+
+  <!-- Volume Card 4: orphaned -->
+  <rect class="card" x="40" y="582" width="1360" height="90"/>
+  <text x="72" y="616" class="text-mono" font-size="16" font-weight="600" fill="#71717a">old_backup_vol</text>
+  <rect x="210" y="602" width="44" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="220" y="616" class="text-muted-mono" font-size="10">local</text>
+  <text x="270" y="616" class="text-muted-mono" font-size="11">890 MB</text>
+  <rect x="1190" y="604" width="80" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1200" y="622" class="text-muted" font-size="10">🔍 Inspect</text>
+  <rect x="1280" y="604" width="80" height="28" rx="6" stroke="rgba(239,68,68,0.3)" fill="rgba(239,68,68,0.05)"/>
+  <text x="1290" y="622" fill="#ef4444" font-size="10">🗑 Remove</text>
+
+  <!-- Volume Card 5 -->
+  <rect class="card" x="40" y="686" width="1360" height="90"/>
+  <text x="72" y="720" class="text-mono" font-size="16" font-weight="600" fill="#71717a">test_data</text>
+  <rect x="160" y="706" width="44" height="20" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="170" y="720" class="text-muted-mono" font-size="10">local</text>
+  <text x="220" y="720" class="text-muted-mono" font-size="11">45 MB</text>
+  <rect x="1190" y="708" width="80" height="28" rx="6" stroke="#23233a" fill="transparent"/>
+  <text x="1200" y="726" class="text-muted" font-size="10">🔍 Inspect</text>
+  <rect x="1280" y="708" width="80" height="28" rx="6" stroke="rgba(239,68,68,0.3)" fill="rgba(239,68,68,0.05)"/>
+  <text x="1290" y="726" fill="#ef4444" font-size="10">🗑 Remove</text>
+
+  <text x="1350" y="880" class="text-muted" font-size="10" text-anchor="end">HLC — Volumes</text>
+</svg>

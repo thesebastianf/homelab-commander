@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" width="1440" height="900">
+  <defs>
+    <style>
+      .bg { fill: #0a0a0f; }
+      .overlay { fill: rgba(0,0,0,0.7); }
+      .dialog { fill: #13131a; stroke: #23233a; stroke-width: 1; rx: 16; }
+      .text-mono { fill: #e4e4e7; font-family: 'JetBrains Mono', monospace; }
+      .text-muted { fill: #71717a; font-family: 'Roboto', sans-serif; }
+      .text-muted-mono { fill: #71717a; font-family: 'JetBrains Mono', monospace; }
+      .input-bg { fill: #0a0a0f; stroke: #23233a; stroke-width: 1; rx: 8; }
+      .section-card { fill: #0a0a0f; stroke: #23233a; stroke-width: 1; rx: 10; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1440" height="900"/>
+  <rect class="overlay" width="1440" height="900"/>
+
+  <rect class="dialog" x="220" y="30" width="1000" height="840"/>
+
+  <!-- Header -->
+  <text x="260" y="72" class="text-mono" font-size="20" font-weight="700">⚙️ Settings</text>
+  <text x="260" y="92" class="text-muted" font-size="12">Configure your homelab command center preferences</text>
+  <text x="1180" y="70" class="text-muted" font-size="20">✕</text>
+
+  <!-- Tabs -->
+  <rect x="260" y="112" width="940" height="40" rx="8" fill="#0a0a0f" stroke="#23233a"/>
+  <text x="300" y="137" class="text-muted" font-size="12">📁 General</text>
+  <rect x="402" y="114" width="160" height="36" rx="7" fill="#1a1a2e"/>
+  <text x="420" y="137" fill="#e4e4e7" font-family="Roboto" font-size="12" font-weight="500">🔔 Notifications</text>
+  <text x="592" y="137" class="text-muted" font-size="12">🔗 Integrations</text>
+
+  <!-- ========== NOTIFICATIONS TAB ========== -->
+
+  <!-- Master Toggle -->
+  <text x="260" y="184" class="text-mono" font-size="14" font-weight="600">Enable Notifications</text>
+  <rect x="1100" y="168" width="40" height="22" rx="11" fill="#6d5acd"/>
+  <circle cx="1130" cy="179" r="8" fill="#fff"/>
+
+  <rect x="260" y="200" width="940" height="1" fill="#23233a"/>
+
+  <!-- Event Notifications Section -->
+  <text x="260" y="230" class="text-mono" font-size="13" font-weight="600">Event Notifications</text>
+
+  <!-- Update Available -->
+  <rect x="260" y="244" width="460" height="34" fill="transparent"/>
+  <text x="276" y="266" class="text-muted" font-size="11">Update Available</text>
+  <rect x="630" y="250" width="36" height="20" rx="10" fill="#6d5acd"/>
+  <circle cx="656" cy="260" r="7" fill="#fff"/>
+
+  <!-- Container Auto-Updated -->
+  <rect x="260" y="278" width="460" height="34" fill="transparent"/>
+  <text x="276" y="300" class="text-muted" font-size="11">Container Auto-Updated</text>
+  <rect x="630" y="284" width="36" height="20" rx="10" fill="#6d5acd"/>
+  <circle cx="656" cy="294" r="7" fill="#fff"/>
+
+  <!-- Container Failed -->
+  <rect x="260" y="312" width="460" height="34" fill="transparent"/>
+  <text x="276" y="334" class="text-muted" font-size="11">Container Failed</text>
+  <rect x="630" y="318" width="36" height="20" rx="10" fill="#6d5acd"/>
+  <circle cx="656" cy="328" r="7" fill="#fff"/>
+
+  <!-- Container Started -->
+  <rect x="260" y="346" width="460" height="34" fill="transparent"/>
+  <text x="276" y="368" class="text-muted" font-size="11">Container Started</text>
+  <rect x="630" y="352" width="36" height="20" rx="10" fill="#23233a"/>
+  <circle cx="642" cy="362" r="7" fill="#71717a"/>
+
+  <!-- Container Stopped -->
+  <rect x="260" y="380" width="460" height="34" fill="transparent"/>
+  <text x="276" y="402" class="text-muted" font-size="11">Container Stopped</text>
+  <rect x="630" y="386" width="36" height="20" rx="10" fill="#23233a"/>
+  <circle cx="642" cy="396" r="7" fill="#71717a"/>
+
+  <!-- Right column -->
+  <!-- Stack Deployed -->
+  <text x="760" y="266" class="text-muted" font-size="11">Stack Deployed</text>
+  <rect x="1100" y="250" width="36" height="20" rx="10" fill="#6d5acd"/>
+  <circle cx="1126" cy="260" r="7" fill="#fff"/>
+
+  <!-- Stack Failed -->
+  <text x="760" y="300" class="text-muted" font-size="11">Stack Failed</text>
+  <rect x="1100" y="284" width="36" height="20" rx="10" fill="#6d5acd"/>
+  <circle cx="1126" cy="294" r="7" fill="#fff"/>
+
+  <!-- High Memory Usage -->
+  <text x="760" y="334" class="text-muted" font-size="11">High Memory Usage</text>
+  <rect x="1100" y="318" width="36" height="20" rx="10" fill="#6d5acd"/>
+  <circle cx="1126" cy="328" r="7" fill="#fff"/>
+
+  <!-- High CPU Usage -->
+  <text x="760" y="368" class="text-muted" font-size="11">High CPU Usage</text>
+  <rect x="1100" y="352" width="36" height="20" rx="10" fill="#6d5acd"/>
+  <circle cx="1126" cy="362" r="7" fill="#fff"/>
+
+  <rect x="260" y="424" width="940" height="1" fill="#23233a"/>
+
+  <!-- Resource Thresholds Section -->
+  <text x="260" y="456" class="text-mono" font-size="13" font-weight="600">Resource Thresholds</text>
+
+  <!-- Memory Threshold -->
+  <text x="260" y="486" class="text-muted" font-size="11">Memory Threshold (%)</text>
+  <rect class="input-bg" x="260" y="494" width="100" height="32"/>
+  <text x="276" y="515" class="text-mono" font-size="12">80</text>
+
+  <!-- CPU Threshold -->
+  <text x="420" y="486" class="text-muted" font-size="11">CPU Threshold (%)</text>
+  <rect class="input-bg" x="420" y="494" width="100" height="32"/>
+  <text x="436" y="515" class="text-mono" font-size="12">80</text>
+
+  <text x="560" y="515" class="text-muted" font-size="10">Trigger alerts when usage exceeds these percentages</text>
+
+  <!-- Footer -->
+  <rect x="260" y="698" width="940" height="1" fill="#23233a"/>
+  <rect x="980" y="718" width="80" height="36" rx="8" stroke="#23233a" fill="transparent"/>
+  <text x="998" y="741" class="text-muted" font-size="12">Cancel</text>
+  <rect x="1080" y="718" width="120" height="36" rx="8" fill="#3b82f6"/>
+  <text x="1098" y="741" fill="#fff" font-family="Roboto" font-size="12" font-weight="500">Save Changes</text>
+
+  <text x="1180" y="858" class="text-muted" font-size="9" text-anchor="end">HLC — Settings Dialog (Notifications Tab)</text>
+</svg>
