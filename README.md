@@ -79,7 +79,7 @@ It combines day to day Docker operations, stack lifecycle tooling, backup automa
 ### Settings and Integrations
 ![Settings Integrations](SVGmocks/07c-Settings-Integrations.svg)
 
-## Quick Start
+## Production Quick Start
 
 ### 1. Clone
 
@@ -88,25 +88,52 @@ git clone https://github.com/thesebastianf/homelab-commander.git
 cd homelab-commander
 ```
 
-### 2. Configure Environment
+### 2. Create Production Files From Examples
 
 ```bash
 cp .env.example .env
+cp docker-compose.yaml.example docker-compose.yaml
 ```
+
+### 3. Configure Environment
 
 Edit .env and set at minimum:
 - POSTGRES_PASSWORD
 - AUTH_USER and AUTH_PASS (recommended)
 - Optional SEED values for first boot defaults
 
-### 3. Start the Stack
+### 4. Start the Stack
 
 ```bash
-docker compose up -d --build
+docker compose -f docker-compose.yaml up -d
 ```
 
 Open the UI at:
 - http://localhost:3210
+
+### Image Channels
+
+- Stable (main): `:latest`
+- Beta (beta branch): `:beta`
+
+Switch channels by changing image lines in [docker-compose.yaml.example](docker-compose.yaml.example) before saving your `docker-compose.yaml`.
+
+## Dev Machine Notes
+
+- Local dev compose files are intentionally ignored by git:
+  - `docker-compose.yml`
+  - `docker-compose.dev.yml`
+- Keep these for local development workflows only.
+
+## GitHub Actions: Next Steps
+
+1. Push the workflow and root Dockerfile to GitHub.
+2. In repository settings, ensure GitHub Actions has permission to read/write packages.
+3. Push to `beta` to publish beta images (`:beta`, `:sha-...`).
+4. Push/merge to `main` to publish stable images (`:latest`, `:main`, `:sha-...`).
+5. Confirm published images in GHCR:
+   - `ghcr.io/thesebastianf/homelab-commander-backend`
+   - `ghcr.io/thesebastianf/homelab-commander-frontend`
 
 ## Service Layout
 
@@ -125,7 +152,7 @@ Open the UI at:
 
 - Documentation: DOCUMENTATION.md
 - Architecture: ARCHITECTURE.md
-- Compose stack: docker-compose.yml
+- Production compose example: docker-compose.yaml.example
 - Backend source: backend/src
 - Frontend source: frontend/src
 - UI mocks/screens: SVGmocks

@@ -1,0 +1,82 @@
+services:
+  frontend:
+    image: ghcr.io/thesebastianf/homelab-commander-frontend:latest
+    # Beta channel:
+    # image: ghcr.io/thesebastianf/homelab-commander-frontend:beta
+    ports:
+      - "${FRONTEND_PORT:-3210}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  backend:
+    image: ghcr.io/thesebastianf/homelab-commander-backend:latest
+    # Beta channel:
+    # image: ghcr.io/thesebastianf/homelab-commander-backend:beta
+    ports:
+      - "${BACKEND_PORT:-3001}:3001"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hlc}:${POSTGRES_PASSWORD:-hlc_secret_change_me}@db:5432/${POSTGRES_DB:-hlc}
+      - STACKS_PATH=${STACKS_PATH:-/data/stacks}
+      - BACKUPS_PATH=${BACKUPS_PATH:-/data/backups}
+      - AUTH_USER=${AUTH_USER:-}
+      - AUTH_PASS=${AUTH_PASS:-}
+      - CORS_ORIGIN=${CORS_ORIGIN:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - stacks_data:/data/stacks
+      - backups_data:/data/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-hlc}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-hlc_secret_change_me}
+      - POSTGRES_DB=${POSTGRES_DB:-hlc}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    shm_size: "256mb"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hlc}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  pg_data:
+  stacks_data:
+  backups_data:

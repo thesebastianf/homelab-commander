@@ -1,6 +1,8 @@
 # Environment — contains secrets, never commit the real .env
 .env
 .env.local
+docker-compose.yml
+docker-compose.dev.yml
 
 # Dependencies (Node.js)
 backend/node_modules/
