@@ -56,6 +56,9 @@ app.use(helmet({
   strictTransportSecurity: false,
   crossOriginOpenerPolicy: false,
   crossOriginEmbedderPolicy: false,
+  // Disable Origin-Agent-Cluster header — it causes a browser warning when the
+  // same origin has been seen with mixed keying policies.
+  originAgentCluster: false,
 }));
 
 app.use(cors({
