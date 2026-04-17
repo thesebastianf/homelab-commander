@@ -1,8 +1,10 @@
 # Environment — contains secrets, never commit the real .env
 .env
 .env.local
+.env.homelab
 docker-compose.yml
 docker-compose.dev.yml
+docker-compose.yaml.homelab
 
 # Dependencies (Node.js)
 backend/node_modules/

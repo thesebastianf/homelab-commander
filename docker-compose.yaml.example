@@ -1,36 +1,18 @@
-services:
-  frontend:
-    image: ghcr.io/thesebastianf/homelab-commander-frontend:latest
-    # Beta channel:
-    # image: ghcr.io/thesebastianf/homelab-commander-frontend:beta
-    ports:
-      - "${FRONTEND_PORT:-3210}:80"
-    depends_on:
-      backend:
-        condition: service_healthy
-    restart: unless-stopped
-    read_only: true
-    tmpfs:
-      - /var/cache/nginx
-      - /var/run
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+# Homelab Commander — production compose example
+# Copy to docker-compose.yml and configure .env before first run.
+# Pull images from GitHub Container Registry (built by CI).
 
-  backend:
-    image: ghcr.io/thesebastianf/homelab-commander-backend:latest
+services:
+  app:
+    image: ghcr.io/thesebastianf/homelab-commander:latest
     # Beta channel:
-    # image: ghcr.io/thesebastianf/homelab-commander-backend:beta
+    # image: ghcr.io/thesebastianf/homelab-commander:beta
     ports:
-      - "${BACKEND_PORT:-3001}:3001"
+      - "${APP_PORT:-3210}:3210"
     env_file:
       - .env
     environment:
+      - APP_PORT=3210
       - NODE_ENV=${NODE_ENV:-production}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-hlc}:${POSTGRES_PASSWORD:-hlc_secret_change_me}@db:5432/${POSTGRES_DB:-hlc}
@@ -50,7 +32,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/healthz"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3210/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3

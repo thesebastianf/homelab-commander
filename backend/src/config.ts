@@ -1,5 +1,5 @@
 export const config = {
-  port: parseInt(process.env.BACKEND_PORT || '3001', 10),
+  port: parseInt(process.env.APP_PORT || '3210', 10),
   nodeEnv: process.env.NODE_ENV || 'production',
   logLevel: process.env.LOG_LEVEL || 'info',
   databaseUrl: process.env.DATABASE_URL || 'postgresql://hlc:hlc_secret_change_me@db:5432/hlc',

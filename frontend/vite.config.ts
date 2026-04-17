@@ -12,13 +12,13 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:3001',
+      '/api': 'http://localhost:3210',
       '/ws': {
-        target: 'ws://localhost:3001',
+        target: 'ws://localhost:3210',
         ws: true,
       },
-      '/healthz': 'http://localhost:3001',
-      '/readyz': 'http://localhost:3001',
+      '/healthz': 'http://localhost:3210',
+      '/readyz': 'http://localhost:3210',
     },
   },
 });
