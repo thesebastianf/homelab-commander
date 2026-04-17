@@ -16,7 +16,9 @@ export function basicAuth(req: Request, res: Response, next: NextFunction): void
 
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Basic ')) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="Homelab Commander"');
+    // Do NOT send WWW-Authenticate — that triggers the browser's native dialog.
+    // Return JSON 401 so the frontend login screen handles it.dialog.
+    // Return JSON 401 so the frontend login screen handles it.
     res.status(401).json({ error: 'Authentication required' });
     return;
   }
@@ -44,7 +46,6 @@ export function basicAuth(req: Request, res: Response, next: NextFunction): void
   if (userMatch && passMatch) {
     next();
   } else {
-    res.setHeader('WWW-Authenticate', 'Basic realm="Homelab Commander"');
     res.status(401).json({ error: 'Invalid credentials' });
   }
 }
