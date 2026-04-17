@@ -91,7 +91,10 @@ const __dirname = path.dirname(__filename);
 const publicPath = path.join(__dirname, '../public');
 app.use(express.static(publicPath));
 // SPA fallback — serve index.html for all non-API routes
-app.get('*', (req, res, next) => {
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return next();
+  }
   if (req.path.startsWith('/api/') || req.path === '/healthz' || req.path === '/readyz') {
     return next();
   }
