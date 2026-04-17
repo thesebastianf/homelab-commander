@@ -49,6 +49,7 @@ import {
   CheckCircle,
   XCircle,
   WandSparkles,
+  Rocket,
 } from 'lucide-react'
 import type { Stack, BackupConfig } from '@/lib/types'
 import { toast } from 'sonner'
@@ -525,6 +526,19 @@ export function StacksEditor({
     onError: (e: any) => toast.error(e.message || 'Git sync failed'),
   })
 
+  const adoptMutation = useMutation({
+    mutationFn: ({ name, stackPath }: { name: string; stackPath: string }) =>
+      api.adoptStack(name, stackPath),
+    onSuccess: (adopted) => {
+      toast.success(`“${adopted.name}” is now managed by THC`)
+      qc.invalidateQueries({ queryKey: ['stacks'] })
+      qc.invalidateQueries({ queryKey: ['externalStacks'] })
+      setSelectedStack(adopted)
+      setIsCreating(false)
+    },
+    onError: (e: any) => toast.error(e.message || 'Failed to adopt stack'),
+  })
+
   // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const validateYAML = (yaml: string): boolean => {
     try {
@@ -755,7 +769,7 @@ export function StacksEditor({
                                   <ExternalLink className="w-2.5 h-2.5" />ext
                                 </span>
                               </TooltipTrigger>
-                              <TooltipContent className="text-xs">Detected from Docker Compose labels. Visible in THC, but not managed by THC yet.</TooltipContent>
+                              <TooltipContent className="text-xs">Detected from Docker Compose labels. Click “Adopt” to manage in THC without moving any files.</TooltipContent>
                             </Tooltip>
                           </div>
                           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -779,6 +793,18 @@ export function StacksEditor({
                         </div>
                         <span className={`text-[10px] mt-0.5 ${stack.status === 'running' ? 'text-green-500' : stack.status === 'failed' ? 'text-destructive' : 'text-muted-foreground/40'}`}>&#9679;</span>
                       </div>
+                      {stack.stackPath && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full mt-2 h-6 text-[10px] gap-1 border-primary/40 text-primary hover:bg-primary/10"
+                          disabled={adoptMutation.isPending}
+                          onClick={() => adoptMutation.mutate({ name: stack.name, stackPath: stack.stackPath! })}
+                        >
+                          <Rocket className="w-3 h-3" />
+                          {adoptMutation.isPending ? 'Adopting…' : 'Adopt into THC'}
+                        </Button>
+                      )}
                     </Card>
                   ))}
                 </>

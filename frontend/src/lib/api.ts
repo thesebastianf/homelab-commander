@@ -49,8 +49,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (res.status === 401) {
-    // Credentials expired or wrong — clear them so the login screen re-appears
+    // Credentials expired or wrong — clear them and signal AuthGate to re-show login screen
     clearStoredCredentials();
+    window.dispatchEvent(new Event('hlc:unauthorized'));
     throw new Error('401');
   }
 
@@ -187,6 +188,10 @@ export async function fetchStacks(): Promise<Stack[]> {
 
 export async function fetchExternalStacks(): Promise<Stack[]> {
   return request('/stacks/external');
+}
+
+export async function adoptStack(name: string, stackPath: string): Promise<Stack> {
+  return request('/stacks/adopt', { method: 'POST', body: JSON.stringify({ name, stackPath }) });
 }
 
 export async function fetchStack(id: string): Promise<Stack> {

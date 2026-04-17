@@ -17,7 +17,7 @@ interface AggregatedLogsProps {
 export function AggregatedLogs({ logs, onRefresh }: AggregatedLogsProps) {
   const [filteredLogs, setFilteredLogs] = useState<LogEntry[]>(logs)
   const [searchQuery, setSearchQuery] = useState('')
-  const [levelFilter, setLevelFilter] = useState<string>('all')
+  const [levelFilter, setLevelFilter] = useState<string>('warn')
   const [containerFilter, setContainerFilter] = useState<string>('all')
   const [isPaused, setIsPaused] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -36,7 +36,16 @@ export function AggregatedLogs({ logs, onRefresh }: AggregatedLogsProps) {
     }
 
     if (levelFilter !== 'all') {
-      filtered = filtered.filter(log => log.level === levelFilter)
+      // Inclusive filtering: each level includes itself and all higher-severity levels.
+      // Severity order (highest → lowest): error > warn > info > debug
+      const levels: Record<string, string[]> = {
+        error: ['error'],
+        warn:  ['warn', 'error'],
+        info:  ['info', 'warn', 'error'],
+        debug: ['debug', 'info', 'warn', 'error'],
+      }
+      const allowed = levels[levelFilter] ?? [levelFilter]
+      filtered = filtered.filter(log => allowed.includes(log.level))
     }
 
     if (containerFilter !== 'all') {

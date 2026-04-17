@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Toaster } from '@/components/ui/sonner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -601,6 +601,27 @@ function App() {
         containers={containers}
         stacks={stacks}
       />
+
+      {/* Footer */}
+      <footer className="mt-8 pb-4 text-center">
+        <a
+          href="https://github.com/thesebastianf/homelab-commander"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="w-4 h-4"
+            fill="currentColor"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            {/* Cute whale */}
+            <path d="M12 2c-1 0-2 .5-2.5 1.5S9 5 10 5c1 0 2-.5 2.5-1.5S13 3 12 2zm6 6c0-1-1-2-2-2s-2 1-2 2 1 2 2 2 2-1 2-2zm-12 0c0-1-1-2-2-2s-2 1-2 2 1 2 2 2 2-1 2-2zm10 2h-8c-2 0-4 1-5 3-1 1-.5 2 .5 2.5L4 16c0 1 1 3 3 4 0 .5 1 1 2 1s2-.5 2-1c0 0 2 1 3 1s3-1 3-1c0 .5 1 1 2 1s2-.5 2-1c2-1 3-3 3-4l2.5-2.5c1-.5 1.5-1.5.5-2.5-1-2-3-3-5-3z" />
+          </svg>
+          <span>Made with ❤️ by Sebastian F.</span>
+        </a>
+      </footer>
     </div>
   )
 }
@@ -608,49 +629,51 @@ function App() {
 /**
  * Auth gate wrapper.
  *
- * If AUTH_USER / AUTH_PASS are set on the backend, every API call returns 401
- * until the user supplies credentials via the login screen. Credentials are
- * stored in sessionStorage (cleared on tab close) and injected into every
- * fetch by api.ts.
- *
- * If auth is disabled on the backend, /healthz returns 200 without credentials,
- * so probeAuth('','') returns true and the login screen is never shown.
+ * - Probes /api/settings (a protected endpoint) on mount to detect whether auth is enabled.
+ * - If 401 → shows LoginScreen.
+ * - If 200 → auth is disabled, show App directly.
+ * - Mid-session 401s (credentials expired) re-show LoginScreen via hlc:unauthorized event.
  */
+type AuthStatus = 'checking' | 'open' | 'required' | 'authenticated'
+
 function AuthGate() {
-  // If we already have credentials stored (e.g. page refresh within the same session)
-  // skip straight to the app.
-  const [authenticated, setAuthenticated] = useState<boolean>(() => {
-    // If there are stored credentials we assume they're still valid — the first
-    // API call will evict them and re-trigger the login screen if they're wrong.
-    return getStoredCredentials() !== null
-  })
+  const [status, setStatus] = useState<AuthStatus>(() =>
+    // If we already have stored credentials, skip the probe and try directly.
+    // The first failing API call will dispatch hlc:unauthorized and reset to 'required'.
+    getStoredCredentials() !== null ? 'authenticated' : 'checking'
+  )
 
-  // We also need to handle the case where auth is completely disabled on the
-  // backend. Probe on mount if not yet authenticated.
-  const [probed, setProbed] = useState(false)
-
-  if (!authenticated && !probed) {
-    // Fire a one-shot probe without credentials to check if auth is required.
-    fetch('/healthz')
+  // Probe a real auth-protected endpoint ONCE on mount (not /healthz — that bypasses auth)
+  useEffect(() => {
+    if (status !== 'checking') return
+    let isMounted = true
+    fetch('/api/settings', { headers: { 'Content-Type': 'application/json' } })
       .then(r => {
-        if (r.ok) {
-          // Auth is disabled — proceed without credentials
-          setAuthenticated(true)
-        }
-        setProbed(true)
+        if (!isMounted) return
+        if (r.status === 401) setStatus('required')
+        else setStatus('open')   // 200 = auth disabled, other errors = try to proceed anyway
       })
-      .catch(() => setProbed(true))
-  }
+      .catch(() => {
+        if (!isMounted) return
+        setStatus('open')
+      })
+    return () => { isMounted = false }
+  }, []) // Empty dependency array — run only once on mount
 
-  if (!authenticated && !probed) {
-    return <LoadingScreen />
-  }
+  // Listen for mid-session 401s dispatched by api.ts
+  useEffect(() => {
+    const handler = () => setStatus('required')
+    window.addEventListener('hlc:unauthorized', handler)
+    return () => window.removeEventListener('hlc:unauthorized', handler)
+  }, [])
 
-  if (!authenticated) {
+  if (status === 'checking') return <LoadingScreen />
+
+  if (status === 'required') {
     return (
       <>
         <Toaster position="bottom-right" richColors />
-        <LoginScreen onAuthenticated={() => setAuthenticated(true)} />
+        <LoginScreen onAuthenticated={() => setStatus('authenticated')} />
       </>
     )
   }

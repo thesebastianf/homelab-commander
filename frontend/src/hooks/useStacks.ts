@@ -18,6 +18,18 @@ export function useExternalStacks() {
   });
 }
 
+export function useAdoptStack() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, stackPath }: { name: string; stackPath: string }) =>
+      api.adoptStack(name, stackPath),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['stacks'] });
+      qc.invalidateQueries({ queryKey: ['externalStacks'] });
+    },
+  });
+}
+
 export function useStack(id: string) {
   return useQuery({
     queryKey: ['stacks', id],

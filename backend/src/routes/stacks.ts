@@ -97,6 +97,56 @@ router.get('/external', asyncHandler(async (_req, res) => {
   res.json(unmanagedProjects);
 }));
 
+// Adopt an external stack — non-destructive: reads existing files, creates DB record.
+// The stack directory is NOT moved or modified.
+router.post('/adopt', asyncHandler(async (req, res) => {
+  const { name, stackPath } = req.body as { name?: string; stackPath?: string };
+  if (!name || !stackPath) {
+    res.status(400).json({ error: 'name and stackPath are required' }); return;
+  }
+
+  // Validate stackPath is absolute and readable
+  const safePath = resolve(stackPath);
+  if (safePath !== stackPath && !safePath.startsWith('/')) {
+    res.status(400).json({ error: 'stackPath must be an absolute path' }); return;
+  }
+
+  let composeContent: string;
+  try {
+    composeContent = await readFile(join(safePath, 'docker-compose.yml'), 'utf8');
+  } catch {
+    res.status(400).json({ error: 'docker-compose.yml not found at that path' }); return;
+  }
+
+  let envContent = '';
+  try { envContent = await readFile(join(safePath, '.env'), 'utf8'); } catch { /* optional */ }
+
+  const { rows: dupe } = await pool.query(
+    'SELECT id FROM stacks WHERE lower(name) = lower($1) OR stack_path = $2',
+    [name, safePath]
+  );
+  if (dupe.length > 0) {
+    res.status(409).json({ error: `Stack "${name}" is already managed by THC` }); return;
+  }
+
+  const serviceCount = countServices(composeContent);
+
+  const { rows: [stack] } = await pool.query(
+    `INSERT INTO stacks (name, description, stack_path, compose_content, env_content, services, status)
+     VALUES ($1, '', $2, $3, $4, $5, 'running') RETURNING *`,
+    [name, safePath, composeContent, envContent, serviceCount]
+  );
+
+  await pool.query(
+    `INSERT INTO stack_versions (stack_id, version, compose_content, env_content, description)
+     VALUES ($1, 1, $2, $3, 'Adopted from external compose project')`,
+    [stack.id, composeContent, envContent]
+  );
+
+  await auditLog('adopt', 'stack', stack.id, { name, stackPath: safePath });
+  res.status(201).json(mapStack(stack));
+}));
+
 // Get single stack
 router.get('/:id', asyncHandler(async (req, res) => {
   const { rows: [stack] } = await pool.query(STACK_SELECT + 'WHERE s.id = $1', [req.params.id]);

@@ -67,49 +67,10 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
 
           <TabsContent value="general" className="space-y-6 mt-6">
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="stacks-path">Stacks Base Path</Label>
-                <Input
-                  id="stacks-path"
-                  value={localSettings.stacksBasePath}
-                  onChange={(e) => setLocalSettings({ ...localSettings, stacksBasePath: e.target.value })}
-                  placeholder="/path/to/stacks"
-                  className="font-mono"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Base directory where stack folders will be created.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="volumes-path">Named Volumes Base Path</Label>
-                <Input
-                  id="volumes-path"
-                  value={localSettings.volumesBasePath}
-                  onChange={(e) => setLocalSettings({ ...localSettings, volumesBasePath: e.target.value })}
-                  placeholder="/path/to/volumes"
-                  className="font-mono"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="backups-path">Backups Base Path</Label>
-                <Input
-                  id="backups-path"
-                  value={localSettings.backupsBasePath}
-                  onChange={(e) => setLocalSettings({ ...localSettings, backupsBasePath: e.target.value })}
-                  placeholder="/mnt/backups"
-                  className="font-mono"
-                />
-              </div>
-
-              <Separator />
-
-              <div className="space-y-4">
-                <h3 className="font-mono font-semibold text-sm flex items-center gap-2">
-                  <CloudDownload className="w-[18px] h-[18px]" />
-                  Update Management
-                </h3>
+              <h3 className="font-mono font-semibold text-sm flex items-center gap-2">
+                <CloudDownload className="w-[18px] h-[18px]" />
+                Update Management
+              </h3>
                 
                 <Card className={`p-4 border-2 ${localSettings.globalUpdateFreeze ? 'border-destructive bg-destructive/10' : 'border-border'}`}>
                   <div className="flex items-center justify-between">
@@ -204,7 +165,6 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                   )}
                 </Card>
 
-              </div>
             </div>
           </TabsContent>
 
