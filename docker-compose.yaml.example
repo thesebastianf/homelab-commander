@@ -1,4 +1,4 @@
-# Homelab Commander — production compose example
+# Homelab Commander ï¿½ production compose example
 # Copy to docker-compose.yml and configure .env before first run.
 # Pull images from GitHub Container Registry (built by CI).
 
@@ -46,7 +46,6 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-hlc}
     volumes:
       - pg_data:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
