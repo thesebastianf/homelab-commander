@@ -7,14 +7,52 @@ import type {
 
 const BASE = '/api';
 
+// ---------------------------------------------------------------------------
+// Auth credential store (session only — stored in sessionStorage, not localStorage,
+// so credentials are cleared when the tab is closed)
+// ---------------------------------------------------------------------------
+const AUTH_KEY = 'hlc_auth';
+
+export function getStoredCredentials(): string | null {
+  return sessionStorage.getItem(AUTH_KEY);
+}
+
+export function setStoredCredentials(user: string, pass: string): void {
+  sessionStorage.setItem(AUTH_KEY, btoa(`${user}:${pass}`));
+}
+
+export function clearStoredCredentials(): void {
+  sessionStorage.removeItem(AUTH_KEY);
+}
+
+/** Attempts a lightweight auth probe. Returns true if auth passes (or auth is disabled). */
+export async function probeAuth(user: string, pass: string): Promise<boolean> {
+  const res = await fetch('/healthz', {
+    headers: { Authorization: `Basic ${btoa(`${user}:${pass}`)}` },
+  });
+  return res.ok;
+}
+
+function authHeader(): Record<string, string> {
+  const creds = getStoredCredentials();
+  return creds ? { Authorization: `Basic ${creds}` } : {};
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...authHeader(),
       ...options?.headers,
     },
   });
+
+  if (res.status === 401) {
+    // Credentials expired or wrong — clear them so the login screen re-appears
+    clearStoredCredentials();
+    throw new Error('401');
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));

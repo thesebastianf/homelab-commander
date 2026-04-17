@@ -51,6 +51,10 @@ app.use(helmet({
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
     },
   },
+  // Disable HSTS — app is served over plain HTTP in homelab; HSTS would cause
+  // browsers to force HTTPS and enter an ERR_SSL_PROTOCOL_ERROR redirect loop.
+  strictTransportSecurity: false,
+  crossOriginOpenerPolicy: false,
   crossOriginEmbedderPolicy: false,
 }));
 

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { LoadingScreen } from '@/components/LoadingScreen'
+import { LoginScreen } from '@/components/LoginScreen'
 import { MetricCard } from '@/components/MetricCard'
 import { ContainerCard } from '@/components/ContainerCard'
 import { ImageCard } from '@/components/ImageCard'
@@ -51,6 +52,7 @@ import { useVolumes } from '@/hooks/useVolumes'
 import { useNetworks } from '@/hooks/useNetworks'
 import { useSettings, useSystemInfo, useUpdateSettings, usePruneSystem } from '@/hooks/useSettings'
 import type { Stack, AppSettings } from '@/lib/types'
+import { getStoredCredentials } from '@/lib/api'
 import { toast } from 'sonner'
 
 const defaultSettings: AppSettings = {
@@ -603,4 +605,57 @@ function App() {
   )
 }
 
-export default App
+/**
+ * Auth gate wrapper.
+ *
+ * If AUTH_USER / AUTH_PASS are set on the backend, every API call returns 401
+ * until the user supplies credentials via the login screen. Credentials are
+ * stored in sessionStorage (cleared on tab close) and injected into every
+ * fetch by api.ts.
+ *
+ * If auth is disabled on the backend, /healthz returns 200 without credentials,
+ * so probeAuth('','') returns true and the login screen is never shown.
+ */
+function AuthGate() {
+  // If we already have credentials stored (e.g. page refresh within the same session)
+  // skip straight to the app.
+  const [authenticated, setAuthenticated] = useState<boolean>(() => {
+    // If there are stored credentials we assume they're still valid — the first
+    // API call will evict them and re-trigger the login screen if they're wrong.
+    return getStoredCredentials() !== null
+  })
+
+  // We also need to handle the case where auth is completely disabled on the
+  // backend. Probe on mount if not yet authenticated.
+  const [probed, setProbed] = useState(false)
+
+  if (!authenticated && !probed) {
+    // Fire a one-shot probe without credentials to check if auth is required.
+    fetch('/healthz')
+      .then(r => {
+        if (r.ok) {
+          // Auth is disabled — proceed without credentials
+          setAuthenticated(true)
+        }
+        setProbed(true)
+      })
+      .catch(() => setProbed(true))
+  }
+
+  if (!authenticated && !probed) {
+    return <LoadingScreen />
+  }
+
+  if (!authenticated) {
+    return (
+      <>
+        <Toaster position="bottom-right" richColors />
+        <LoginScreen onAuthenticated={() => setAuthenticated(true)} />
+      </>
+    )
+  }
+
+  return <App />
+}
+
+export default AuthGate
