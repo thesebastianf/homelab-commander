@@ -148,7 +148,7 @@ function StackRow({ stack, config, onCreate, onUpdate }: StackRowProps) {
           {/* Device status */}
           {config.triggerValue && (
             <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-mono bg-muted/20 rounded px-2 py-1.5">
-              <span>Last check: {lastChecked ? formatDistanceToNow(lastChecked, { addSuffix: true }) : 'pending…'}</span>
+              <span>Last check: {lastChecked ? formatDistanceToNow(lastChecked, { addSuffix: true }) : 'pendingï¿½'}</span>
               {lastSeen && <span>Last seen: {formatDistanceToNow(lastSeen, { addSuffix: true })}</span>}
             </div>
           )}
@@ -198,7 +198,7 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
           <span>
             Smart Startup pings the configured device IP or hostname at the set interval.
             When the device comes online, the stack starts automatically after the configured delay.
-            Ideal for NAS-dependent stacks — just enter your Synology's IP or <code className="font-mono">synology.local</code>.
+            Ideal for NAS-dependent stacks ï¿½ just enter your Synology's IP or <code className="font-mono">synology.local</code>.
           </span>
         </div>
 
