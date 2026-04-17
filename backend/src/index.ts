@@ -25,12 +25,15 @@ import backupRoutes from './routes/backups.js';
 import notificationServiceRoutes from './routes/notificationServices.js';
 import portReservationRoutes from './routes/portReservations.js';
 import smartStartupRoutes from './routes/smartStartup.js';
+import aiRoutes from './routes/ai.js';
 
 // Background services
 import { initBackupScheduler } from './services/backupScheduler.js';
 import { initSmartStartup } from './services/smartStartup.js';
 import { initUpdateChecker } from './services/updates.js';
 import { initThresholdMonitor } from './services/notifications.js';
+import { initAutoUpdateScheduler } from './services/autoUpdateScheduler.js';
+import { seedSettings } from './lib/seed.js';
 
 const app = express();
 
@@ -40,7 +43,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "blob:"],
       connectSrc: ["'self'", "ws:", "wss:"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
@@ -78,6 +81,7 @@ app.use('/api/backups', backupRoutes);
 app.use('/api/notifications', notificationServiceRoutes);
 app.use('/api/ports', portReservationRoutes);
 app.use('/api/smart-startup', smartStartupRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Error handler (must be last)
 app.use(globalErrorHandler);
@@ -87,6 +91,7 @@ setupWebSocket(server);
 
 async function main() {
   await initDatabase();
+  await seedSettings();
 
   server.listen(config.port, '0.0.0.0', () => {
     logger.info({ port: config.port }, 'Homelab Commander Backend started');
@@ -97,6 +102,7 @@ async function main() {
   await initSmartStartup();
   initUpdateChecker();
   initThresholdMonitor();
+  await initAutoUpdateScheduler();
 }
 
 async function shutdown(signal: string) {

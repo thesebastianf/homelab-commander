@@ -8,15 +8,50 @@ import { sendNotification } from '../services/notifications.js';
 import { config } from '../config.js';
 import { mkdir, writeFile, readFile, readdir } from 'fs/promises';
 import { join, resolve, relative, dirname } from 'path';
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
+import { getStackUpdateStatus } from '../services/updates.js';
+import { listComposeProjects } from '../services/docker.js';
 
 const execFileAsync = promisify(execFile);
 const router = Router();
 
-// List all stacks
-router.get('/', asyncHandler(async (_req, res) => {
-  const { rows } = await pool.query(`
+// ---- In-memory operation store for streaming output ----
+interface OperationState {
+  lines: string[];
+  done: boolean;
+  startedAt: Date;
+}
+const operationStore = new Map<string, OperationState>();
+
+async function runUpdateOperation(id: string, stack: any, op: OperationState): Promise<void> {
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn(
+        'docker',
+        ['compose', '-f', join(stack.stack_path, 'docker-compose.yml'), 'up', '-d', '--pull', 'always'],
+        { cwd: stack.stack_path }
+      );
+      const onData = (data: Buffer) => {
+        data.toString('utf8').split('\n').filter(l => l.trim()).forEach(l => op.lines.push(l));
+      };
+      proc.stdout.on('data', onData);
+      proc.stderr.on('data', onData);
+      proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`docker compose exited with code ${code}`))));
+      proc.on('error', reject);
+    });
+    await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
+    await auditLog('update', 'stack', id);
+  } catch (err: any) {
+    op.lines.push(`Error: ${err.message}`);
+    await pool.query("UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1", [id]);
+  } finally {
+    op.done = true;
+    setTimeout(() => operationStore.delete(id), 5 * 60 * 1000);
+  }
+}
+
+const STACK_SELECT = `
     SELECT 
       s.*,
       bc.id as backup_config_id,
@@ -34,46 +69,42 @@ router.get('/', asyncHandler(async (_req, res) => {
       sc.enabled as smart_startup_enabled,
       sc.trigger_type,
       sc.auto_start,
-      sc.start_delay
+      sc.start_delay,
+      (SELECT completed_at FROM backup_jobs WHERE stack_id = s.id AND status = 'completed' ORDER BY completed_at DESC LIMIT 1) AS last_backup_at
     FROM stacks s
     LEFT JOIN backup_configs bc ON s.id = bc.stack_id
     LEFT JOIN smart_startup_configs sc ON s.id::text = sc.target_id AND sc.target_type = 'stack'
-    ORDER BY s.name
-  `);
+`;
+
+// List all stacks
+router.get('/', asyncHandler(async (_req, res) => {
+  const { rows } = await pool.query(STACK_SELECT + 'ORDER BY s.name');
   res.json(rows.map(mapStack));
+}));
+
+router.get('/external', asyncHandler(async (_req, res) => {
+  const { rows } = await pool.query('SELECT name, stack_path FROM stacks');
+  const managedNames = new Set(rows.map((row: any) => String(row.name).toLowerCase()));
+  const managedPaths = new Set(rows.map((row: any) => row.stack_path).filter(Boolean));
+
+  const externalProjects = await listComposeProjects();
+  const unmanagedProjects = externalProjects.filter((project) => {
+    if (managedNames.has(project.name.toLowerCase())) return false;
+    if (project.stackPath && managedPaths.has(project.stackPath)) return false;
+    return true;
+  });
+
+  res.json(unmanagedProjects);
 }));
 
 // Get single stack
 router.get('/:id', asyncHandler(async (req, res) => {
-  const { rows: [stack] } = await pool.query(`
-    SELECT 
-      s.*,
-      bc.id as backup_config_id,
-      bc.enabled as backup_enabled,
-      bc.cron_schedule,
-      bc.retention_days,
-      bc.include_stack_folder,
-      bc.include_volumes,
-      bc.include_databases,
-      bc.database_type,
-      bc.compression_level,
-      bc.use_advanced_retention,
-      bc.retention_policy,
-      sc.id as smart_startup_id,
-      sc.enabled as smart_startup_enabled,
-      sc.trigger_type,
-      sc.auto_start,
-      sc.start_delay
-    FROM stacks s
-    LEFT JOIN backup_configs bc ON s.id = bc.stack_id
-    LEFT JOIN smart_startup_configs sc ON s.id::text = sc.target_id AND sc.target_type = 'stack'
-    WHERE s.id = $1
-  `, [req.params.id]);
+  const { rows: [stack] } = await pool.query(STACK_SELECT + 'WHERE s.id = $1', [req.params.id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
-  // Get versions
+  // Get versions (max 10)
   const { rows: versions } = await pool.query(
-    'SELECT * FROM stack_versions WHERE stack_id = $1 ORDER BY version DESC LIMIT 20',
+    'SELECT * FROM stack_versions WHERE stack_id = $1 ORDER BY version DESC LIMIT 10',
     [req.params.id]
   );
 
@@ -125,6 +156,7 @@ router.put('/:id', validateBody(updateStackBody), asyncHandler(async (req, res) 
   if (b.name !== undefined) { updates.push(`name = $${idx++}`); values.push(b.name); }
   if (b.description !== undefined) { updates.push(`description = $${idx++}`); values.push(b.description); }
   if (b.autoUpdate !== undefined) { updates.push(`auto_update = $${idx++}`); values.push(b.autoUpdate); }
+  if (b.runBackupBeforeUpdate !== undefined) { updates.push(`run_backup_before_update = $${idx++}`); values.push(b.runBackupBeforeUpdate); }
   if (b.gitRepoConfig !== undefined) { updates.push(`git_repo_config = $${idx++}`); values.push(JSON.stringify(b.gitRepoConfig)); }
 
   if (b.composeContent !== undefined) {
@@ -140,13 +172,37 @@ router.put('/:id', validateBody(updateStackBody), asyncHandler(async (req, res) 
     await pool.query(
       `INSERT INTO stack_versions (stack_id, version, compose_content, env_content, description)
        VALUES ($1, $2, $3, $4, $5)`,
-      [req.params.id, newVersion, b.composeContent, b.envContent || existing.env_content, 'Updated']
+      [req.params.id, newVersion, b.composeContent, b.envContent ?? existing.env_content, 'Updated compose']
+    );
+    // Keep max 10 versions
+    await pool.query(
+      `DELETE FROM stack_versions WHERE stack_id = $1 AND version NOT IN (
+         SELECT version FROM stack_versions WHERE stack_id = $1 ORDER BY version DESC LIMIT 10
+       )`,
+      [req.params.id]
     );
   }
 
   if (b.envContent !== undefined) {
     updates.push(`env_content = $${idx++}`); values.push(b.envContent);
     await writeFile(join(existing.stack_path, '.env'), b.envContent);
+
+    // Version env-only changes too
+    if (b.composeContent === undefined) {
+      updates.push('version = version + 1');
+      const newVersion = existing.version + 1;
+      await pool.query(
+        `INSERT INTO stack_versions (stack_id, version, compose_content, env_content, description)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [req.params.id, newVersion, existing.compose_content, b.envContent, 'Updated .env']
+      );
+      await pool.query(
+        `DELETE FROM stack_versions WHERE stack_id = $1 AND version NOT IN (
+           SELECT version FROM stack_versions WHERE stack_id = $1 ORDER BY version DESC LIMIT 10
+         )`,
+        [req.params.id]
+      );
+    }
   }
 
   if (updates.length > 0) {
@@ -235,7 +291,7 @@ router.post('/:id/restart', asyncHandler(async (req, res) => {
 router.get('/:id/versions', asyncHandler(async (req, res) => {
   const id = String(req.params.id);
   const { rows } = await pool.query(
-    'SELECT * FROM stack_versions WHERE stack_id = $1 ORDER BY version DESC',
+    'SELECT * FROM stack_versions WHERE stack_id = $1 ORDER BY version DESC LIMIT 10',
     [id]
   );
   res.json(rows.map(mapVersion));
@@ -426,6 +482,57 @@ router.post('/:id/git/push', asyncHandler(async (req, res) => {
   }
 }));
 
+// ---- Container list for a stack ----
+
+router.get('/:id/containers', asyncHandler(async (req, res) => {
+  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [req.params.id]);
+  if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
+
+  try {
+    const { stdout } = await execFileAsync(
+      'docker',
+      ['ps', '-a', '--filter', `label=com.docker.compose.project=${stack.name.toLowerCase()}`, '--format', '{{.ID}}\t{{.Names}}\t{{.State}}\t{{.Image}}'],
+      { timeout: 10000 }
+    );
+    const containers = stdout.trim().split('\n').filter(Boolean).map(line => {
+      const [id, names, state, image] = line.split('\t');
+      return { id: id?.trim() || '', name: (names?.trim() || '').replace(/^\//, ''), status: state?.trim() || '', image: image?.trim() || '' };
+    }).filter(c => c.id);
+    res.json(containers);
+  } catch {
+    res.json([]);
+  }
+}));
+
+// ---- Operation output polling ----
+
+router.get('/:id/operation', asyncHandler(async (req, res) => {
+  const id = String(req.params.id);
+  const op = operationStore.get(id);
+  if (!op) { res.json({ running: false, lines: [], done: false }); return; }
+  res.json({ running: !op.done, lines: op.lines, done: op.done });
+}));
+
+// ---- Update stack images (pull + redeploy) ----
+
+router.post('/:id/update', asyncHandler(async (req, res) => {
+  const id = String(req.params.id);
+  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
+  if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
+
+  // Reject if already running an operation for this stack
+  const existing = operationStore.get(id);
+  if (existing && !existing.done) { res.status(409).json({ error: 'Operation already running' }); return; }
+
+  const op: OperationState = { lines: [], done: false, startedAt: new Date() };
+  operationStore.set(id, op);
+  await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [id]);
+
+  // Fire-and-forget: start operation in background
+  runUpdateOperation(id, stack, op).catch(() => { /* handled inside */ });
+  res.json({ ok: true });
+}));
+
 // ---- Helpers ----
 
 async function listFilesRecursive(dir: string, base: string, depth = 0): Promise<any[]> {
@@ -456,6 +563,8 @@ function mapStack(row: any) {
     name: row.name,
     description: row.description,
     status: row.status,
+    managedBy: 'thc',
+    external: false,
     services: row.services,
     version: row.version,
     stackPath: row.stack_path,
@@ -463,6 +572,9 @@ function mapStack(row: any) {
     composeContent: row.compose_content,
     envContent: row.env_content,
     autoUpdate: row.auto_update,
+    runBackupBeforeUpdate: row.run_backup_before_update,
+    updateAvailable: getStackUpdateStatus(row.name),
+    lastBackupAt: row.last_backup_at || null,
     gitRepoConfig: row.git_repo_config,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -477,6 +589,7 @@ function mapStack(row: any) {
       compressionLevel: row.compression_level,
       useAdvancedRetention: row.use_advanced_retention,
       retentionPolicy: row.retention_policy,
+      lastBackupAt: row.last_backup_at || null,
     } : undefined,
     smartStartup: row.smart_startup_id ? {
       enabled: row.smart_startup_enabled || false,

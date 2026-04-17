@@ -33,15 +33,21 @@ export interface Stack {
   name: string
   description?: string
   status: 'running' | 'stopped' | 'failed' | 'deploying'
+  managedBy?: 'thc' | 'external'
+  external?: boolean
   services: number
+  containerCount?: number
   version: number
   stackPath?: string
+  composeFiles?: string[]
   volumePath?: string
   compose: string
   composeContent?: string
   envFile?: string
   envContent?: string
   autoUpdate?: boolean
+  runBackupBeforeUpdate?: boolean
+  updateAvailable?: boolean
   createdAt?: string
   updatedAt?: string
   versions?: StackVersion[]
@@ -52,6 +58,7 @@ export interface Stack {
     retention?: number
     lastBackup?: string
     backupSize?: string
+    lastBackupAt?: string
   }
   smartStartup?: {
     enabled: boolean
@@ -104,6 +111,7 @@ export interface SystemInfo {
   memory: string
   memoryTotal: string
   memoryUsedPercent: number
+  cpuUsedPercent: number
   diskTotal: string
   diskUsedPercent: number
 }
@@ -150,6 +158,26 @@ export interface AppSettings {
     accessToken: string
     entityPrefix: string
   }
+  gitIntegration?: {
+    enabled: boolean
+    repoUrl: string
+    accessToken: string
+    syncOn: 'save' | 'deploy' | 'manual'
+  }
+  autoUpdateSchedule?: {
+    enabled: boolean
+    cron: string
+    label: string
+  }
+  ai?: {
+    enabled: boolean
+    provider: 'ollama' | 'openai' | 'google' | 'anthropic' | 'custom'
+    baseUrl: string
+    apiKey: string
+    model: string
+    treatAsLocal: boolean
+    allowEnvToLocal: boolean
+  }
 }
 
 export interface NotificationService {
@@ -173,6 +201,12 @@ export interface BackupConfig {
   databaseConfig?: {
     containerName?: string
     databaseName?: string
+    targets?: Array<{
+      serviceName?: string
+      containerName?: string
+      databaseName?: string
+      type: 'postgresql' | 'mysql' | 'mongodb' | 'redis' | 'influxdb'
+    }>
   }
   compressionLevel?: number
   encrypted?: boolean
@@ -211,13 +245,15 @@ export interface PortReservation {
 
 export interface SmartStartupConfig {
   id: string
-  targetType: 'container' | 'stack'
+  targetType: 'stack'
   targetId: string
-  triggerType: 'ping' | 'ip' | 'nas' | 'device'
   triggerValue: string
-  autoStart: boolean
   startDelay: number
+  monitorInterval: number
   enabled: boolean
+  deviceOnline?: boolean
+  lastCheckedAt?: string | null
+  lastSeenAt?: string | null
   createdAt?: string
   updatedAt?: string
 }

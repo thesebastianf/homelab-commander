@@ -28,6 +28,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "${BACKEND_PORT:-3001}:3001"
+    env_file:
+      - .env
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - LOG_LEVEL=${LOG_LEVEL:-info}

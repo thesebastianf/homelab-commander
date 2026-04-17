@@ -8,7 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Settings, FolderOpen, Bell, Link, Snowflake, CloudDownload } from 'lucide-react'
+import { Settings, FolderOpen, Bell, Link, Snowflake, CloudDownload, Github, AlertTriangle } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import type { AppSettings } from '@/lib/types'
 
 interface SettingsDialogProps {
@@ -22,8 +24,8 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings)
 
   useEffect(() => {
-    setLocalSettings(settings)
-  }, [settings])
+    if (open) setLocalSettings(settings)
+  }, [open]) // intentionally not [settings] — avoids reset from background refetches
 
   const handleSave = () => {
     onSave(localSettings)
@@ -44,7 +46,7 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
         </DialogHeader>
 
         <Tabs defaultValue="general" className="mt-4">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="general" className="gap-2">
               <FolderOpen className="w-4 h-4" />
               General
@@ -56,6 +58,10 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
             <TabsTrigger value="integrations" className="gap-2">
               <Link className="w-4 h-4" />
               Integrations
+            </TabsTrigger>
+            <TabsTrigger value="ai" className="gap-2">
+              <Github className="w-4 h-4" />
+              AI
             </TabsTrigger>
           </TabsList>
 
@@ -119,7 +125,7 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Disable ALL container updates for maximum stability.
+                        Disable ALL container updates for maximum stability. Overrules everything.
                       </p>
                     </div>
                     <Switch
@@ -130,20 +136,74 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                   </div>
                 </Card>
 
-                <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-card">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="auto-update" className="text-base">Automatic Container Updates</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Automatically update containers when new images are available
-                    </p>
+                {/* Auto-update schedule */}
+                <Card className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-base">Scheduled Auto-Update Window</Label>
+                      <p className="text-sm text-muted-foreground mt-0.5">
+                        Run automatic updates for all stacks with auto-update enabled on a defined schedule.
+                        Respects Global Update Freeze.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={localSettings.autoUpdateSchedule?.enabled || false}
+                      disabled={localSettings.globalUpdateFreeze}
+                      onCheckedChange={checked => setLocalSettings(prev => ({
+                        ...prev,
+                        autoUpdateSchedule: { ...(prev.autoUpdateSchedule || { cron: '0 7 * * 6', label: 'Saturdays at 07:00' }), enabled: checked },
+                      }))}
+                    />
                   </div>
-                  <Switch
-                    id="auto-update"
-                    checked={localSettings.autoUpdate}
-                    disabled={localSettings.globalUpdateFreeze}
-                    onCheckedChange={(checked) => setLocalSettings({ ...localSettings, autoUpdate: checked })}
-                  />
-                </div>
+                  {localSettings.autoUpdateSchedule?.enabled && !localSettings.globalUpdateFreeze && (
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Preset Schedule</Label>
+                        <Select
+                          value={localSettings.autoUpdateSchedule?.cron || '0 7 * * 6'}
+                          onValueChange={v => {
+                            const labels: Record<string, string> = {
+                              '0 7 * * 6': 'Saturdays at 07:00',
+                              '0 3 * * 0': 'Sundays at 03:00',
+                              '0 3 * * 1': 'Mondays at 03:00',
+                              '0 3 1 * *': '1st of each month at 03:00',
+                            }
+                            setLocalSettings(prev => ({
+                              ...prev,
+                              autoUpdateSchedule: { ...(prev.autoUpdateSchedule || { enabled: true }), cron: v, label: labels[v] || v },
+                            }))
+                          }}
+                        >
+                          <SelectTrigger className="w-64">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0 7 * * 6">Saturdays at 07:00</SelectItem>
+                            <SelectItem value="0 3 * * 0">Sundays at 03:00</SelectItem>
+                            <SelectItem value="0 3 * * 1">Mondays at 03:00</SelectItem>
+                            <SelectItem value="0 3 1 * *">1st of month at 03:00</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Custom Cron Expression</Label>
+                        <Input
+                          value={localSettings.autoUpdateSchedule?.cron || '0 7 * * 6'}
+                          onChange={e => setLocalSettings(prev => ({
+                            ...prev,
+                            autoUpdateSchedule: { ...(prev.autoUpdateSchedule || { enabled: true, label: '' }), cron: e.target.value },
+                          }))}
+                          className="font-mono text-sm"
+                          placeholder="0 7 * * 6"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Standard cron: minute hour day-of-month month day-of-week
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </Card>
+
               </div>
             </div>
           </TabsContent>
@@ -318,6 +378,240 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                   </>
                 )}
               </div>
+            </Card>
+
+            {/* Git Integration */}
+            <Card className="p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Github className="w-4 h-4" />
+                  <h3 className="font-mono font-semibold text-base">Git Integration</h3>
+                  <Badge variant={localSettings.gitIntegration?.enabled ? 'default' : 'secondary'}>
+                    {localSettings.gitIntegration?.enabled ? 'Enabled' : 'Disabled'}
+                  </Badge>
+                </div>
+                <Switch
+                  checked={localSettings.gitIntegration?.enabled || false}
+                  onCheckedChange={checked =>
+                    setLocalSettings(prev => ({
+                      ...prev,
+                      gitIntegration: { ...(prev.gitIntegration || { repoUrl: '', accessToken: '', syncOn: 'manual' }), enabled: checked },
+                    }))
+                  }
+                />
+              </div>
+              <p className="text-sm text-muted-foreground">Sync your stack compose files and .env files to a GitHub repository for backup and version history.</p>
+              {localSettings.gitIntegration?.enabled && (
+                <div className="space-y-4">
+                  <Alert variant="destructive" className="py-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    <AlertDescription className="text-xs">
+                      <strong>Security warning:</strong> All files including <code>.env</code> files containing passwords and secrets will be synced to the repository in plaintext. Use a private repository and never commit secrets to a public repo.
+                    </AlertDescription>
+                  </Alert>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="git-repo-url">GitHub Repository URL</Label>
+                    <Input
+                      id="git-repo-url"
+                      value={localSettings.gitIntegration?.repoUrl || ''}
+                      onChange={e => setLocalSettings(prev => ({ ...prev, gitIntegration: { ...(prev.gitIntegration || { enabled: true, accessToken: '', syncOn: 'manual' }), repoUrl: e.target.value } }))}
+                      placeholder="https://github.com/yourname/homelab-stacks"
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="git-access-token">Personal Access Token</Label>
+                    <Input
+                      id="git-access-token"
+                      type="password"
+                      value={localSettings.gitIntegration?.accessToken || ''}
+                      onChange={e => setLocalSettings(prev => ({ ...prev, gitIntegration: { ...(prev.gitIntegration || { enabled: true, repoUrl: '', syncOn: 'manual' }), accessToken: e.target.value } }))}
+                      placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">GitHub PAT with <code>repo</code> scope. Stored in the database.</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Auto-sync Trigger</Label>
+                    <Select
+                      value={localSettings.gitIntegration?.syncOn || 'manual'}
+                      onValueChange={v => setLocalSettings(prev => ({ ...prev, gitIntegration: { ...(prev.gitIntegration || { enabled: true, repoUrl: '', accessToken: '' }), syncOn: v as 'save' | 'deploy' | 'manual' } }))}
+                    >
+                      <SelectTrigger className="w-48">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="save">On Save</SelectItem>
+                        <SelectItem value="deploy">On Deploy</SelectItem>
+                        <SelectItem value="manual">Manual only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">When to automatically commit and push changes.</p>
+                  </div>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="ai" className="space-y-6 mt-6">
+            <Card className="p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-base">AI Assistant</Label>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Use an LLM to generate or review compose files inside the stack editor.
+                  </p>
+                </div>
+                <Switch
+                  checked={localSettings.ai?.enabled || false}
+                  onCheckedChange={(checked) => setLocalSettings(prev => ({
+                    ...prev,
+                    ai: {
+                      ...(prev.ai || {
+                        provider: 'ollama',
+                        baseUrl: 'http://host.docker.internal:11434',
+                        apiKey: '',
+                        model: 'llama3.1',
+                        treatAsLocal: true,
+                        allowEnvToLocal: false,
+                      }),
+                      enabled: checked,
+                    },
+                  }))}
+                />
+              </div>
+
+              <Alert className="py-2">
+                <AlertTriangle className="w-4 h-4" />
+                <AlertDescription className="text-xs">
+                  Raw <code>.env</code> content is never sent to remote AI providers. For non-local providers the backend sends only redacted compose content and env key names.
+                </AlertDescription>
+              </Alert>
+
+              {localSettings.ai?.enabled && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label>Provider</Label>
+                      <Select
+                        value={localSettings.ai?.provider || 'ollama'}
+                        onValueChange={(value) => setLocalSettings(prev => ({
+                          ...prev,
+                          ai: {
+                            ...(prev.ai || {
+                              enabled: true,
+                              baseUrl: '',
+                              apiKey: '',
+                              model: '',
+                              treatAsLocal: false,
+                              allowEnvToLocal: false,
+                            }),
+                            provider: value as NonNullable<AppSettings['ai']>['provider'],
+                            baseUrl:
+                              value === 'ollama'
+                                ? 'http://host.docker.internal:11434'
+                                : value === 'openai'
+                                ? 'https://api.openai.com/v1'
+                                : value === 'google'
+                                ? 'https://generativelanguage.googleapis.com/v1beta'
+                                : value === 'anthropic'
+                                ? 'https://api.anthropic.com/v1'
+                                : prev.ai?.baseUrl || '',
+                            treatAsLocal: value === 'ollama' ? true : prev.ai?.treatAsLocal ?? false,
+                          },
+                        }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ollama">Local Ollama</SelectItem>
+                          <SelectItem value="openai">OpenAI</SelectItem>
+                          <SelectItem value="google">Google</SelectItem>
+                          <SelectItem value="anthropic">Anthropic</SelectItem>
+                          <SelectItem value="custom">Custom (OpenAI-compatible)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ai-model">Model</Label>
+                      <Input
+                        id="ai-model"
+                        value={localSettings.ai?.model || ''}
+                        onChange={(e) => setLocalSettings(prev => ({
+                          ...prev,
+                          ai: { ...(prev.ai || { enabled: true, provider: 'ollama', baseUrl: '', apiKey: '', treatAsLocal: true, allowEnvToLocal: false }), model: e.target.value },
+                        }))}
+                        placeholder="llama3.1 / gpt-4.1 / claude-sonnet-4-0"
+                        className="font-mono text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ai-base-url">Base URL</Label>
+                    <Input
+                      id="ai-base-url"
+                      value={localSettings.ai?.baseUrl || ''}
+                      onChange={(e) => setLocalSettings(prev => ({
+                        ...prev,
+                        ai: { ...(prev.ai || { enabled: true, provider: 'custom', apiKey: '', model: '', treatAsLocal: false, allowEnvToLocal: false }), baseUrl: e.target.value },
+                      }))}
+                      placeholder="http://host.docker.internal:11434"
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">For `custom`, this should be an OpenAI-compatible API base. For Ollama, use the reachable local endpoint from the backend container.</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ai-api-key">API Key</Label>
+                    <Input
+                      id="ai-api-key"
+                      type="password"
+                      value={localSettings.ai?.apiKey || ''}
+                      onChange={(e) => setLocalSettings(prev => ({
+                        ...prev,
+                        ai: { ...(prev.ai || { enabled: true, provider: 'openai', baseUrl: '', model: '', treatAsLocal: false, allowEnvToLocal: false }), apiKey: e.target.value },
+                      }))}
+                      placeholder="Optional for Ollama, required for hosted providers"
+                      className="font-mono text-sm"
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-border/60 p-3 space-y-3">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <Label className="text-sm">Treat endpoint as local/private</Label>
+                        <p className="text-xs text-muted-foreground">Hosted providers should stay off. Use this only for a trusted endpoint inside your own network.</p>
+                      </div>
+                      <Switch
+                        checked={localSettings.ai?.treatAsLocal || false}
+                        disabled={localSettings.ai?.provider === 'ollama'}
+                        onCheckedChange={(checked) => setLocalSettings(prev => ({
+                          ...prev,
+                          ai: { ...(prev.ai || { enabled: true, provider: 'custom', baseUrl: '', apiKey: '', model: '', allowEnvToLocal: false }), treatAsLocal: checked },
+                        }))}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <Label className="text-sm">Allow raw .env content to local AI</Label>
+                        <p className="text-xs text-muted-foreground">Disabled keeps AI requests to compose plus env key names only.</p>
+                      </div>
+                      <Switch
+                        checked={localSettings.ai?.allowEnvToLocal || false}
+                        disabled={!(localSettings.ai?.treatAsLocal || localSettings.ai?.provider === 'ollama')}
+                        onCheckedChange={(checked) => setLocalSettings(prev => ({
+                          ...prev,
+                          ai: { ...(prev.ai || { enabled: true, provider: 'ollama', baseUrl: '', apiKey: '', model: '', treatAsLocal: true }), allowEnvToLocal: checked },
+                        }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </Card>
           </TabsContent>
         </Tabs>

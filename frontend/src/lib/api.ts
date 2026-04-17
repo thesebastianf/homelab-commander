@@ -146,6 +146,10 @@ export async function fetchStacks(): Promise<Stack[]> {
   return request('/stacks');
 }
 
+export async function fetchExternalStacks(): Promise<Stack[]> {
+  return request('/stacks/external');
+}
+
 export async function fetchStack(id: string): Promise<Stack> {
   return request(`/stacks/${id}`);
 }
@@ -180,6 +184,18 @@ export async function fetchStackVersions(id: string): Promise<any[]> {
 
 export async function restoreStackVersion(id: string, version: number): Promise<void> {
   await request(`/stacks/${id}/restore/${version}`, { method: 'POST' });
+}
+
+export async function fetchStackContainers(id: string): Promise<{ id: string; name: string; status: string; image: string }[]> {
+  return request(`/stacks/${id}/containers`);
+}
+
+export async function fetchStackOperation(id: string): Promise<{ running: boolean; lines: string[]; done: boolean }> {
+  return request(`/stacks/${id}/operation`);
+}
+
+export async function updateStackImages(id: string): Promise<void> {
+  await request(`/stacks/${id}/update`, { method: 'POST' });
 }
 
 // ---- Stack Files ----
@@ -232,6 +248,16 @@ export async function runBackup(stackId: string): Promise<void> {
   await request(`/backups/${stackId}/run`, { method: 'POST' });
 }
 
+// ---- AI ----
+
+export async function generateComposeWithAi(data: { prompt: string; composeContent?: string; envContent?: string }): Promise<{ message: string; composeContent?: string; redactionMode: 'full-local' | 'redacted-remote' }> {
+  return request('/ai/compose/generate', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function validateComposeWithAi(data: { prompt?: string; composeContent: string; envContent?: string }): Promise<{ message: string; redactionMode: 'full-local' | 'redacted-remote' }> {
+  return request('/ai/compose/validate', { method: 'POST', body: JSON.stringify(data) });
+}
+
 // ---- Notification Services ----
 
 export async function fetchNotificationServices(): Promise<NotificationService[]> {
@@ -274,11 +300,15 @@ export async function fetchSmartStartupConfigs(): Promise<SmartStartupConfig[]> 
   return request('/smart-startup');
 }
 
-export async function createSmartStartupConfig(data: Omit<SmartStartupConfig, 'id' | 'createdAt' | 'updatedAt'>): Promise<SmartStartupConfig> {
+export async function fetchSmartStartupDeviceStatus(): Promise<Record<string, { isOnline: boolean; lastCheckedAt: string | null; lastSeenAt: string | null }>> {
+  return request('/smart-startup/device-status');
+}
+
+export async function createSmartStartupConfig(data: Omit<SmartStartupConfig, 'id' | 'createdAt' | 'updatedAt' | 'deviceOnline' | 'lastCheckedAt' | 'lastSeenAt'>): Promise<SmartStartupConfig> {
   return request('/smart-startup', { method: 'POST', body: JSON.stringify(data) });
 }
 
-export async function updateSmartStartupConfig(id: string, data: Omit<SmartStartupConfig, 'id' | 'createdAt' | 'updatedAt'>): Promise<SmartStartupConfig> {
+export async function updateSmartStartupConfig(id: string, data: Omit<SmartStartupConfig, 'id' | 'createdAt' | 'updatedAt' | 'deviceOnline' | 'lastCheckedAt' | 'lastSeenAt'>): Promise<SmartStartupConfig> {
   return request(`/smart-startup/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 

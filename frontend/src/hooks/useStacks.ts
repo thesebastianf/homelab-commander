@@ -10,6 +10,14 @@ export function useStacks() {
   });
 }
 
+export function useExternalStacks() {
+  return useQuery({
+    queryKey: ['externalStacks'],
+    queryFn: api.fetchExternalStacks,
+    refetchInterval: 15000,
+  });
+}
+
 export function useStack(id: string) {
   return useQuery({
     queryKey: ['stacks', id],

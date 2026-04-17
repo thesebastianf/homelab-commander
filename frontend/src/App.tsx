@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { LoadingScreen } from '@/components/LoadingScreen'
 import { MetricCard } from '@/components/MetricCard'
 import { ContainerCard } from '@/components/ContainerCard'
 import { ImageCard } from '@/components/ImageCard'
@@ -14,12 +15,11 @@ import { AggregatedLogs } from '@/components/AggregatedLogs'
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { MaintenanceDialog } from '@/components/MaintenanceDialog'
 import { NotificationServicesDialog } from '@/components/NotificationServicesDialog'
-import { StacksList } from '@/components/StacksList'
-import { EnhancedStackEditorDialog } from '@/components/EnhancedStackEditorDialog'
-import { NewStackDialog } from '@/components/NewStackDialog'
+import { StacksEditor } from '@/components/StacksEditor'
 import { BackupManagementDialog } from '@/components/BackupManagementDialog'
 import { SmartStartupDialog } from '@/components/SmartStartupDialog'
 import { PortRegistryDialog } from '@/components/PortRegistryDialog'
+import { ClockWidget } from '@/components/ClockWidget'
 import {
   Box,
   Home,
@@ -28,7 +28,6 @@ import {
   Network,
   HardDrive,
   TrendingUp,
-  Plus,
   Search,
   Settings,
   Paintbrush,
@@ -47,7 +46,7 @@ import {
 } from 'lucide-react'
 import { useContainers, useStartContainer, useStopContainer, useRestartContainer, useRemoveContainer, useAggregatedLogs } from '@/hooks/useContainers'
 import { useImages } from '@/hooks/useImages'
-import { useStacks, useDeployStack, useStopStack, useRestartStack } from '@/hooks/useStacks'
+import { useStacks, useExternalStacks, useDeployStack, useStopStack, useRestartStack, useUpdateStack } from '@/hooks/useStacks'
 import { useVolumes } from '@/hooks/useVolumes'
 import { useNetworks } from '@/hooks/useNetworks'
 import { useSettings, useSystemInfo, useUpdateSettings, usePruneSystem } from '@/hooks/useSettings'
@@ -81,19 +80,32 @@ const defaultSettings: AppSettings = {
       memoryPercent: 80,
       cpuPercent: 80
     }
-  }
+  },
+  ai: {
+    enabled: false,
+    provider: 'ollama',
+    baseUrl: 'http://host.docker.internal:11434',
+    apiKey: '',
+    model: 'llama3.1',
+    treatAsLocal: true,
+    allowEnvToLocal: false,
+  },
 }
 
 function App() {
-  const { data: containers = [] } = useContainers()
-  const { data: images = [] } = useImages()
-  const { data: stacks = [] } = useStacks()
-  const { data: volumes = [] } = useVolumes()
-  const { data: networks = [] } = useNetworks()
-  const { data: settings } = useSettings()
-  const { data: systemInfo } = useSystemInfo()
-  const { data: aggregatedLogs = [] } = useAggregatedLogs()
+  // ALL HOOKS MUST BE DECLARED FIRST - BEFORE ANY EARLY RETURNS
+  // Query hooks
+  const containersQuery = useContainers()
+  const imagesQuery = useImages()
+  const stacksQuery = useStacks()
+  const externalStacksQuery = useExternalStacks()
+  const volumesQuery = useVolumes()
+  const networksQuery = useNetworks()
+  const settingsQuery = useSettings()
+  const systemInfoQuery = useSystemInfo()
+  const aggregatedLogsQuery = useAggregatedLogs()
 
+  // Mutation hooks
   const startContainer = useStartContainer()
   const stopContainer = useStopContainer()
   const restartContainer = useRestartContainer()
@@ -101,8 +113,37 @@ function App() {
   const deployStack = useDeployStack()
   const stopStack = useStopStack()
   const restartStack = useRestartStack()
+  const updateStack = useUpdateStack()
   const updateSettings = useUpdateSettings()
   const pruneSystem = usePruneSystem()
+
+  // State hooks - MUST BE HERE BEFORE EARLY RETURN
+  const [searchQuery, setSearchQuery] = useState('')
+  const [activeTab, setActiveTab] = useState('dashboard')
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [maintenanceOpen, setMaintenanceOpen] = useState(false)
+  const [notificationServicesOpen, setNotificationServicesOpen] = useState(false)
+  const [backupManagementOpen, setBackupManagementOpen] = useState(false)
+  const [smartStartupOpen, setSmartStartupOpen] = useState(false)
+  const [portRegistryOpen, setPortRegistryOpen] = useState(false)
+
+  // Extract data from queries
+  const containers = containersQuery.data ?? []
+  const images = imagesQuery.data ?? []
+  const stacks = stacksQuery.data ?? []
+  const externalStacks = externalStacksQuery.data ?? []
+  const volumes = volumesQuery.data ?? []
+  const networks = networksQuery.data ?? []
+  const settings = settingsQuery.data
+  const systemInfo = systemInfoQuery.data
+  const aggregatedLogs = aggregatedLogsQuery.data ?? []
+
+  // Show loading screen while initial data is being fetched
+  const isLoading = containersQuery.isPending || imagesQuery.isPending || stacksQuery.isPending
+
+  if (isLoading) {
+    return <LoadingScreen />
+  }
 
   const currentSettings: AppSettings = {
     ...defaultSettings,
@@ -112,20 +153,8 @@ function App() {
       ...(settings?.notifications || {}),
     },
     homeAssistant: settings?.homeAssistant ?? defaultSettings.homeAssistant,
+    ai: settings?.ai ?? defaultSettings.ai,
   }
-
-  const [searchQuery, setSearchQuery] = useState('')
-  const [activeTab, setActiveTab] = useState('dashboard')
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [maintenanceOpen, setMaintenanceOpen] = useState(false)
-  const [notificationServicesOpen, setNotificationServicesOpen] = useState(false)
-  const [stackEditorOpen, setStackEditorOpen] = useState(false)
-  const [newStackOpen, setNewStackOpen] = useState(false)
-  const [backupManagementOpen, setBackupManagementOpen] = useState(false)
-  const [smartStartupOpen, setSmartStartupOpen] = useState(false)
-  const [portRegistryOpen, setPortRegistryOpen] = useState(false)
-  const [selectedStackForView, setSelectedStackForView] = useState<Stack | null>(null)
-  const [selectedStackForEdit, setSelectedStackForEdit] = useState<Stack | null>(null)
 
   const systemStats = {
     containers: {
@@ -137,7 +166,7 @@ function App() {
     volumes: volumes.length,
     networks: networks.length,
     stacks: stacks.length,
-    cpuUsage: 0,
+    cpuUsage: systemInfo?.cpuUsedPercent ?? 0,
     memoryUsage: systemInfo?.memoryUsedPercent ?? 0,
     memoryTotal: systemInfo?.memoryTotal ?? systemInfo?.memory ?? '0 GB',
     diskUsage: systemInfo?.diskUsedPercent ?? 0,
@@ -191,20 +220,6 @@ function App() {
     toast.info(`Opening terminal for ${container?.name}`)
   }
 
-  const handleStackEdit = (stack: Stack) => {
-    setSelectedStackForEdit(stack)
-    setStackEditorOpen(true)
-  }
-
-  const handleStackSave = (stack: Stack) => {
-    setSelectedStackForView(stack)
-    toast.success('Stack configuration saved')
-  }
-
-  const handleNewStackSave = (stack: Stack) => {
-    setSelectedStackForView(stack)
-  }
-
   const handlePurgeImages = async () => { await pruneSystem.mutateAsync(); }
   const handlePruneSystems = async () => { await pruneSystem.mutateAsync(); }
 
@@ -223,9 +238,7 @@ function App() {
         <div className="px-6 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-gradient-to-br from-primary to-accent">
-                <Box className="w-6 h-6 text-primary-foreground" />
-              </div>
+              <img src="/thc_small_.png" alt="THC Logo" className="h-12 w-12 object-contain" />
               <div>
                 <h1 className="text-xl font-bold font-mono tracking-tight">THC</h1>
                 <p className="text-xs text-muted-foreground">The Homelab Commander · highly addictive.</p>
@@ -252,6 +265,9 @@ function App() {
                 </Badge>
               )}
             </div>
+
+            {/* Clock + timezone */}
+            <ClockWidget />
 
             {/* Action buttons with labels */}
             <div className="flex items-center gap-1">
@@ -471,40 +487,29 @@ function App() {
             </div>
           </TabsContent>
 
-          <TabsContent value="stacks" className="space-y-6">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-semibold font-mono">Docker Compose Stacks</h2>
-                <p className="text-sm text-muted-foreground mt-1">Deploy and manage multi-container applications</p>
-              </div>
-              <Button onClick={() => setNewStackOpen(true)}>
-                <Plus className="w-5 h-5 mr-2" />
-                New Stack
-              </Button>
-            </div>
-            <StacksList
+          <TabsContent value="stacks">
+            <StacksEditor
               stacks={stacks}
-              selectedStack={selectedStackForView}
-              onSelectStack={setSelectedStackForView}
-              onStart={(id) => {
+              externalStacks={externalStacks}
+              containers={containers}
+              onDeployStack={(id) => {
                 deployStack.mutate(id, {
-                  onSuccess: () => toast.success('Stack started'),
-                  onError: () => toast.error('Failed to start stack')
+                  onSuccess: () => toast.success('Stack deployed'),
+                  onError: () => toast.error('Failed to deploy stack')
                 })
               }}
-              onStop={(id) => {
+              onStopStack={(id) => {
                 stopStack.mutate(id, {
                   onSuccess: () => toast.success('Stack stopped'),
                   onError: () => toast.error('Failed to stop stack')
                 })
               }}
-              onRestart={(id) => {
+              onRestartStack={(id) => {
                 restartStack.mutate(id, {
                   onSuccess: () => toast.success('Stack restarted'),
                   onError: () => toast.error('Failed to restart stack')
                 })
               }}
-              onEdit={handleStackEdit}
             />
           </TabsContent>
 
@@ -572,27 +577,6 @@ function App() {
         }}
       />
 
-      <NewStackDialog
-        open={newStackOpen}
-        onOpenChange={setNewStackOpen}
-        stacksBasePath={currentSettings.stacksBasePath || '/opt/stacks'}
-        volumesBasePath={currentSettings.volumesBasePath || '/mnt/docker-volumes'}
-        onSave={handleNewStackSave}
-        allStacks={stacks}
-        allContainers={containers}
-      />
-
-      <EnhancedStackEditorDialog
-        open={stackEditorOpen}
-        onOpenChange={setStackEditorOpen}
-        stack={selectedStackForEdit}
-        stacksBasePath={currentSettings.stacksBasePath || '/opt/stacks'}
-        volumesBasePath={currentSettings.volumesBasePath || '/mnt/docker-volumes'}
-        onSave={handleStackSave}
-        allStacks={stacks}
-        allContainers={containers}
-      />
-
       <BackupManagementDialog
         open={backupManagementOpen}
         onOpenChange={setBackupManagementOpen}
@@ -607,7 +591,6 @@ function App() {
         open={smartStartupOpen}
         onOpenChange={setSmartStartupOpen}
         stacks={stacks}
-        containers={containers}
       />
 
       <PortRegistryDialog

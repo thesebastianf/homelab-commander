@@ -35,6 +35,26 @@ CREATE TABLE IF NOT EXISTS settings (
     "accessToken": "",
     "entityPrefix": "hlc"
   }'::jsonb,
+  git_integration_config JSONB DEFAULT '{
+    "enabled": false,
+    "repoUrl": "",
+    "accessToken": "",
+    "syncOn": "manual"
+  }'::jsonb,
+  auto_update_schedule JSONB DEFAULT '{
+    "enabled": false,
+    "cron": "0 7 * * 6",
+    "label": "Saturdays at 07:00"
+  }'::jsonb,
+  ai_config JSONB DEFAULT '{
+    "enabled": false,
+    "provider": "ollama",
+    "baseUrl": "http://host.docker.internal:11434",
+    "apiKey": "",
+    "model": "llama3.1",
+    "treatAsLocal": true,
+    "allowEnvToLocal": false
+  }'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -56,6 +76,7 @@ CREATE TABLE IF NOT EXISTS stacks (
   services INTEGER DEFAULT 0,
   version INTEGER DEFAULT 1,
   auto_update BOOLEAN DEFAULT FALSE,
+  run_backup_before_update BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -136,13 +157,15 @@ CREATE TABLE IF NOT EXISTS port_reservations (
 -- Smart startup configurations
 CREATE TABLE IF NOT EXISTS smart_startup_configs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  target_type TEXT NOT NULL CHECK (target_type IN ('container','stack')),
+  target_type TEXT NOT NULL CHECK (target_type IN ('stack')),
   target_id TEXT NOT NULL,
-  trigger_type TEXT NOT NULL CHECK (trigger_type IN ('ping','ip','nas','device')),
   trigger_value TEXT NOT NULL,
-  auto_start BOOLEAN DEFAULT TRUE,
-  start_delay INTEGER DEFAULT 30,
+  start_delay INTEGER DEFAULT 60,
+  monitor_interval INTEGER DEFAULT 30,
   enabled BOOLEAN DEFAULT FALSE,
+  device_online BOOLEAN DEFAULT FALSE,
+  last_checked_at TIMESTAMPTZ,
+  last_seen_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

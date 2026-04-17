@@ -66,6 +66,15 @@ export function useSmartStartupConfigs() {
   return useQuery({
     queryKey: ['smartStartup'],
     queryFn: api.fetchSmartStartupConfigs,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useSmartStartupDeviceStatus() {
+  return useQuery({
+    queryKey: ['smartStartupDeviceStatus'],
+    queryFn: api.fetchSmartStartupDeviceStatus,
+    refetchInterval: 15_000,
   });
 }
 

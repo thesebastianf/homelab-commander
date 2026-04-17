@@ -17,6 +17,7 @@ export const updateStackBody = z.object({
   composeContent: z.string().min(1).max(200_000).optional(),
   envContent: z.string().max(100_000).optional(),
   autoUpdate: z.boolean().optional(),
+  runBackupBeforeUpdate: z.boolean().optional(),
   gitRepoConfig: z.object({
     enabled: z.boolean(),
     repoUrl: z.string().max(500).optional(),
@@ -49,6 +50,26 @@ export const updateSettingsBody = z.object({
     accessToken: z.string().max(500).optional(),
     entityPrefix: z.string().max(50).optional(),
   }).optional(),
+  gitIntegration: z.object({
+    enabled: z.boolean(),
+    repoUrl: z.string().max(500).optional(),
+    accessToken: z.string().max(500).optional(),
+    syncOn: z.enum(['save', 'deploy', 'manual']).optional(),
+  }).optional(),
+  autoUpdateSchedule: z.object({
+    enabled: z.boolean(),
+    cron: z.string().max(100).optional(),
+    label: z.string().max(200).optional(),
+  }).optional(),
+  ai: z.object({
+    enabled: z.boolean(),
+    provider: z.enum(['ollama', 'openai', 'google', 'anthropic', 'custom']),
+    baseUrl: z.string().max(500).optional(),
+    apiKey: z.string().max(2000).optional(),
+    model: z.string().max(200).optional(),
+    treatAsLocal: z.boolean().optional(),
+    allowEnvToLocal: z.boolean().optional(),
+  }).optional(),
 });
 
 export const backupConfigBody = z.object({
@@ -58,10 +79,16 @@ export const backupConfigBody = z.object({
   includeStackFolder: z.boolean().optional(),
   includeVolumes: z.boolean().optional(),
   includeDatabases: z.boolean().optional(),
-  databaseType: z.enum(['postgresql', 'mysql', 'mongodb', 'redis', 'none']).optional(),
+  databaseType: z.enum(['postgresql', 'mysql', 'mongodb', 'redis', 'influxdb', 'auto', 'none']).optional(),
   databaseConfig: z.object({
     containerName: z.string().max(200).optional(),
     databaseName: z.string().max(200).optional(),
+    targets: z.array(z.object({
+      serviceName: z.string().max(200).optional(),
+      containerName: z.string().max(200).optional(),
+      databaseName: z.string().max(200).optional(),
+      type: z.enum(['postgresql', 'mysql', 'mongodb', 'redis', 'influxdb']),
+    })).optional(),
   }).optional(),
   compressionLevel: z.number().int().min(0).max(9).optional(),
   encrypted: z.boolean().optional(),
@@ -92,13 +119,29 @@ export const portReservationBody = z.object({
 }).refine(d => d.portRangeEnd >= d.portRangeStart, 'End port must be >= start port');
 
 export const smartStartupBody = z.object({
-  targetType: z.enum(['container', 'stack']),
+  targetType: z.literal('stack'),
   targetId: z.string().min(1).max(100),
-  triggerType: z.enum(['ping', 'ip', 'nas', 'device']),
-  triggerValue: z.string().min(1).max(200).regex(/^[a-zA-Z0-9._:-]+$/),
-  autoStart: z.boolean(),
-  startDelay: z.number().int().min(0).max(3600),
+  // triggerValue may be empty when first enabling (user fills it in via the form).
+  // Non-empty values must be a valid IP or hostname.
+  triggerValue: z.union([
+    z.literal(''),
+    z.string().min(1).max(200).regex(/^[a-zA-Z0-9._:-]+$/),
+  ]).default(''),
+  startDelay: z.number().int().min(0).max(3600).default(60),
+  monitorInterval: z.number().int().min(5).max(3600).default(30),
   enabled: z.boolean(),
+});
+
+export const composeAiGenerateBody = z.object({
+  prompt: z.string().min(1).max(4000),
+  composeContent: z.string().max(200_000).optional().default(''),
+  envContent: z.string().max(100_000).optional().default(''),
+});
+
+export const composeAiValidateBody = z.object({
+  prompt: z.string().max(4000).optional().default(''),
+  composeContent: z.string().min(1).max(200_000),
+  envContent: z.string().max(100_000).optional().default(''),
 });
 
 export const pullImageBody = z.object({

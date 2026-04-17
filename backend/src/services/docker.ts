@@ -5,6 +5,27 @@ import { logger } from '../logger.js';
 
 const docker = new Dockerode({ socketPath: '/var/run/docker.sock' });
 
+// ---- CPU usage sampler ----
+// Samples the diff between two os.cpus() snapshots every 15 seconds.
+let cachedCpuPercent = 0;
+function sampleCpu(): void {
+  const cpus1 = os.cpus();
+  setTimeout(() => {
+    const cpus2 = os.cpus();
+    let idle = 0, total = 0;
+    for (let i = 0; i < cpus1.length; i++) {
+      for (const type of Object.keys(cpus1[i].times) as (keyof os.CpuInfo['times'])[]) {
+        const diff = cpus2[i].times[type] - cpus1[i].times[type];
+        total += diff;
+        if (type === 'idle') idle += diff;
+      }
+    }
+    cachedCpuPercent = total > 0 ? parseFloat((100 - (idle / total) * 100).toFixed(1)) : 0;
+  }, 500);
+}
+sampleCpu();
+setInterval(sampleCpu, 15_000);
+
 // ---- Containers ----
 
 export async function listContainers() {
@@ -196,6 +217,7 @@ export async function getSystemInfo() {
     memory: formatBytes(memTotal),
     memoryTotal: formatBytes(memTotal),
     memoryUsedPercent: memUsedPercent,
+    cpuUsedPercent: cachedCpuPercent,
     diskTotal: formatBytes(diskTotal),
     diskUsedPercent,
   };
@@ -278,6 +300,82 @@ export async function ping() {
 
 export function getDockerEventStream() {
   return docker.getEvents();
+}
+
+export async function listComposeProjects() {
+  const containers = await docker.listContainers({ all: true });
+  const projects = new Map<string, {
+    id: string;
+    name: string;
+    status: 'running' | 'stopped' | 'failed' | 'deploying';
+    services: Set<string>;
+    stackPath: string;
+    composeFiles: string[];
+    ports: number[];
+    containerCount: number;
+  }>();
+
+  for (const container of containers) {
+    const labels = container.Labels || {};
+    const projectName = labels['com.docker.compose.project'];
+    if (!projectName) continue;
+
+    const serviceName = labels['com.docker.compose.service'] || container.Names?.[0]?.replace(/^\//, '') || 'service';
+    const workingDir = labels['com.docker.compose.project.working_dir'] || '';
+    const configFiles = (labels['com.docker.compose.project.config_files'] || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    const existing = projects.get(projectName) ?? {
+      id: `external:${projectName}`,
+      name: projectName,
+      status: 'stopped' as const,
+      services: new Set<string>(),
+      stackPath: workingDir,
+      composeFiles: configFiles,
+      ports: [],
+      containerCount: 0,
+    };
+
+    existing.services.add(serviceName);
+    existing.containerCount += 1;
+    if (!existing.stackPath && workingDir) existing.stackPath = workingDir;
+    if (existing.composeFiles.length === 0 && configFiles.length > 0) existing.composeFiles = configFiles;
+
+    for (const port of container.Ports || []) {
+      if (port.PublicPort) {
+        existing.ports.push(port.PublicPort);
+      }
+    }
+
+    const state = (container.State || '').toLowerCase();
+    if (state === 'running') {
+      existing.status = 'running';
+    } else if (existing.status !== 'running' && (state === 'restarting' || state === 'created')) {
+      existing.status = 'deploying';
+    } else if (existing.status !== 'running' && existing.status !== 'deploying' && (state === 'dead' || state === 'exited')) {
+      existing.status = 'failed';
+    }
+
+    projects.set(projectName, existing);
+  }
+
+  return [...projects.values()]
+    .map((project) => ({
+      id: project.id,
+      name: project.name,
+      status: project.status,
+      services: project.services.size || project.containerCount,
+      version: 0,
+      stackPath: project.stackPath,
+      composeFiles: project.composeFiles,
+      ports: [...new Set(project.ports)].sort((a, b) => a - b),
+      external: true,
+      managedBy: 'external' as const,
+      containerCount: project.containerCount,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // ---- Helpers ----

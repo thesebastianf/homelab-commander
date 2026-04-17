@@ -18,6 +18,9 @@ import type { Stack, BackupConfig, BackupJob } from '@/lib/types'
 import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
 import * as api from '@/lib/api'
+import { ScheduleEditor } from '@/components/ScheduleEditor'
+
+
 
 interface BackupManagementDialogProps {
   open: boolean
@@ -90,15 +93,7 @@ function StackBackupItem({ stack }: { stack: Stack }) {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Schedule</Label>
-                  <Select value={cfg.cronSchedule} onValueChange={(v) => u({ cronSchedule: v })}>
-                    <SelectTrigger className="h-8 text-xs font-mono"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0 * * * *">Hourly</SelectItem>
-                      <SelectItem value="0 2 * * *">Daily at 2 AM</SelectItem>
-                      <SelectItem value="0 2 * * 0">Weekly (Sunday)</SelectItem>
-                      <SelectItem value="0 2 1 * *">Monthly</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <ScheduleEditor value={cfg.cronSchedule ?? '0 2 * * *'} onChange={(v) => u({ cronSchedule: v })} />
                 </div>
                 <div className="flex items-end">
                   <Button size="sm" variant="outline" disabled={run.isPending} onClick={() => run.mutate()}>
@@ -145,11 +140,11 @@ function StackBackupItem({ stack }: { stack: Stack }) {
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Checkbox checked={cfg.includeStackFolder} onCheckedChange={(v) => u({ includeStackFolder: !!v })} />
-                  <Label className="text-xs">Stack folder (compose + env)</Label>
+                  <Label className="text-xs">Full stack folder</Label>
                 </div>
                 <div className="flex items-center gap-2">
                   <Checkbox checked={cfg.includeVolumes} onCheckedChange={(v) => u({ includeVolumes: !!v })} />
-                  <Label className="text-xs">Docker volumes</Label>
+                  <Label className="text-xs">All attached Docker volumes</Label>
                 </div>
                 <div className="flex items-center gap-2">
                   <Checkbox checked={cfg.includeDatabases} onCheckedChange={(v) => u({ includeDatabases: !!v })} />
@@ -160,12 +155,15 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                 <div className="ml-5 p-2 bg-muted/50 rounded space-y-2">
                   <div className="space-y-1">
                     <Label className="text-xs">Database Type</Label>
-                    <Select value={cfg.databaseType || 'postgres'} onValueChange={(v) => u({ databaseType: v })}>
+                    <Select value={cfg.databaseType || 'auto'} onValueChange={(v) => u({ databaseType: v })}>
                       <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="postgres">PostgreSQL</SelectItem>
+                        <SelectItem value="auto">Auto-detect stack databases</SelectItem>
+                        <SelectItem value="postgresql">PostgreSQL</SelectItem>
                         <SelectItem value="mysql">MySQL / MariaDB</SelectItem>
-                        <SelectItem value="mongo">MongoDB</SelectItem>
+                        <SelectItem value="mongodb">MongoDB</SelectItem>
+                        <SelectItem value="redis">Redis</SelectItem>
+                        <SelectItem value="influxdb">InfluxDB</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -177,6 +175,9 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                     <Label className="text-xs">Database Name</Label>
                     <Input value={cfg.databaseConfig?.databaseName || ''} onChange={(e) => u({ databaseConfig: { ...cfg.databaseConfig, databaseName: e.target.value } })} className="h-7 text-xs font-mono" placeholder="mydb" />
                   </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Redis and InfluxDB are best protected by volume backups. Logical dumps are used when supported by the running container image.
+                  </p>
                 </div>
               )}
             </Card>

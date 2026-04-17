@@ -1,9 +1,19 @@
 import { logger } from '../logger.js';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 
-const updateResults = new Map<string, boolean>();
+const execFileAsync = promisify(execFile);
+
+const containerUpdateResults = new Map<string, boolean>();
+// keyed by stack project name (com.docker.compose.project label, lowercased)
+const stackUpdateResults = new Map<string, boolean>();
 
 export function getUpdateStatus(containerId: string): boolean {
-  return updateResults.get(containerId) || false;
+  return containerUpdateResults.get(containerId) || false;
+}
+
+export function getStackUpdateStatus(stackName: string): boolean {
+  return stackUpdateResults.get(stackName.toLowerCase()) || false;
 }
 
 export async function checkForUpdates(): Promise<void> {
@@ -11,27 +21,56 @@ export async function checkForUpdates(): Promise<void> {
     const { listContainers } = await import('./docker.js');
     const containers = await listContainers();
 
+    // Accumulate per-stack results in this run
+    const thisRunStackResults = new Map<string, boolean>();
+
     for (const container of containers) {
-      const [name, tag] = container.image.split(':');
-      if (!name) continue;
+      const colonIdx = container.image.lastIndexOf(':');
+      const imageName = colonIdx > 0 ? container.image.slice(0, colonIdx) : container.image;
+      const tag = colonIdx > 0 ? container.image.slice(colonIdx + 1) : 'latest';
+      if (!imageName) continue;
+
+      // Derive stack name from container name (compose format: stackname-service-1)
+      // Also works for: stackname_service_1 (older compose)
+      const stackNameFromContainer = container.name.replace(/-[^-]+-\d+$/, '').replace(/_[^_]+_\d+$/, '').toLowerCase();
 
       try {
-        const remoteDigest = await checkRegistryDigest(name, tag || 'latest');
-        // If we can't get remote digest, skip (private registries, etc.)
-        if (!remoteDigest) {
-          updateResults.set(container.id, false);
-          continue;
+        // Get local image manifest digest
+        const { stdout: repoDigestRaw } = await execFileAsync(
+          'docker',
+          ['inspect', container.image, '--format', '{{index .RepoDigests 0}}'],
+          { timeout: 5000 }
+        ).catch(() => ({ stdout: '' }));
+        const localDigest = repoDigestRaw.trim().split('@')[1] || '';
+
+        // Get remote manifest digest
+        const remoteDigest = await checkRegistryDigest(imageName, tag);
+
+        let hasUpdate = false;
+        if (remoteDigest && localDigest && localDigest !== remoteDigest) {
+          hasUpdate = true;
+          logger.debug({ image: container.image, localDigest, remoteDigest }, 'Update available');
         }
 
-        // For now just mark as no update — proper local digest comparison
-        // requires inspecting the image which may not always match
-        updateResults.set(container.id, false);
+        containerUpdateResults.set(container.id, hasUpdate);
+
+        // Accumulate: if ANY container in the stack has an update, mark the stack
+        const existing = thisRunStackResults.get(stackNameFromContainer) || false;
+        thisRunStackResults.set(stackNameFromContainer, existing || hasUpdate);
       } catch {
-        updateResults.set(container.id, false);
+        containerUpdateResults.set(container.id, false);
+        if (!thisRunStackResults.has(stackNameFromContainer)) {
+          thisRunStackResults.set(stackNameFromContainer, false);
+        }
       }
     }
 
-    logger.info({ checked: containers.length }, 'Update check completed');
+    // Replace stack results with this run's results
+    stackUpdateResults.clear();
+    thisRunStackResults.forEach((v, k) => stackUpdateResults.set(k, v));
+
+    const updatable = [...stackUpdateResults.entries()].filter(([, v]) => v).map(([k]) => k);
+    logger.info({ checked: containers.length, stacksWithUpdates: updatable }, 'Update check completed');
   } catch (err) {
     logger.error({ err }, 'Update check failed');
   }

@@ -3,6 +3,7 @@ import { pool } from '../database.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { validateBody } from '../middleware/validate.js';
 import { updateSettingsBody } from '../validation/schemas.js';
+import { rescheduleAutoUpdater } from '../services/autoUpdateScheduler.js';
 
 const router = Router();
 
@@ -10,6 +11,9 @@ router.get('/', asyncHandler(async (_req, res) => {
   const { rows: [settings] } = await pool.query('SELECT * FROM settings WHERE id = 1');
   const notifConfig = settings.notification_config || {};
   const haConfig = settings.home_assistant_config || {};
+  const gitConfig = settings.git_integration_config || {};
+  const scheduleConfig = settings.auto_update_schedule || {};
+  const aiConfig = settings.ai_config || {};
   res.json({
     dockerHost: settings.docker_host,
     refreshInterval: settings.refresh_interval,
@@ -31,6 +35,26 @@ router.get('/', asyncHandler(async (_req, res) => {
       accessToken: haConfig.accessToken || '',
       entityPrefix: haConfig.entityPrefix || 'hlc',
     },
+    gitIntegration: {
+      enabled: gitConfig.enabled ?? false,
+      repoUrl: gitConfig.repoUrl || '',
+      accessToken: gitConfig.accessToken || '',
+      syncOn: gitConfig.syncOn || 'manual',
+    },
+    autoUpdateSchedule: {
+      enabled: scheduleConfig.enabled ?? false,
+      cron: scheduleConfig.cron || '0 7 * * 6',
+      label: scheduleConfig.label || 'Saturdays at 07:00',
+    },
+    ai: {
+      enabled: aiConfig.enabled ?? false,
+      provider: aiConfig.provider || 'ollama',
+      baseUrl: aiConfig.baseUrl || 'http://host.docker.internal:11434',
+      apiKey: aiConfig.apiKey || '',
+      model: aiConfig.model || 'llama3.1',
+      treatAsLocal: aiConfig.treatAsLocal ?? true,
+      allowEnvToLocal: aiConfig.allowEnvToLocal ?? false,
+    },
   });
 }));
 
@@ -50,6 +74,9 @@ router.put('/', validateBody(updateSettingsBody), asyncHandler(async (req, res) 
   if (b.backupsBasePath !== undefined) { updates.push(`backups_base_path = $${idx++}`); values.push(b.backupsBasePath); }
   if (b.notifications !== undefined) { updates.push(`notification_config = $${idx++}`); values.push(JSON.stringify(b.notifications)); }
   if (b.homeAssistant !== undefined) { updates.push(`home_assistant_config = $${idx++}`); values.push(JSON.stringify(b.homeAssistant)); }
+  if (b.gitIntegration !== undefined) { updates.push(`git_integration_config = $${idx++}`); values.push(JSON.stringify(b.gitIntegration)); }
+  if (b.autoUpdateSchedule !== undefined) { updates.push(`auto_update_schedule = $${idx++}`); values.push(JSON.stringify(b.autoUpdateSchedule)); }
+  if (b.ai !== undefined) { updates.push(`ai_config = $${idx++}`); values.push(JSON.stringify(b.ai)); }
 
   if (updates.length === 0) {
     res.json({ ok: true });
@@ -61,6 +88,11 @@ router.put('/', validateBody(updateSettingsBody), asyncHandler(async (req, res) 
     `UPDATE settings SET ${updates.join(', ')} WHERE id = 1`,
     values
   );
+
+  // Reschedule auto-updater if schedule changed
+  if (b.autoUpdateSchedule !== undefined) {
+    rescheduleAutoUpdater(b.autoUpdateSchedule.enabled ? (b.autoUpdateSchedule.cron || null) : null);
+  }
 
   res.json({ ok: true });
 }));
