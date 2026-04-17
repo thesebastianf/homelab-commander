@@ -49,6 +49,10 @@ app.use(helmet({
       imgSrc: ["'self'", "data:", "blob:"],
       connectSrc: ["'self'", "ws:", "wss:"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      // MUST be null — Helmet adds upgrade-insecure-requests by default, which
+      // forces the browser to reload all assets (JS/CSS) over HTTPS, causing
+      // ERR_SSL_PROTOCOL_ERROR on plain-HTTP homelab deployments.
+      upgradeInsecureRequests: null,
     },
   },
   // Disable HSTS — app is served over plain HTTP in homelab; HSTS would cause
