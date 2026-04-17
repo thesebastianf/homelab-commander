@@ -67,8 +67,8 @@ const STACK_SELECT = `
       bc.retention_policy,
       sc.id as smart_startup_id,
       sc.enabled as smart_startup_enabled,
-      sc.trigger_type,
-      sc.auto_start,
+      sc.trigger_value as trigger_type,
+      FALSE as auto_start,
       sc.start_delay,
       (SELECT completed_at FROM backup_jobs WHERE stack_id = s.id AND status = 'completed' ORDER BY completed_at DESC LIMIT 1) AS last_backup_at
     FROM stacks s
