@@ -132,13 +132,11 @@ Switch channels by changing image lines in [docker-compose.yaml.example](docker-
 3. Push to `beta` to publish beta images (`:beta`, `:sha-...`).
 4. Push/merge to `main` to publish stable images (`:latest`, `:main`, `:sha-...`).
 5. Confirm published images in GHCR:
-   - `ghcr.io/thesebastianf/homelab-commander-backend`
-   - `ghcr.io/thesebastianf/homelab-commander-frontend`
+  - `ghcr.io/thesebastianf/homelab-commander`
 
 ## Service Layout
 
-- Frontend: React + Vite, served by NGINX
-- Backend: Node.js + Express + TypeScript
+- App: Node.js + Express + TypeScript serving React static build
 - Database: PostgreSQL 16
 
 ## Security Notes

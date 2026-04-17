@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import pinoHttp from 'pino-http';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 import { config } from './config.js';
 import { logger } from './logger.js';
@@ -82,6 +84,19 @@ app.use('/api/notifications', notificationServiceRoutes);
 app.use('/api/ports', portReservationRoutes);
 app.use('/api/smart-startup', smartStartupRoutes);
 app.use('/api/ai', aiRoutes);
+
+// Serve React frontend static files
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const publicPath = path.join(__dirname, '../public');
+app.use(express.static(publicPath));
+// SPA fallback — serve index.html for all non-API routes
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/') || req.path === '/healthz' || req.path === '/readyz') {
+    return next();
+  }
+  res.sendFile(path.join(publicPath, 'index.html'));
+});
 
 // Error handler (must be last)
 app.use(globalErrorHandler);
