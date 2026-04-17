@@ -78,11 +78,34 @@ export function useSmartStartupDeviceStatus() {
   });
 }
 
+export function useSmartStartupStartupWarnings() {
+  return useQuery({
+    queryKey: ['smartStartupStartupWarnings'],
+    queryFn: api.fetchSmartStartupStartupWarnings,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useCheckSmartStartupAddressNow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.checkSmartStartupAddressNow,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['smartStartup'] });
+      qc.invalidateQueries({ queryKey: ['smartStartupDeviceStatus'] });
+    },
+  });
+}
+
 export function useCreateSmartStartupConfig() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: api.createSmartStartupConfig,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['smartStartup'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['smartStartup'] });
+      qc.invalidateQueries({ queryKey: ['smartStartupStartupWarnings'] });
+    },
   });
 }
 
@@ -91,7 +114,10 @@ export function useUpdateSmartStartupConfig() {
   return useMutation({
     mutationFn: ({ id, ...data }: { id: string } & Parameters<typeof api.updateSmartStartupConfig>[1]) =>
       api.updateSmartStartupConfig(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['smartStartup'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['smartStartup'] });
+      qc.invalidateQueries({ queryKey: ['smartStartupStartupWarnings'] });
+    },
   });
 }
 
@@ -99,6 +125,9 @@ export function useDeleteSmartStartupConfig() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: api.deleteSmartStartupConfig,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['smartStartup'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['smartStartup'] });
+      qc.invalidateQueries({ queryKey: ['smartStartupStartupWarnings'] });
+    },
   });
 }

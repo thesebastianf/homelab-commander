@@ -12,11 +12,31 @@ interface DeviceStatus {
   lastSeenAt: Date | null;
 }
 
+interface SmartStartupOrphan {
+  configId: string;
+  targetId: string;
+  triggerValue: string;
+  enabled: boolean;
+}
+
+interface SmartStartupDiagnostics {
+  address: string;
+  isOnline: boolean;
+  latencyMs: number;
+  checkedAt: string;
+}
+
 const deviceStatuses = new Map<string, DeviceStatus>();
 let pollerHandle: ReturnType<typeof setInterval> | null = null;
+let startupOrphansSnapshot: { checkedAt: string; count: number; items: SmartStartupOrphan[] } = {
+  checkedAt: new Date(0).toISOString(),
+  count: 0,
+  items: [],
+};
 
 /** Called at backend startup */
 export async function initSmartStartup(): Promise<void> {
+  await checkStartupOrphans();
   // Run immediately, then every 10 s to re-evaluate per-config intervals
   await monitorDevices();
   pollerHandle = setInterval(monitorDevices, 10_000);
@@ -28,6 +48,40 @@ export function getDeviceStatuses(): Record<string, DeviceStatus> {
   return Object.fromEntries(deviceStatuses);
 }
 
+/** Called by route to show one-time startup orphan check result in UI. */
+export function getStartupOrphansSnapshot(): { checkedAt: string; count: number; items: SmartStartupOrphan[] } {
+  return startupOrphansSnapshot;
+}
+
+/** Called by route to force an immediate check for one IP/hostname. */
+export async function runDeviceDiagnostics(address: string): Promise<SmartStartupDiagnostics> {
+  const { isOnline, latencyMs } = await pingDeviceWithLatency(address);
+  const checkedAt = new Date();
+
+  const prev = deviceStatuses.get(address);
+  const seenAt = isOnline ? checkedAt : (prev?.lastSeenAt ?? null);
+
+  deviceStatuses.set(address, {
+    isOnline,
+    lastCheckedAt: checkedAt,
+    lastSeenAt: seenAt,
+  });
+
+  await pool.query(
+    `UPDATE smart_startup_configs
+     SET device_online = $1, last_checked_at = $2, last_seen_at = $3, updated_at = NOW()
+     WHERE trigger_value = $4`,
+    [isOnline, checkedAt, seenAt, address]
+  );
+
+  return {
+    address,
+    isOnline,
+    latencyMs,
+    checkedAt: checkedAt.toISOString(),
+  };
+}
+
 // Track the last real check time per config to honour per-config monitor_interval
 const lastChecked = new Map<string, number>();
 
@@ -36,7 +90,7 @@ async function monitorDevices(): Promise<void> {
     const { rows: configs } = await pool.query(
       `SELECT ssc.*, s.stack_path, s.status AS stack_status
        FROM smart_startup_configs ssc
-       JOIN stacks s ON ssc.target_id = s.id
+       LEFT JOIN stacks s ON s.id::text = ssc.target_id
        WHERE ssc.enabled = true`
     );
 
@@ -59,7 +113,7 @@ async function monitorDevices(): Promise<void> {
       const prev = deviceStatuses.get(addr);
       const wasOnline = prev?.isOnline ?? false;
 
-      const isOnline = await pingDevice(addr);
+      const { isOnline } = await pingDeviceWithLatency(addr);
       const checkedAt = new Date();
       const seenAt = isOnline ? checkedAt : (prev?.lastSeenAt ?? null);
 
@@ -75,6 +129,14 @@ async function monitorDevices(): Promise<void> {
 
       // Transition: offline → online → start stack after configurable delay
       if (isOnline && !wasOnline) {
+        if (!config.stack_path) {
+          logger.warn(
+            { addr, stackId: config.target_id },
+            'Smart startup: config references missing stack, skipping start'
+          );
+          continue;
+        }
+
         logger.info(
           { addr, stackId: config.target_id, delay: config.start_delay },
           'Smart startup: trigger device came online — scheduling stack start'
@@ -95,6 +157,40 @@ async function monitorDevices(): Promise<void> {
   }
 }
 
+async function checkStartupOrphans(): Promise<void> {
+  const checkedAt = new Date().toISOString();
+  const { rows } = await pool.query(
+    `SELECT ssc.id, ssc.target_id, ssc.trigger_value, ssc.enabled
+     FROM smart_startup_configs ssc
+     LEFT JOIN stacks s ON s.id::text = ssc.target_id
+     WHERE s.id IS NULL`
+  );
+
+  const items = rows.map((row: any) => ({
+    configId: row.id as string,
+    targetId: row.target_id as string,
+    triggerValue: row.trigger_value as string,
+    enabled: row.enabled as boolean,
+  }));
+
+  startupOrphansSnapshot = {
+    checkedAt,
+    count: items.length,
+    items,
+  };
+
+  if (items.length > 0) {
+    logger.warn(
+      {
+        count: items.length,
+        orphanConfigIds: items.map((i) => i.configId),
+        checkedAt,
+      },
+      'Smart startup: found orphan configs at startup (target stack missing)'
+    );
+  }
+}
+
 async function startStack(stackId: string, stackPath: string, triggeredBy: string): Promise<void> {
   try {
     logger.info({ stackId, stackPath, triggeredBy }, 'Smart startup: starting stack');
@@ -111,18 +207,19 @@ async function startStack(stackId: string, stackPath: string, triggeredBy: strin
 }
 
 /** ICMP ping an IP or hostname. Returns true if reachable. */
-async function pingDevice(address: string): Promise<boolean> {
+async function pingDeviceWithLatency(address: string): Promise<{ isOnline: boolean; latencyMs: number }> {
   // Input is already validated by the regex in the Zod schema, double-check here
-  if (!/^[a-zA-Z0-9._:-]+$/.test(address)) return false;
+  if (!/^[a-zA-Z0-9._:-]+$/.test(address)) return { isOnline: false, latencyMs: 0 };
 
   try {
     const isWindows = process.platform === 'win32';
     const args = isWindows
       ? ['-n', '1', '-w', '1000', address]
       : ['-c', '1', '-W', '2', address];
+    const startedAt = Date.now();
     await execFileAsync('ping', args, { timeout: 5000 });
-    return true;
+    return { isOnline: true, latencyMs: Date.now() - startedAt };
   } catch {
-    return false;
+    return { isOnline: false, latencyMs: 0 };
   }
 }

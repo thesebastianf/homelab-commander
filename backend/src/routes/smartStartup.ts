@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { pool } from '../database.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { validateBody as validate } from '../middleware/validate.js';
-import { smartStartupBody } from '../validation/schemas.js';
-import { getDeviceStatuses } from '../services/smartStartup.js';
+import { smartStartupBody, smartStartupCheckNowBody } from '../validation/schemas.js';
+import { getDeviceStatuses, getStartupOrphansSnapshot, runDeviceDiagnostics } from '../services/smartStartup.js';
 
 const router = Router();
 
@@ -20,6 +20,17 @@ router.get('/', asyncHandler(async (_req, res) => {
 router.get('/device-status', asyncHandler(async (_req, res) => {
   const statuses = getDeviceStatuses();
   res.json(statuses);
+}));
+
+/** GET /warnings/startup  — one-time startup orphan snapshot for UI visibility */
+router.get('/warnings/startup', asyncHandler(async (_req, res) => {
+  res.json(getStartupOrphansSnapshot());
+}));
+
+/** POST /check-now  — immediate connectivity check for one configured address */
+router.post('/check-now', validate(smartStartupCheckNowBody), asyncHandler(async (req, res) => {
+  const result = await runDeviceDiagnostics(req.body.address);
+  res.json(result);
 }));
 
 router.post('/', validate(smartStartupBody), asyncHandler(async (req, res) => {

@@ -132,6 +132,10 @@ export const smartStartupBody = z.object({
   enabled: z.boolean(),
 });
 
+export const smartStartupCheckNowBody = z.object({
+  address: z.string().min(1).max(200).regex(/^[a-zA-Z0-9._:-]+$/),
+});
+
 export const composeAiGenerateBody = z.object({
   prompt: z.string().min(1).max(4000),
   composeContent: z.string().max(200_000).optional().default(''),

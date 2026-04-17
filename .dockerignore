@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/coverage
+**/build
+**/*.log
+**/.cache
+**/.DS_Store
+**/.vscode
+.git
+.gitignore

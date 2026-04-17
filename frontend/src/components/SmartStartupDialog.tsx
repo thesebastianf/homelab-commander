@@ -7,13 +7,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Zap, Loader2, Info, Wifi, WifiOff, Clock, Timer } from 'lucide-react'
+import { Zap, Loader2, Info, Wifi, WifiOff, Clock, Timer, AlertTriangle, Activity } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
-import type { Stack, SmartStartupConfig } from '@/lib/types'
+import type { Stack, SmartStartupConfig, SmartStartupCheckNowResult } from '@/lib/types'
 import {
   useSmartStartupConfigs,
   useSmartStartupDeviceStatus,
+  useSmartStartupStartupWarnings,
+  useCheckSmartStartupAddressNow,
   useCreateSmartStartupConfig,
   useUpdateSmartStartupConfig,
   useDeleteSmartStartupConfig,
@@ -28,17 +30,22 @@ interface SmartStartupDialogProps {
 interface StackRowProps {
   stack: Stack
   config?: SmartStartupConfig
+  diagnostic?: SmartStartupCheckNowResult
+  checkingAddress: string | null
+  onCheckNow: (address: string) => void
   onCreate: ReturnType<typeof useCreateSmartStartupConfig>
   onUpdate: ReturnType<typeof useUpdateSmartStartupConfig>
   onDelete: ReturnType<typeof useDeleteSmartStartupConfig>
 }
 
-function StackRow({ stack, config, onCreate, onUpdate }: StackRowProps) {
+function StackRow({ stack, config, diagnostic, checkingAddress, onCheckNow, onCreate, onUpdate }: StackRowProps) {
   const [draft, setDraft] = useState<Partial<SmartStartupConfig> | null>(null)
   const enabled = config?.enabled ?? false
   const isDirty = draft !== null
   const isBusy = onCreate.isPending || onUpdate.isPending
   const merged = { ...config, ...draft } as SmartStartupConfig
+  const canCheckNow = !!config?.triggerValue
+  const isCheckingThisAddress = !!config?.triggerValue && checkingAddress === config.triggerValue
 
   const handleToggle = (on: boolean) => {
     if (on && !config) {
@@ -148,10 +155,33 @@ function StackRow({ stack, config, onCreate, onUpdate }: StackRowProps) {
           {/* Device status */}
           {config.triggerValue && (
             <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-mono bg-muted/20 rounded px-2 py-1.5">
-              <span>Last check: {lastChecked ? formatDistanceToNow(lastChecked, { addSuffix: true }) : 'pending�'}</span>
+              <span>Last check: {lastChecked ? formatDistanceToNow(lastChecked, { addSuffix: true }) : 'pending'}</span>
               {lastSeen && <span>Last seen: {formatDistanceToNow(lastSeen, { addSuffix: true })}</span>}
             </div>
           )}
+
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() => config?.triggerValue && onCheckNow(config.triggerValue)}
+              disabled={!canCheckNow || isCheckingThisAddress}
+            >
+              {isCheckingThisAddress ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+              Check now
+            </Button>
+
+            {diagnostic && (
+              <span className={`text-[10px] font-mono ${diagnostic.isOnline ? 'text-green-400' : 'text-red-400'}`}>
+                {diagnostic.isOnline ? 'Online' : 'Offline'}
+                {diagnostic.isOnline ? ` (${diagnostic.latencyMs} ms)` : ''}
+                {' · '}
+                {formatDistanceToNow(new Date(diagnostic.checkedAt), { addSuffix: true })}
+              </span>
+            )}
+          </div>
 
           {isDirty && (
             <Button size="sm" className="h-7 text-xs" onClick={handleSave} disabled={isBusy}>
@@ -168,9 +198,24 @@ function StackRow({ stack, config, onCreate, onUpdate }: StackRowProps) {
 export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupDialogProps) {
   const { data: configs = [] } = useSmartStartupConfigs()
   const { data: deviceStatuses = {} } = useSmartStartupDeviceStatus()
+  const { data: startupWarnings } = useSmartStartupStartupWarnings()
+  const checkNow = useCheckSmartStartupAddressNow()
   const createConfig = useCreateSmartStartupConfig()
   const updateConfig = useUpdateSmartStartupConfig()
   const deleteConfig = useDeleteSmartStartupConfig()
+  const [diagnosticsByAddress, setDiagnosticsByAddress] = useState<Record<string, SmartStartupCheckNowResult>>({})
+
+  const checkingAddress = checkNow.isPending ? (checkNow.variables as string) : null
+
+  const handleCheckNow = (address: string) => {
+    checkNow.mutate(address, {
+      onSuccess: (result) => {
+        setDiagnosticsByAddress((prev) => ({ ...prev, [address]: result }))
+        toast.success(`${address} is ${result.isOnline ? 'online' : 'offline'}${result.isOnline ? ` (${result.latencyMs} ms)` : ''}`)
+      },
+      onError: (e: any) => toast.error(`Check failed: ${e.message}`),
+    })
+  }
 
   const getConfig = (stackId: string) =>
     configs.find((c) => c.targetId === stackId)
@@ -198,9 +243,36 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
           <span>
             Smart Startup pings the configured device IP or hostname at the set interval.
             When the device comes online, the stack starts automatically after the configured delay.
-            Ideal for NAS-dependent stacks � just enter your Synology's IP or <code className="font-mono">synology.local</code>.
+            Ideal for NAS-dependent stacks - just enter your Synology's IP or <code className="font-mono">synology.local</code>.
           </span>
         </div>
+
+        {startupWarnings && startupWarnings.count > 0 && (
+          <Card className="p-3 shrink-0 border-amber-500/30 bg-amber-500/5">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-amber-300">
+                  Startup Warning: {startupWarnings.count} Smart Startup config{startupWarnings.count > 1 ? 's' : ''} reference missing stacks
+                </p>
+                <p className="text-[11px] text-amber-200/90 mt-0.5">
+                  Checked {formatDistanceToNow(new Date(startupWarnings.checkedAt), { addSuffix: true })}. Remove or reassign these configs to restore automatic starts.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {startupWarnings.items.map((item) => (
+                    <Badge
+                      key={item.configId}
+                      variant="outline"
+                      className="font-mono text-[10px] border-amber-500/40 text-amber-200"
+                    >
+                      {item.triggerValue} - {item.targetId.slice(0, 8)}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* Monitored devices summary */}
         {monitoredDevices.length > 0 && (
@@ -235,6 +307,12 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
                 key={stack.id}
                 stack={stack}
                 config={getConfig(stack.id)}
+                diagnostic={(() => {
+                  const cfg = getConfig(stack.id)
+                  return cfg?.triggerValue ? diagnosticsByAddress[cfg.triggerValue] : undefined
+                })()}
+                checkingAddress={checkingAddress}
+                onCheckNow={handleCheckNow}
                 onCreate={createConfig}
                 onUpdate={updateConfig}
                 onDelete={deleteConfig}

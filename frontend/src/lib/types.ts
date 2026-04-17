@@ -258,6 +258,24 @@ export interface SmartStartupConfig {
   updatedAt?: string
 }
 
+export interface SmartStartupStartupWarning {
+  checkedAt: string
+  count: number
+  items: {
+    configId: string
+    targetId: string
+    triggerValue: string
+    enabled: boolean
+  }[]
+}
+
+export interface SmartStartupCheckNowResult {
+  address: string
+  isOnline: boolean
+  latencyMs: number
+  checkedAt: string
+}
+
 export interface ContainerStats {
   cpu: number
   memory: number

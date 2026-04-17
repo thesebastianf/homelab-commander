@@ -1,7 +1,8 @@
 import type {
   Container, Image, Stack, Volume, Network, SystemInfo,
   AppSettings, NotificationService, BackupConfig, BackupJob,
-  PortReservation, SmartStartupConfig, ContainerStats,
+  PortReservation, SmartStartupConfig, SmartStartupStartupWarning,
+  SmartStartupCheckNowResult, ContainerStats,
 } from './types';
 
 const BASE = '/api';
@@ -302,6 +303,14 @@ export async function fetchSmartStartupConfigs(): Promise<SmartStartupConfig[]> 
 
 export async function fetchSmartStartupDeviceStatus(): Promise<Record<string, { isOnline: boolean; lastCheckedAt: string | null; lastSeenAt: string | null }>> {
   return request('/smart-startup/device-status');
+}
+
+export async function fetchSmartStartupStartupWarnings(): Promise<SmartStartupStartupWarning> {
+  return request('/smart-startup/warnings/startup');
+}
+
+export async function checkSmartStartupAddressNow(address: string): Promise<SmartStartupCheckNowResult> {
+  return request('/smart-startup/check-now', { method: 'POST', body: JSON.stringify({ address }) });
 }
 
 export async function createSmartStartupConfig(data: Omit<SmartStartupConfig, 'id' | 'createdAt' | 'updatedAt' | 'deviceOnline' | 'lastCheckedAt' | 'lastSeenAt'>): Promise<SmartStartupConfig> {
