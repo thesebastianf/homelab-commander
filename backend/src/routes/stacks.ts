@@ -125,7 +125,7 @@ router.post('/adopt', asyncHandler(async (req, res) => {
     res.status(400).json({ error: 'stackPath must be an absolute path' }); return;
   }
 
-  let composeContent: string;
+  let composeContent = '';
   let composeFile = '';
   try {
     for (const fn of COMPOSE_FILENAMES) {
