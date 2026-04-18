@@ -8,9 +8,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Settings, FolderOpen, Bell, Link, Snowflake, CloudDownload, Github, AlertTriangle } from 'lucide-react'
+import { Settings, FolderOpen, Bell, Link, Snowflake, CloudDownload, Github, AlertTriangle, FlaskConical, Loader2, CheckCircle, XCircle } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { toast } from 'sonner'
+import * as api from '@/lib/api'
 import type { AppSettings } from '@/lib/types'
 
 interface SettingsDialogProps {
@@ -22,10 +24,28 @@ interface SettingsDialogProps {
 
 export function SettingsDialog({ open, onOpenChange, settings, onSave }: SettingsDialogProps) {
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings)
+  const [aiTesting, setAiTesting] = useState(false)
+  const [aiTestResult, setAiTestResult] = useState<{ success: boolean; message: string } | null>(null)
 
   useEffect(() => {
-    if (open) setLocalSettings(settings)
+    if (open) { setLocalSettings(settings); setAiTestResult(null) }
   }, [open]) // intentionally not [settings] — avoids reset from background refetches
+
+  const handleTestAi = async () => {
+    setAiTesting(true)
+    setAiTestResult(null)
+    try {
+      const result = await api.testAiConnection()
+      setAiTestResult({ success: result.success, message: result.success ? `Connected - model replied: "${result.message}"` : result.message })
+      if (result.success) toast.success('AI connection test passed!')
+      else toast.error(`AI test failed: ${result.message}`)
+    } catch (e: any) {
+      setAiTestResult({ success: false, message: e.message })
+      toast.error(`AI test failed: ${e.message}`)
+    } finally {
+      setAiTesting(false)
+    }
+  }
 
   const handleSave = () => {
     onSave(localSettings)
@@ -198,6 +218,10 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                     containerStopped: 'Container Stopped',
                     stackDeployed: 'Stack Deployed',
                     stackFailed: 'Stack Failed',
+                    backupCompleted: 'Backup Completed',
+                    backupFailed: 'Backup Failed',
+                    smartStartupDeviceOnline: 'Smart Startup: Device Online',
+                    smartStartupStackStarted: 'Smart Startup: Stack Started',
                     highMemory: 'High Memory Usage',
                     highCpu: 'High CPU Usage'
                   }).map(([key, label]) => (
@@ -538,6 +562,33 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                       className="font-mono text-sm"
                     />
                   </div>
+
+                  <div className="flex items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleTestAi}
+                      disabled={aiTesting}
+                      className="gap-2"
+                    >
+                      {aiTesting ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" />Testing Connection...</>
+                      ) : (
+                        <><FlaskConical className="w-4 h-4" />Test Connection</>
+                      )}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">Sends a minimal test prompt to verify provider connectivity and credentials.</p>
+                  </div>
+
+                  {aiTestResult && (
+                    <Alert className={aiTestResult.success ? 'border-success/40' : 'border-destructive/40'}>
+                      {aiTestResult.success ? <CheckCircle className="w-4 h-4 text-success" /> : <XCircle className="w-4 h-4 text-destructive" />}
+                      <AlertDescription className="text-xs font-mono break-all">
+                        {aiTestResult.message}
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
                   <div className="rounded-lg border border-border/60 p-3 space-y-3">
                     <div className="flex items-center justify-between gap-4">

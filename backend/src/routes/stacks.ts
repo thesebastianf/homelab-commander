@@ -6,7 +6,7 @@ import { createStackBody, updateStackBody } from '../validation/schemas.js';
 import { auditLog } from '../lib/audit.js';
 import { sendNotification } from '../services/notifications.js';
 import { config } from '../config.js';
-import { mkdir, writeFile, readFile, readdir } from 'fs/promises';
+import { mkdir, writeFile, readFile, readdir, access } from 'fs/promises';
 import { join, resolve, relative, dirname } from 'path';
 import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
@@ -15,6 +15,20 @@ import { listComposeProjects } from '../services/docker.js';
 
 const execFileAsync = promisify(execFile);
 const router = Router();
+
+// Docker supports 4 compose filenames in priority order
+const COMPOSE_FILENAMES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'];
+
+/** Returns the first compose filename found in the given directory, or 'docker-compose.yml' as fallback */
+async function findComposeFile(dir: string): Promise<string> {
+  for (const filename of COMPOSE_FILENAMES) {
+    try {
+      await access(join(dir, filename));
+      return filename;
+    } catch { /* not found, try next */ }
+  }
+  return 'docker-compose.yml'; // fallback for stacks created by THC
+}
 
 // ---- In-memory operation store for streaming output ----
 interface OperationState {
@@ -29,7 +43,7 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState): P
     await new Promise<void>((resolve, reject) => {
       const proc = spawn(
         'docker',
-        ['compose', '-f', join(stack.stack_path, 'docker-compose.yml'), 'up', '-d', '--pull', 'always'],
+        ['compose', 'up', '-d', '--pull', 'always'],
         { cwd: stack.stack_path }
       );
       const onData = (data: Buffer) => {
@@ -112,10 +126,14 @@ router.post('/adopt', asyncHandler(async (req, res) => {
   }
 
   let composeContent: string;
+  let composeFile = '';
   try {
-    composeContent = await readFile(join(safePath, 'docker-compose.yml'), 'utf8');
+    for (const fn of COMPOSE_FILENAMES) {
+      try { composeContent = await readFile(join(safePath, fn), 'utf8'); composeFile = fn; break; } catch { /* try next */ }
+    }
+    if (!composeFile) throw new Error('not found');
   } catch {
-    res.status(400).json({ error: 'docker-compose.yml not found at that path' }); return;
+    res.status(400).json({ error: 'No compose file found at that path (tried compose.yaml, compose.yml, docker-compose.yaml, docker-compose.yml)' }); return;
   }
 
   let envContent = '';
@@ -214,8 +232,9 @@ router.put('/:id', validateBody(updateStackBody), asyncHandler(async (req, res) 
     updates.push(`services = $${idx++}`); values.push(countServices(b.composeContent));
     updates.push(`version = version + 1`);
 
-    // Write to disk
-    await writeFile(join(existing.stack_path, 'docker-compose.yml'), b.composeContent);
+    // Write to disk — preserve existing compose filename
+    const composeFile = await findComposeFile(existing.stack_path);
+    await writeFile(join(existing.stack_path, composeFile), b.composeContent);
 
     // Save version
     const newVersion = existing.version + 1;
@@ -287,7 +306,7 @@ router.post('/:id/deploy', asyncHandler(async (req, res) => {
   await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [id]);
 
   try {
-    await execFileAsync('docker', ['compose', '-f', join(stack.stack_path, 'docker-compose.yml'), 'up', '-d'],
+    await execFileAsync('docker', ['compose', 'up', '-d'],
       { cwd: stack.stack_path, timeout: 120000 }
     );
     await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
@@ -308,7 +327,7 @@ router.post('/:id/stop', asyncHandler(async (req, res) => {
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
   try {
-    await execFileAsync('docker', ['compose', '-f', join(stack.stack_path, 'docker-compose.yml'), 'down'],
+    await execFileAsync('docker', ['compose', 'down'],
       { cwd: stack.stack_path, timeout: 120000 }
     );
     await pool.query("UPDATE stacks SET status = 'stopped', updated_at = NOW() WHERE id = $1", [id]);
@@ -326,7 +345,7 @@ router.post('/:id/restart', asyncHandler(async (req, res) => {
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
   try {
-    await execFileAsync('docker', ['compose', '-f', join(stack.stack_path, 'docker-compose.yml'), 'restart'],
+    await execFileAsync('docker', ['compose', 'restart'],
       { cwd: stack.stack_path, timeout: 120000 }
     );
     await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
@@ -360,7 +379,8 @@ router.post('/:id/restore/:version', asyncHandler(async (req, res) => {
   const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
-  await writeFile(join(stack.stack_path, 'docker-compose.yml'), versionRow.compose_content);
+  const composeFile = await findComposeFile(stack.stack_path);
+  await writeFile(join(stack.stack_path, composeFile), versionRow.compose_content);
   if (versionRow.env_content) {
     await writeFile(join(stack.stack_path, '.env'), versionRow.env_content);
   }

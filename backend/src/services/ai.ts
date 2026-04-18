@@ -82,6 +82,18 @@ export async function validateComposeWithAi(prompt: string, context: Required<Pi
   };
 }
 
+export async function testAiConnection(): Promise<{ success: boolean; message: string; model: string }> {
+  const ai = await loadAiConfig();
+  const testPrompt = 'Reply with only the word "OK".';
+  try {
+    const response = await callProvider(ai, 'You are a connectivity test. Respond with exactly "OK".', testPrompt);
+    return { success: true, message: response.trim().slice(0, 200), model: ai.model };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, message: msg, model: ai.model };
+  }
+}
+
 async function loadAiConfig(): Promise<AiConfig> {
   const { rows: [settings] } = await pool.query('SELECT ai_config FROM settings WHERE id = 1');
   const ai = settings?.ai_config || {};

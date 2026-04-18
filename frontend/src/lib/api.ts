@@ -302,6 +302,10 @@ export async function validateComposeWithAi(data: { prompt?: string; composeCont
   return request('/ai/compose/validate', { method: 'POST', body: JSON.stringify(data) });
 }
 
+export async function testAiConnection(): Promise<{ success: boolean; message: string; model: string }> {
+  return request('/ai/test', { method: 'POST' });
+}
+
 // ---- Notification Services ----
 
 export async function fetchNotificationServices(): Promise<NotificationService[]> {

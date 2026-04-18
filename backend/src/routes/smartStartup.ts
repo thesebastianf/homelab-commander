@@ -37,8 +37,8 @@ router.post('/', validate(smartStartupBody), asyncHandler(async (req, res) => {
   const b = req.body;
   const { rows: [row] } = await pool.query(
     `INSERT INTO smart_startup_configs
-       (target_type, target_id, trigger_type, trigger_value, auto_start, start_delay, monitor_interval, enabled)
-     VALUES ('stack', $1, 'ip', $2, TRUE, $3, $4, $5) RETURNING *`,
+       (target_type, target_id, trigger_value, start_delay, monitor_interval, enabled)
+     VALUES ('stack', $1, $2, $3, $4, $5) RETURNING *`,
     [b.targetId, b.triggerValue, b.startDelay, b.monitorInterval, b.enabled]
   );
   res.status(201).json(mapConfig(row, getDeviceStatuses()));
@@ -48,8 +48,8 @@ router.put('/:id', validate(smartStartupBody), asyncHandler(async (req, res) => 
   const b = req.body;
   const { rows: [row] } = await pool.query(
     `UPDATE smart_startup_configs SET
-       target_id = $1, trigger_type = 'ip', trigger_value = $2,
-       auto_start = TRUE, start_delay = $3, monitor_interval = $4, enabled = $5,
+       target_id = $1, trigger_value = $2,
+       start_delay = $3, monitor_interval = $4, enabled = $5,
        updated_at = NOW()
      WHERE id = $6 RETURNING *`,
     [b.targetId, b.triggerValue, b.startDelay, b.monitorInterval, b.enabled, req.params.id]

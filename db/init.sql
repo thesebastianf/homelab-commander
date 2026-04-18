@@ -22,7 +22,11 @@ CREATE TABLE IF NOT EXISTS settings (
       "containerStarted": false,
       "containerStopped": false,
       "stackDeployed": true,
-      "stackFailed": true
+      "stackFailed": true,
+      "backupCompleted": true,
+      "backupFailed": true,
+      "smartStartupDeviceOnline": false,
+      "smartStartupStackStarted": true
     },
     "thresholds": {
       "cpuPercent": 80,

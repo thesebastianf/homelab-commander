@@ -1,12 +1,15 @@
+import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Play, Square, RotateCw, Trash2, MoreHorizontal, Terminal, FileText, Box, CloudDownload, Zap, RefreshCw } from 'lucide-react'
 import type { Container } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -25,6 +28,7 @@ interface ContainerCardProps {
 export function ContainerCard({
   container, onStart, onStop, onRestart, onRemove, onViewLogs, onOpenTerminal, smartStartEnabled,
 }: ContainerCardProps) {
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const isRunning = container.status === 'running'
   const isStopped = container.status === 'stopped'
 
@@ -46,6 +50,7 @@ export function ContainerCard({
   }
 
   return (
+    <>
     <Card className={cn(
       "px-5 py-4 hover:shadow-md transition-all duration-200 border-l-4",
       isRunning ? "border-l-success" : isStopped ? "border-l-border" : "border-l-warning"
@@ -87,33 +92,83 @@ export function ContainerCard({
 
         {/* Action buttons right-aligned */}
         <div className="flex items-center gap-1 shrink-0">
+          <TooltipProvider delayDuration={400}>
           {!isRunning && (
-            <Button onClick={() => onStart(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-success hover:text-success hover:bg-success/10">
-              <Play className="w-4 h-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={() => onStart(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-success hover:text-success hover:bg-success/10">
+                  <Play className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p className="font-mono text-xs">docker start {container.name}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Start the stopped container</p>
+              </TooltipContent>
+            </Tooltip>
           )}
           {isRunning && (
             <>
-              <Button onClick={() => onStop(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive">
-                <Square className="w-4 h-4" />
-              </Button>
-              <Button onClick={() => onRestart(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
-                <RotateCw className="w-4 h-4" />
-              </Button>
-              <Button onClick={() => onViewLogs(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
-                <FileText className="w-4 h-4" />
-              </Button>
-              <Button onClick={() => onOpenTerminal(container.id)} size="sm" variant="ghost"
-                className="h-8 w-8 p-0 text-primary hover:text-primary hover:bg-primary/10 border border-primary/30">
-                <Terminal className="w-4 h-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={() => onStop(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive">
+                    <Square className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="font-mono text-xs">docker stop {container.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Gracefully stop the container</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={() => onRestart(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
+                    <RotateCw className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="font-mono text-xs">docker restart {container.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Stop and start the container</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={() => onViewLogs(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
+                    <FileText className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="font-mono text-xs">docker logs --tail 100 {container.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">View recent container logs</p>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={() => onOpenTerminal(container.id)} size="sm" variant="ghost"
+                    className="h-8 w-8 p-0 text-primary hover:text-primary hover:bg-primary/10 border border-primary/30">
+                    <Terminal className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="font-mono text-xs">docker exec -it {container.name} sh</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Open interactive shell in container</p>
+                </TooltipContent>
+              </Tooltip>
             </>
           )}
           {isStopped && (
-            <Button onClick={() => onRemove(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive">
-              <Trash2 className="w-4 h-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={() => setConfirmOpen(true)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive">
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p className="font-mono text-xs">docker rm {container.name}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Permanently remove this container</p>
+              </TooltipContent>
+            </Tooltip>
           )}
+          </TooltipProvider>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground">
@@ -126,7 +181,7 @@ export function ContainerCard({
                   <FileText className="w-4 h-4 mr-2" /> View Logs
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onClick={() => onRemove(container.id)} className="text-destructive">
+              <DropdownMenuItem onClick={() => setConfirmOpen(true)} className="text-destructive">
                 <Trash2 className="w-4 h-4 mr-2" /> Remove
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -154,5 +209,27 @@ export function ContainerCard({
         </div>
       )}
     </Card>
+
+    <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove Container?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently remove the container <span className="font-mono font-semibold">{container.name}</span>.
+            The container and its writable layer will be deleted. Volumes are not affected.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={() => { setConfirmOpen(false); onRemove(container.id); }}
+          >
+            Remove Container
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }

@@ -7,7 +7,9 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, Send, Mail, Globe } from 'lucide-react'
+import { Plus, Trash2, Send, Mail, Globe, FlaskConical, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
+import * as api from '@/lib/api'
 import type { NotificationService } from '@/lib/types'
 
 interface NotificationServicesDialogProps {
@@ -20,6 +22,21 @@ interface NotificationServicesDialogProps {
 export function NotificationServicesDialog({ open, onOpenChange, services, onSave }: NotificationServicesDialogProps) {
   const [localServices, setLocalServices] = useState<NotificationService[]>(services)
   const [newServiceType, setNewServiceType] = useState<NotificationService['type']>('telegram')
+  const [testingId, setTestingId] = useState<string | null>(null)
+
+  const isSavedService = (id: string) => !id.startsWith('service-')
+
+  const handleTestService = async (id: string) => {
+    setTestingId(id)
+    try {
+      await api.testNotificationService(id)
+      toast.success('Test notification sent successfully!')
+    } catch (e: any) {
+      toast.error(`Test failed: ${e.message}`)
+    } finally {
+      setTestingId(null)
+    }
+  }
 
   const handleAddService = () => {
     const newService: NotificationService = {
@@ -140,6 +157,21 @@ export function NotificationServicesDialog({ open, onOpenChange, services, onSav
                         checked={service.enabled}
                         onCheckedChange={(checked) => handleUpdateService(service.id, { enabled: checked })}
                       />
+                      {isSavedService(service.id) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleTestService(service.id)}
+                          disabled={testingId !== null}
+                          className="gap-1.5"
+                        >
+                          {testingId === service.id ? (
+                            <><Loader2 className="w-3.5 h-3.5 animate-spin" />Testing...</>
+                          ) : (
+                            <><FlaskConical className="w-3.5 h-3.5" />Test</>
+                          )}
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"

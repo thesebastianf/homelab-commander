@@ -76,7 +76,11 @@ const defaultSettings: AppSettings = {
       containerStarted: false,
       containerStopped: false,
       stackDeployed: true,
-      stackFailed: true
+      stackFailed: true,
+      backupCompleted: true,
+      backupFailed: true,
+      smartStartupDeviceOnline: false,
+      smartStartupStackStarted: true,
     },
     thresholds: {
       memoryPercent: 80,

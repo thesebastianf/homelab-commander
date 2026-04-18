@@ -58,26 +58,40 @@ export function PortRegistryDialog({
   const [newGroup, setNewGroup] = useState('Custom')
   const [newColor, setNewColor] = useState('#6b7280')
 
-  // Build port usage map
+  // Build port usage map — deduplicate so TCP+UDP bindings don't create false conflicts
   const usedPorts = useMemo(() => {
     const map = new Map<number, string[]>()
+    // Track (portNum, name) pairs already recorded to avoid TCP/UDP duplicates
+    const seen = new Set<string>()
+
     containers.forEach(c => {
       if (c.ports) {
         c.ports.forEach(p => {
           const portStr = p.split(':')[0]
           const portNum = parseInt(portStr, 10)
           if (!isNaN(portNum)) {
-            if (!map.has(portNum)) map.set(portNum, [])
-            map.get(portNum)!.push(c.name)
+            const key = `${portNum}:${c.name}`
+            if (!seen.has(key)) {
+              seen.add(key)
+              if (!map.has(portNum)) map.set(portNum, [])
+              map.get(portNum)!.push(c.name)
+            }
           }
         })
       }
     })
+    // Only include stack-level ports if the stack has no running containers already recorded
+    // to avoid double-counting (stack ports are already reflected by their containers)
+    const containerNames = new Set(containers.map(c => c.name))
     stacks.forEach(s => {
       if (s.ports) {
         s.ports.forEach(port => {
-          if (!map.has(port)) map.set(port, [])
-          map.get(port)!.push(`Stack: ${s.name}`)
+          const key = `${port}:Stack: ${s.name}`
+          if (!seen.has(key)) {
+            seen.add(key)
+            if (!map.has(port)) map.set(port, [])
+            map.get(port)!.push(`Stack: ${s.name}`)
+          }
         })
       }
     })
@@ -151,7 +165,7 @@ export function PortRegistryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ListOrdered className="w-6 h-6 text-primary" />

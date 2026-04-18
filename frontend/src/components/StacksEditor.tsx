@@ -511,7 +511,7 @@ export function StacksEditor({
     onSuccess: () => {
       setIsOperating(true)
       setOperationDone(false)
-      toast.info('Update started â€” pulling new imagesâ€¦')
+      toast.info('Update started - pulling new images...')
     },
     onError: (e: any) => toast.error(e.message || 'Update failed'),
   })
@@ -539,7 +539,7 @@ export function StacksEditor({
     onError: (e: any) => toast.error(e.message || 'Failed to adopt stack'),
   })
 
-  // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Helpers
   const validateYAML = (yaml: string): boolean => {
     try {
       YAML.load(yaml)
@@ -620,7 +620,7 @@ export function StacksEditor({
     }
   }
 
-  // â”€â”€ Derived state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Derived state
   const sortedStacks = [...stacks].sort((a, b) => {
     const order = { running: 0, stopped: 1, failed: 2, deploying: 3 }
     const ao = order[a.status as keyof typeof order] ?? 99
@@ -659,17 +659,17 @@ export function StacksEditor({
     return () => window.removeEventListener('keydown', handler)
   })
 
-  // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Render
   return (
     <TooltipProvider>
       <div className="flex h-[calc(100vh-200px)] gap-4">
 
-        {/* â•â•â• LEFT SIDEBAR â€” Stack List â•â•â• */}
+        {/* LEFT SIDEBAR - Stack List */}
         <div className="w-56 flex flex-col gap-3 shrink-0">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search stacksâ€¦"
+              placeholder="Search stacks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 font-mono text-sm"
@@ -1084,9 +1084,9 @@ export function StacksEditor({
             </Card>
 
           ) : (
-            /* â”€â”€â”€ EDIT MODE â”€â”€â”€ */
+            /* EDIT MODE */
             <>
-              {/* â”€â”€ Stack Header â”€â”€ */}
+              {/* Stack Header */}
               {/* -- Stack Header -- */}
               <div className="flex items-center gap-2 pb-3 border-b shrink-0 flex-wrap">
                 <h2 className="text-lg font-mono font-bold truncate">{selectedStack.name}</h2>
@@ -1110,14 +1110,14 @@ export function StacksEditor({
                 )}
               </div>
 
-              {/* â”€â”€ Operation Terminal â”€â”€ */}
+              {/* Operation Terminal */}
               {(isOperating || (operationDone && opLines.length > 0)) && (
                 <div className="rounded-lg border border-border/60 bg-black/80 shrink-0 flex flex-col max-h-44 min-h-0">
                   <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/30 shrink-0">
                     <div className="flex items-center gap-2">
                       <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
                       <span className="text-xs font-mono text-muted-foreground">
-                        {isOperating ? 'Updatingâ€¦' : 'Update complete'}
+                        {isOperating ? 'Updating...' : 'Update complete'}
                       </span>
                       {isOperating && <Loader2 className="w-3 h-3 animate-spin text-blue-400" />}
                       {operationDone && !isOperating && <CheckCircle2 className="w-3 h-3 text-green-500" />}
@@ -1133,7 +1133,7 @@ export function StacksEditor({
                     <div className="font-mono text-xs space-y-0.5">
                       {opLines.map((line, i) => (
                         <div key={i} className={
-                          line.includes('âœ“') || line.includes('Started') || line.includes('Running') ? 'text-green-400' :
+                          line.includes('OK') || line.includes('Started') || line.includes('Running') ? 'text-green-400' :
                           line.includes('Error') || line.includes('error') || line.includes('failed') ? 'text-red-400' :
                           line.includes('Pulling') || line.includes('Pulled') || line.includes('pull') ? 'text-blue-400' :
                           'text-foreground/70'
@@ -1146,10 +1146,10 @@ export function StacksEditor({
                 </div>
               )}
 
-              {/* â”€â”€ Two-Panel Editor â”€â”€ */}
+              {/* Two-Panel Editor */}
               <div className="flex-1 flex gap-3 min-h-0">
 
-                {/* â”€â”€â”€â”€ LEFT PANEL: File Editor â”€â”€â”€â”€ */}
+                {/* LEFT PANEL: File Editor */}
                 <div className="flex flex-col min-w-0 min-h-0" style={{ flex: '0 0 55%' }}>
 
                   {/* Action buttons */}
@@ -1336,8 +1336,8 @@ export function StacksEditor({
                                 ? <Loader2 className="w-3 h-3 animate-spin" />
                                 : <GitBranch className="w-3 h-3" />}
                               <span className="font-mono">{gitStatus.branch}</span>
-                              {gitStatus.status === 'modified' && <span className="text-amber-400 text-[10px]">â—</span>}
-                              {gitStatus.status === 'in_sync' && <span className="text-green-400 text-[10px]">â—</span>}
+                              {gitStatus.status === 'modified' && <span className="text-amber-400 text-[10px]">*</span>}
+                              {gitStatus.status === 'in_sync' && <span className="text-green-400 text-[10px]">*</span>}
                             </button>
                           </TooltipTrigger>
                           <TooltipContent className="text-xs max-w-[220px]">
@@ -1347,7 +1347,7 @@ export function StacksEditor({
                         </Tooltip>
                       )}
 
-                      {isDirty && <span className="text-amber-500 font-mono text-xs">â— Unsaved</span>}
+                      {isDirty && <span className="text-amber-500 font-mono text-xs">* Unsaved</span>}
                     </div>
 
                     <Button
@@ -1364,7 +1364,7 @@ export function StacksEditor({
                   </div>
                 </div>
 
-                {/* â”€â”€â”€â”€ RIGHT PANEL: Logs or Compare â”€â”€â”€â”€ */}
+                {/* RIGHT PANEL: Logs or Compare */}
                 <div className="flex flex-col min-w-0 min-h-0 flex-1">
 
                   {/* Panel toggle header */}
@@ -1416,12 +1416,12 @@ export function StacksEditor({
                         onValueChange={v => setCompareVersion(v ? parseInt(v) : null)}
                       >
                         <SelectTrigger className="h-6 text-xs w-36">
-                          <SelectValue placeholder="Select versionâ€¦" />
+                          <SelectValue placeholder="Select version..." />
                         </SelectTrigger>
                         <SelectContent>
                           {versions.map((v: any) => (
                             <SelectItem key={v.id} value={v.version.toString()}>
-                              v{v.version} â€” {new Date(v.createdAt).toLocaleDateString()}
+                              v{v.version} - {new Date(v.createdAt).toLocaleDateString()}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1435,12 +1435,12 @@ export function StacksEditor({
                       {stackContainers.length === 0 ? (
                         <div className="flex-1 flex items-center justify-center">
                           <p className="text-muted-foreground text-xs font-mono">
-                            {selectedStack.status === 'running' ? 'Connecting to containersâ€¦' : 'Stack is not running'}
+                            {selectedStack.status === 'running' ? 'Connecting to containers...' : 'Stack is not running'}
                           </p>
                         </div>
                       ) : logLines.length === 0 ? (
                         <div className="flex-1 flex items-center justify-center">
-                          <p className="text-muted-foreground text-xs font-mono">Waiting for log outputâ€¦</p>
+                          <p className="text-muted-foreground text-xs font-mono">Waiting for log output...</p>
                         </div>
                       ) : (
                         <ScrollArea className="flex-1">
@@ -1636,7 +1636,7 @@ export function StacksEditor({
             disabled={deleteStackMutation.isPending}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {deleteStackMutation.isPending ? 'Deletingâ€¦' : 'Delete Stack'}
+            {deleteStackMutation.isPending ? 'Deleting...' : 'Delete Stack'}
           </AlertDialogAction>
         </AlertDialogContent>
       </AlertDialog>

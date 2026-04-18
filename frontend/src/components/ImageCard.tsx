@@ -1,6 +1,9 @@
+import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Download, Trash2 } from 'lucide-react'
 import type { Image } from '@/lib/types'
 
@@ -25,7 +28,10 @@ function formatRelativeTime(isoDate: string): string {
 }
 
 export function ImageCard({ image, onPull, onRemove }: ImageCardProps) {
+  const [confirmOpen, setConfirmOpen] = useState(false)
+
   return (
+    <>
     <Card className="p-4 hover:shadow-lg transition-all duration-200">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
@@ -45,19 +51,59 @@ export function ImageCard({ image, onPull, onRemove }: ImageCardProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        <Button onClick={onPull} size="sm" variant="outline" className="h-7 px-2 text-xs">
-          <Download className="w-3.5 h-3.5 mr-1" /> Pull
-        </Button>
-        <Button
-          onClick={onRemove}
-          size="sm"
-          variant="outline"
-          className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-          disabled={image.inUse}
-        >
-          <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
-        </Button>
+        <TooltipProvider delayDuration={400}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button onClick={onPull} size="sm" variant="outline" className="h-7 px-2 text-xs">
+              <Download className="w-3.5 h-3.5 mr-1" /> Pull
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="font-mono text-xs">docker pull {image.repository}:{image.tag}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Pull the latest version of this image</p>
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              onClick={() => setConfirmOpen(true)}
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+              disabled={image.inUse}
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="font-mono text-xs">docker rmi {image.id}</p>
+            {image.inUse && <p className="text-xs text-muted-foreground mt-0.5">Cannot remove: image is in use</p>}
+          </TooltipContent>
+        </Tooltip>
+        </TooltipProvider>
       </div>
     </Card>
+
+    <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove Image?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently delete the image <span className="font-mono font-semibold">{image.repository}:{image.tag}</span>.
+            Containers using this image will continue to run but the image cannot be recovered without re-pulling.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={() => { setConfirmOpen(false); onRemove(); }}
+          >
+            Remove Image
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }

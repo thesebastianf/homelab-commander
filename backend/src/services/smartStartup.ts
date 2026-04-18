@@ -2,6 +2,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { pool } from '../database.js';
 import { logger } from '../logger.js';
+import { sendNotification } from './notifications.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -143,6 +144,7 @@ async function monitorDevices(): Promise<void> {
         );
         const status = config.stack_status as string;
         if (status === 'stopped' || status === 'failed') {
+          sendNotification('smartStartupDeviceOnline', { address: addr, stackId: config.target_id }).catch(() => {});
           setTimeout(
             () => startStack(config.target_id, config.stack_path, addr),
             (config.start_delay ?? 60) * 1000
@@ -195,10 +197,11 @@ async function startStack(stackId: string, stackPath: string, triggeredBy: strin
   try {
     logger.info({ stackId, stackPath, triggeredBy }, 'Smart startup: starting stack');
     await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [stackId]);
-    await execFileAsync('docker', ['compose', '-f', `${stackPath}/docker-compose.yml`, 'up', '-d'],
+    await execFileAsync('docker', ['compose', 'up', '-d'],
       { cwd: stackPath, timeout: 120_000 }
     );
     await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [stackId]);
+    sendNotification('smartStartupStackStarted', { stackId, triggeredBy }).catch(() => {});
     logger.info({ stackId }, 'Smart startup: stack started successfully');
   } catch (err: any) {
     await pool.query("UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1", [stackId]).catch(() => {});

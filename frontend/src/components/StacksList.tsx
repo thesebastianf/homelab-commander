@@ -300,14 +300,30 @@ export function StacksList({
                 )}
                 {isRunning && (
                   <>
-                    <Button onClick={() => onStop(selectedStack.id)} variant="outline" size="sm">
-                      <Square className="w-4 h-4 mr-2" />
-                      Stop
-                    </Button>
-                    <Button onClick={() => onRestart(selectedStack.id)} variant="outline" size="sm">
-                      <RotateCw className="w-4 h-4 mr-2" />
-                      Restart
-                    </Button>
+                    <TooltipProvider delayDuration={400}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button onClick={() => onStop(selectedStack.id)} variant="outline" size="sm">
+                            <Square className="w-4 h-4 mr-2" />
+                            Stop
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="font-mono text-xs">docker compose down</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button onClick={() => onRestart(selectedStack.id)} variant="outline" size="sm">
+                            <RotateCw className="w-4 h-4 mr-2" />
+                            Restart
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="font-mono text-xs">docker compose restart</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </>
                 )}
                 <Button onClick={() => onEdit(selectedStack)} size="sm">
@@ -366,41 +382,66 @@ export function StacksList({
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          toast.info('Updating stack...')
-                          onRestart(selectedStack.id)
-                        }}
-                        disabled={selectedStack.status !== 'running'}
-                      >
-                        <Upload className="w-4 h-4 mr-2" />
-                        Update
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          toast.info('Deploying stack...')
-                          setTimeout(() => {
-                            onStart(selectedStack.id)
-                          }, 500)
-                        }}
-                        disabled={selectedStack.status === 'running' || selectedStack.status === 'deploying'}
-                      >
-                        <Rocket className="w-4 h-4 mr-2" />
-                        Deploy
-                      </Button>
+                      <TooltipProvider delayDuration={400}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              toast.info('Updating stack...')
+                              onRestart(selectedStack.id)
+                            }}
+                            disabled={selectedStack.status !== 'running'}
+                          >
+                            <Upload className="w-4 h-4 mr-2" />
+                            Update
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="font-mono text-xs">docker compose up -d --pull always</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Pull latest images and redeploy</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              toast.info('Deploying stack...')
+                              setTimeout(() => {
+                                onStart(selectedStack.id)
+                              }, 500)
+                            }}
+                            disabled={selectedStack.status === 'running' || selectedStack.status === 'deploying'}
+                          >
+                            <Rocket className="w-4 h-4 mr-2" />
+                            Deploy
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="font-mono text-xs">docker compose up -d</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Deploy stack in detached mode</p>
+                        </TooltipContent>
+                      </Tooltip>
                       {!isRunning && selectedStack.status !== 'deploying' && (
-                        <Button 
-                          size="sm"
-                          onClick={() => onStart(selectedStack.id)}
-                        >
-                          <Play className="w-4 h-4 mr-2" />
-                          Start
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button 
+                              size="sm"
+                              onClick={() => onStart(selectedStack.id)}
+                            >
+                              <Play className="w-4 h-4 mr-2" />
+                              Start
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="font-mono text-xs">docker compose up -d</p>
+                          </TooltipContent>
+                        </Tooltip>
                       )}
+                      </TooltipProvider>
                     </div>
                   </div>
                   <ScrollArea className="flex-1">

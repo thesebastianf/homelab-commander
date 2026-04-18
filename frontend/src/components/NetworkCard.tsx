@@ -1,6 +1,9 @@
+import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Network as NetworkIcon, Trash2, Info } from 'lucide-react'
 import type { Network } from '@/lib/types'
 
@@ -11,10 +14,12 @@ interface NetworkCardProps {
 }
 
 export function NetworkCard({ network, onRemove, onInspect }: NetworkCardProps) {
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const isInUse = network.containers.length > 0
   const isSystemNetwork = ['bridge', 'host', 'none'].includes(network.name)
 
   return (
+    <>
     <Card className="p-4 hover:shadow-lg transition-all duration-200">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -53,29 +58,68 @@ export function NetworkCard({ network, onRemove, onInspect }: NetworkCardProps) 
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={() => onInspect?.(network.id)}
-          >
-            <Info className="w-3.5 h-3.5 mr-1" />
-            Inspect
-          </Button>
+          <TooltipProvider delayDuration={400}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => onInspect?.(network.id)}
+              >
+                <Info className="w-3.5 h-3.5 mr-1" />
+                Inspect
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="font-mono text-xs">docker network inspect {network.name}</p>
+            </TooltipContent>
+          </Tooltip>
           {!isSystemNetwork && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={() => onRemove?.(network.id)}
-              disabled={isInUse}
-            >
-              <Trash2 className="w-3.5 h-3.5 mr-1" />
-              Remove
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => setConfirmOpen(true)}
+                  disabled={isInUse}
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1" />
+                  Remove
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="font-mono text-xs">docker network rm {network.name}</p>
+                {isInUse && <p className="text-xs text-muted-foreground mt-0.5">Cannot remove: network is in use</p>}
+              </TooltipContent>
+            </Tooltip>
           )}
+          </TooltipProvider>
         </div>
       </div>
     </Card>
+
+    <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove Network?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently delete the network <span className="font-mono font-semibold">{network.name}</span>.
+            Containers connected to this network will lose their connection. This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={() => { setConfirmOpen(false); onRemove?.(network.id); }}
+          >
+            Remove Network
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }

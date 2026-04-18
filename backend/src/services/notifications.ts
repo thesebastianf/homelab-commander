@@ -51,6 +51,8 @@ function buildPayload(eventType: string, data: Record<string, unknown>): Notific
     stackFailed: 'Stack Deploy Failed',
     backupCompleted: 'Backup Completed',
     backupFailed: 'Backup Failed',
+    smartStartupDeviceOnline: 'Smart Startup: Device Online',
+    smartStartupStackStarted: 'Smart Startup: Stack Started',
   };
 
   return {
