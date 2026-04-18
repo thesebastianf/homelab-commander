@@ -1414,17 +1414,22 @@ export function StacksEditor({
                       {isDirty && <span className="text-amber-500 font-mono text-xs">* Unsaved</span>}
                     </div>
 
-                    <Button
-                      size="sm"
-                      onClick={handleSave}
-                      disabled={!isDirty || updateStackMutation.isPending || saveFileMutation.isPending || (activeFile === 'compose' && !!yamlError)}
-                      className="gap-1.5 text-xs"
-                    >
-                      {(updateStackMutation.isPending || saveFileMutation.isPending)
-                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        : <Save className="w-3.5 h-3.5" />}
-                      Save
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          onClick={handleSave}
+                          disabled={!isDirty || updateStackMutation.isPending || saveFileMutation.isPending || (activeFile === 'compose' && !!yamlError)}
+                          className="gap-1.5 text-xs"
+                        >
+                          {(updateStackMutation.isPending || saveFileMutation.isPending)
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Save className="w-3.5 h-3.5" />}
+                          Save
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Save changes to compose and .env files</TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
 
@@ -1433,41 +1438,66 @@ export function StacksEditor({
 
                   {/* Panel toggle header */}
                   <div className="flex items-center gap-1 mb-2 shrink-0">
-                    <button
-                      onClick={() => setRightPanel('logs')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'logs' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                    >
-                      <Terminal className="w-3 h-3" />
-                      Logs
-                    </button>
-                    <button
-                      onClick={() => setRightPanel('compare')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'compare' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                    >
-                      <Diff className="w-3 h-3" />
-                      Compare
-                    </button>
-                    <button
-                      onClick={() => setRightPanel('backup')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'backup' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                    >
-                      <Archive className="w-3 h-3" />
-                      Backup
-                    </button>
-                    <button
-                      onClick={() => setRightPanel('autoupdate')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'autoupdate' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                    >
-                      <Zap className="w-3 h-3" />
-                      Auto Update
-                    </button>
-                    <button
-                      onClick={() => setRightPanel('ai')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'ai' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                    >
-                      <WandSparkles className="w-3 h-3" />
-                      AI
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setRightPanel('logs')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'logs' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <Terminal className="w-3 h-3" />
+                          Logs
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">View container logs from this stack</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setRightPanel('compare')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'compare' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <Diff className="w-3 h-3" />
+                          Compare
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Compare current with past versions</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setRightPanel('backup')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'backup' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <Archive className="w-3 h-3" />
+                          Backup
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Configure backup settings for this stack</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setRightPanel('autoupdate')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'autoupdate' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <Zap className="w-3 h-3" />
+                          Auto Update
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Configure automatic image updates</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setRightPanel('ai')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'ai' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <WandSparkles className="w-3 h-3" />
+                          AI
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Open AI helper for compose review and generation</TooltipContent>
+                    </Tooltip>
                     <div className="flex-1" />
                     {rightPanel === 'logs' && (
                       <span className="text-[10px] text-muted-foreground font-mono">
