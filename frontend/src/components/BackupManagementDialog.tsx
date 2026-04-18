@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -7,14 +6,14 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Save, Clock, HardDrive, CheckCircle, XCircle, Loader2, Play, Database, Copy, ShieldCheck, FileArchive } from 'lucide-react'
+import { Save, CheckCircle, XCircle, Loader2, Play, Copy, ShieldCheck, FileArchive, HardDrive } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import type { Stack, BackupConfig, BackupJob } from '@/lib/types'
 import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
@@ -28,8 +27,6 @@ interface BackupManagementDialogProps {
   onOpenChange: (open: boolean) => void
   stacks: Stack[]
   onUpdateStack?: (stack: Stack) => void
-  backupsBasePath: string
-  onUpdateBackupsPath: (path: string) => void
   // Legacy props kept for backward compat but no longer used:
   backupConfigs?: Record<string, BackupConfig>
   backupJobs?: Record<string, BackupJob[]>
@@ -251,28 +248,27 @@ export function BackupManagementDialog({
   open,
   onOpenChange,
   stacks,
-  backupsBasePath,
-  onUpdateBackupsPath,
 }: BackupManagementDialogProps) {
-  const [localBackupsPath, setLocalBackupsPath] = useState(backupsBasePath)
-
-  useEffect(() => {
-    setLocalBackupsPath(backupsBasePath)
-  }, [backupsBasePath])
 
   const nasScript = `#!/bin/bash
 # NAS Pull Script — run from your NAS via cron
-# Pulls the latest backup from the Homelab Commander backup directory
+# Pulls latest backups from the Homelab Commander backup volume on your Docker host.
+#
+# STEP 1: Find the volume mount point on your Docker host:
+#   docker volume inspect hlc_backups | grep -i mountpoint
+#   (the volume is named after your compose project, e.g. homelab-commander_backups)
+#
+# STEP 2: Replace REMOTE_PATH below with that Mountpoint path.
 
-REMOTE_HOST="homelab-server"
-REMOTE_PATH="${localBackupsPath}"
-LOCAL_PATH="/volume1/backups/homelab-commander"
+REMOTE_HOST="homelab-server"       # SSH hostname or IP of your Docker host
+REMOTE_PATH="/var/lib/docker/volumes/hlc_backups/_data"  # from docker volume inspect
+LOCAL_PATH="/volume1/backups/homelab-commander"           # destination on your NAS
 
 rsync -avz --delete \\
   "\${REMOTE_HOST}:\${REMOTE_PATH}/" \\
   "\${LOCAL_PATH}/"
 
-echo "Backup sync completed at $(date)"
+echo "Backup sync completed at \$(date)"
 `
 
   return (
@@ -317,31 +313,15 @@ echo "Backup sync completed at $(date)"
           </TabsContent>
 
           <TabsContent value="settings" className="mt-4 space-y-4">
-            <Card className="p-4 space-y-3">
-              <Label className="text-base">Backups Base Path</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={localBackupsPath}
-                  onChange={(e) => setLocalBackupsPath(e.target.value)}
-                  className="font-mono"
-                  placeholder="/mnt/backups"
-                />
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        onUpdateBackupsPath(localBackupsPath)
-                        toast.success('Backups path updated')
-                      }}
-                    >
-                      Save
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="text-xs">Persist the base path used for all future backups</p>
-                  </TooltipContent>
-                </Tooltip>
+            <Card className="p-4 space-y-2 border-border/60 bg-muted/10">
+              <Label className="text-base">Backup Storage</Label>
+              <p className="text-sm text-muted-foreground">
+                Backups are written to the <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">/data/backups</span> path
+                inside the THC container, which maps to the <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">hlc_backups</span> named Docker volume on your host.
+                Do <strong>not</strong> change this internal path — control where it lands on your host by editing your <span className="font-mono text-xs">docker-compose.yml</span> volume binding instead.
+              </p>
+              <div className="mt-1 rounded-md border border-border/50 bg-black/50 p-2">
+                <pre className="font-mono text-xs text-muted-foreground whitespace-pre">{`volumes:\n  hlc_backups:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /your/host/backup/path`}</pre>
               </div>
             </Card>
 

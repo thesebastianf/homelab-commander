@@ -50,6 +50,8 @@ import {
   XCircle,
   WandSparkles,
   Rocket,
+  BookOpen,
+  Clipboard,
 } from 'lucide-react'
 import type { Stack, BackupConfig } from '@/lib/types'
 import { toast } from 'sonner'
@@ -336,14 +338,14 @@ export function StacksEditor({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   // Two-panel state
   const [activeFile, setActiveFile] = useState<'compose' | 'env' | string>('compose')
-  const [rightPanel, setRightPanel] = useState<'logs' | 'compare' | 'backup' | 'autoupdate' | 'ai'>('logs')
+  const [rightPanel, setRightPanel] = useState<'logs' | 'compare' | 'backup' | 'autoupdate' | 'ai' | 'conflicts' | 'reference' | 'helpers'>('logs')
   const [compareVersion, setCompareVersion] = useState<number | null>(null)
   // Operation terminal
   const [isOperating, setIsOperating] = useState(false)
   const [operationDone, setOperationDone] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
   // Create mode right panel
-  const [createRightPanel, setCreateRightPanel] = useState<'conflicts' | 'reference' | 'volumes' | 'backup' | 'autoupdate' | 'ai'>('conflicts')
+  const [createRightPanel, setCreateRightPanel] = useState<'conflicts' | 'reference' | 'helpers' | 'backup' | 'autoupdate' | 'ai'>('conflicts')
   const [refStackId, setRefStackId] = useState<string | null>(null)
   const [createBackupConfig, setCreateBackupConfig] = useState<Partial<BackupConfig>>({
     enabled: false, cronSchedule: '0 2 * * *', retentionDays: 7,
@@ -527,8 +529,8 @@ export function StacksEditor({
   })
 
   const adoptMutation = useMutation({
-    mutationFn: ({ name, stackPath }: { name: string; stackPath: string }) =>
-      api.adoptStack(name, stackPath),
+    mutationFn: ({ name, stackPath, composeFiles }: { name: string; stackPath: string; composeFiles?: string[] }) =>
+      api.adoptStack(name, stackPath, composeFiles),
     onSuccess: (adopted) => {
       toast.success(`“${adopted.name}” is now managed by THC`)
       qc.invalidateQueries({ queryKey: ['stacks'] })
@@ -648,7 +650,6 @@ export function StacksEditor({
   // Create mode derived
   const newPorts = isCreating ? extractPorts(composeContent) : []
   const refStackCompose = refStackId ? (stacks.find(s => s.id === refStackId) as any)?.composeContent ?? (stacks.find(s => s.id === refStackId) as any)?.compose ?? '' : ''
-  const volBase = settings?.volumesBasePath ?? '/data/volumes'
 
   // Keyboard shortcut: Ctrl+S to save
   useEffect(() => {
@@ -799,7 +800,7 @@ export function StacksEditor({
                           variant="outline"
                           className="w-full mt-2 h-6 text-[10px] gap-1 border-primary/40 text-primary hover:bg-primary/10"
                           disabled={adoptMutation.isPending}
-                          onClick={() => adoptMutation.mutate({ name: stack.name, stackPath: stack.stackPath! })}
+                          onClick={() => adoptMutation.mutate({ name: stack.name, stackPath: stack.stackPath!, composeFiles: stack.composeFiles })}
                         >
                           <Rocket className="w-3 h-3" />
                           {adoptMutation.isPending ? 'Adopting…' : 'Adopt into THC'}
@@ -934,14 +935,14 @@ export function StacksEditor({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
-                          onClick={() => setCreateRightPanel('volumes')}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${createRightPanel === 'volumes' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                          onClick={() => setCreateRightPanel('helpers')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${createRightPanel === 'helpers' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
                         >
                           <HardDrive className="w-3 h-3" />
-                          Volumes
+                          Helpers
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent className="text-xs">Preview mapped volumes and host path suggestions</TooltipContent>
+                      <TooltipContent className="text-xs">Global copy-paste helpers from Settings</TooltipContent>
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1047,36 +1048,30 @@ export function StacksEditor({
                     </div>
                   )}
 
-                  {/* VOLUME PATH TEMPLATES */}
-                  {createRightPanel === 'volumes' && (
+                  {/* COPY-PASTE HELPERS */}
+                  {createRightPanel === 'helpers' && (
                     <div className="flex-1 overflow-y-auto space-y-2">
-                      <p className="text-xs text-muted-foreground mb-1">Named volume path templates. Click to copy. Based on Settings &#8594; Named Volumes Base Path.</p>
-                      {(['config', 'data', 'cache', 'logs'] as const).map(sub => {
-                        const path = `${volBase}/${newStackName || '<stack-name>'}/${sub}`
-                        return (
-                          <div key={sub} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border/40 bg-muted/20">
+                      <p className="text-xs text-muted-foreground mb-1">
+                        Global helpers from Settings. Click to copy.
+                      </p>
+                      {(settings?.copyPasteHelpers ?? []).length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic px-1">No helpers configured. Add them in Settings → Helpers.</p>
+                      ) : (
+                        (settings?.copyPasteHelpers ?? []).map(h => (
+                          <div key={h.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border/40 bg-muted/20">
                             <div className="min-w-0">
-                              <p className="text-xs font-semibold capitalize">{sub}</p>
-                              <p className="font-mono text-xs text-muted-foreground truncate">{path}</p>
+                              <p className="text-xs font-semibold">{h.label}</p>
+                              <p className="font-mono text-xs text-muted-foreground truncate">{h.value}</p>
                             </div>
-                            <button onClick={() => { navigator.clipboard.writeText(path); toast.success('Path copied') }} className="text-muted-foreground hover:text-foreground shrink-0">
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(h.value); toast.success('Copied') }}
+                              className="text-muted-foreground hover:text-foreground shrink-0"
+                            >
                               <Copy className="w-3.5 h-3.5" />
                             </button>
                           </div>
-                        )
-                      })}
-                      <div className="pt-2 border-t">
-                        <p className="text-xs text-muted-foreground mb-1">Named volume snippet for compose.yml:</p>
-                        <div className="rounded-lg border border-border/40 bg-muted/20 p-2 relative">
-                          <pre className="font-mono text-xs text-muted-foreground whitespace-pre">{`volumes:\n  ${newStackName || 'stack'}_data:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: ${volBase}/${newStackName || '<stack>'}/data`}</pre>
-                          <button
-                            onClick={() => { navigator.clipboard.writeText(`volumes:\n  ${newStackName || 'stack'}_data:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: ${volBase}/${newStackName || '<stack>'}/data`); toast.success('Copied') }}
-                            className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
+                        ))
+                      )}
                     </div>
                   )}
 
@@ -1498,6 +1493,42 @@ export function StacksEditor({
                       </TooltipTrigger>
                       <TooltipContent className="text-xs">Open AI helper for compose review and generation</TooltipContent>
                     </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setRightPanel('conflicts')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'conflicts' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <AlertCircle className="w-3 h-3" />
+                          Conflicts
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Check port conflicts against other stacks</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setRightPanel('reference')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'reference' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <BookOpen className="w-3 h-3" />
+                          Reference
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">View another stack's compose as reference</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setRightPanel('helpers')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'helpers' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <Clipboard className="w-3 h-3" />
+                          Helpers
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Global copy-paste helpers from Settings</TooltipContent>
+                    </Tooltip>
                     <div className="flex-1" />
                     {rightPanel === 'logs' && (
                       <span className="text-[10px] text-muted-foreground font-mono">
@@ -1702,6 +1733,102 @@ export function StacksEditor({
                           <AlertTriangle className="w-3 h-3 shrink-0" />
                           Configure backup settings in the Backup tab to enable pre-update backups
                         </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* PORT CONFLICTS (edit mode) */}
+                  {rightPanel === 'conflicts' && (() => {
+                    const editPorts = extractPorts(composeContent)
+                    return (
+                      <div className="flex-1 overflow-y-auto space-y-2">
+                        {editPorts.length === 0 ? (
+                          <div className="flex items-center justify-center h-32">
+                            <p className="text-xs text-muted-foreground font-mono">No ports defined in compose yet</p>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-xs text-muted-foreground mb-2">Ports declared in your compose:</p>
+                            {editPorts.map(port => {
+                              const conflict = stacks.find(s => s.id !== selectedStack.id && (s.ports || []).includes(port))
+                              return (
+                                <div key={port} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${conflict ? 'border-destructive/60 bg-destructive/5' : 'border-border/40 bg-muted/20'}`}>
+                                  <span className="font-mono text-sm font-semibold">:{port}</span>
+                                  {conflict ? (
+                                    <span className="text-xs text-destructive flex items-center gap-1">
+                                      <AlertCircle className="w-3 h-3" />
+                                      Used by <strong className="ml-0.5">{conflict.name}</strong>
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-green-500">&#10003; Available</span>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </>
+                        )}
+                        <p className="text-xs text-muted-foreground pt-3 pb-1">All ports in use across stacks:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {stacks.filter(s => s.id !== selectedStack.id).flatMap(s => (s.ports || []).map(p => ({ p, name: s.name }))).map(({ p, name }, i) => (
+                            <Tooltip key={i}>
+                              <TooltipTrigger asChild>
+                                <Badge variant={editPorts.includes(p) ? 'destructive' : 'outline'} className="font-mono text-xs cursor-default">:{p}</Badge>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs">{name}</TooltipContent>
+                            </Tooltip>
+                          ))}
+                          {stacks.filter(s => s.id !== selectedStack.id).every(s => !s.ports?.length) && (
+                            <span className="text-xs text-muted-foreground italic">No ports in use across other stacks</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })()}
+
+                  {/* STACK REFERENCE (edit mode) */}
+                  {rightPanel === 'reference' && (
+                    <div className="flex-1 flex flex-col min-h-0 gap-2">
+                      <Select value={refStackId ?? ''} onValueChange={v => setRefStackId(v || null)}>
+                        <SelectTrigger className="h-7 text-xs shrink-0">
+                          <SelectValue placeholder="Pick a stack to reference..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stacks.filter(s => s.id !== selectedStack.id).map(s => (
+                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {refStackId ? (
+                        <Textarea value={refStackCompose} readOnly className="flex-1 font-mono text-xs resize-none bg-muted/30 min-h-0" />
+                      ) : (
+                        <div className="flex-1 flex items-center justify-center">
+                          <p className="text-xs text-muted-foreground text-center">Select a stack above to view its compose as reference</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* COPY-PASTE HELPERS (edit mode) */}
+                  {rightPanel === 'helpers' && (
+                    <div className="flex-1 overflow-y-auto space-y-2">
+                      <p className="text-xs text-muted-foreground mb-1">Global helpers from Settings. Click to copy.</p>
+                      {(settings?.copyPasteHelpers ?? []).length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic px-1">No helpers configured. Add them in Settings → Helpers.</p>
+                      ) : (
+                        (settings?.copyPasteHelpers ?? []).map(h => (
+                          <div key={h.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border/40 bg-muted/20">
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold">{h.label}</p>
+                              <p className="font-mono text-xs text-muted-foreground truncate">{h.value}</p>
+                            </div>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(h.value); toast.success('Copied') }}
+                              className="text-muted-foreground hover:text-foreground shrink-0"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))
                       )}
                     </div>
                   )}

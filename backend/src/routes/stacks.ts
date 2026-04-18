@@ -114,7 +114,7 @@ router.get('/external', asyncHandler(async (_req, res) => {
 // Adopt an external stack — non-destructive: reads existing files, creates DB record.
 // The stack directory is NOT moved or modified.
 router.post('/adopt', asyncHandler(async (req, res) => {
-  const { name, stackPath } = req.body as { name?: string; stackPath?: string };
+  const { name, stackPath, composeFiles } = req.body as { name?: string; stackPath?: string; composeFiles?: string[] };
   if (!name || !stackPath) {
     res.status(400).json({ error: 'name and stackPath are required' }); return;
   }
@@ -125,19 +125,64 @@ router.post('/adopt', asyncHandler(async (req, res) => {
     res.status(400).json({ error: 'stackPath must be an absolute path' }); return;
   }
 
+  // Read compose file via docker volume mount — the backend container cannot access host paths
+  // directly, but the Docker daemon can mount them. We try three strategies:
+  //   1. Mount each specific file from composeFiles labels (most reliable — exact paths)
+  //   2. Mount the stackPath directory and scan for standard compose filenames
   let composeContent = '';
   let composeFile = '';
-  try {
-    for (const fn of COMPOSE_FILENAMES) {
-      try { composeContent = await readFile(join(safePath, fn), 'utf8'); composeFile = fn; break; } catch { /* try next */ }
+
+  // Strategy 1: mount the specific file path(s) reported by Docker Compose labels
+  if (composeFiles?.length) {
+    for (const filePath of composeFiles) {
+      // Only accept absolute paths
+      if (!filePath.startsWith('/')) continue;
+      try {
+        const { stdout } = await execFileAsync(
+          'docker', ['run', '--rm', '-v', `${filePath}:/hlcread/compose.file:ro`, 'alpine', 'cat', '/hlcread/compose.file'],
+          { timeout: 20000 }
+        );
+        if (stdout.trim()) {
+          composeFile = filePath.split('/').pop() ?? 'docker-compose.yml';
+          composeContent = stdout;
+          break;
+        }
+      } catch { /* file not accessible, try next */ }
     }
-    if (!composeFile) throw new Error('not found');
-  } catch {
-    res.status(400).json({ error: 'No compose file found at that path (tried compose.yaml, compose.yml, docker-compose.yaml, docker-compose.yml)' }); return;
+  }
+
+  // Strategy 2: mount directory and probe standard filenames
+  if (!composeContent) {
+    try {
+      const { stdout } = await execFileAsync(
+        'docker', [
+          'run', '--rm',
+          '-v', `${safePath}:/hlcread:ro`,
+          'alpine', 'sh', '-c',
+          'for f in compose.yaml compose.yml docker-compose.yaml docker-compose.yml; do [ -f "/hlcread/$f" ] && printf "__FILE__%s\\n" "$f" && cat "/hlcread/$f" && exit 0; done; exit 1',
+        ],
+        { timeout: 20000 }
+      );
+      const nlIdx = stdout.indexOf('\n');
+      if (nlIdx !== -1) {
+        composeFile = stdout.slice(0, nlIdx).replace('__FILE__', '');
+        composeContent = stdout.slice(nlIdx + 1);
+      }
+    } catch { /* directory not accessible */ }
+  }
+
+  if (!composeContent.trim()) {
+    res.status(400).json({ error: 'No compose file found at that path (tried compose.yaml, compose.yml, docker-compose.yaml, docker-compose.yml). Ensure the path is accessible to Docker and the file exists.' }); return;
   }
 
   let envContent = '';
-  try { envContent = await readFile(join(safePath, '.env'), 'utf8'); } catch { /* optional */ }
+  try {
+    const { stdout: envOut } = await execFileAsync(
+      'docker', ['run', '--rm', '-v', `${safePath}:/hlcread:ro`, 'alpine', 'cat', '/hlcread/.env'],
+      { timeout: 10000 }
+    );
+    envContent = envOut;
+  } catch { /* optional — .env may not exist */ }
 
   const { rows: dupe } = await pool.query(
     'SELECT id FROM stacks WHERE lower(name) = lower($1) OR stack_path = $2',

@@ -178,6 +178,7 @@ export interface AppSettings {
     treatAsLocal: boolean
     allowEnvToLocal: boolean
   }
+  copyPasteHelpers?: Array<{ id: string; label: string; value: string }>
 }
 
 export interface NotificationService {

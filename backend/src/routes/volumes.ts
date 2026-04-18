@@ -26,4 +26,10 @@ router.delete('/:name', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+router.get('/:name/inspect', asyncHandler(async (req, res) => {
+  const name = String(req.params.name);
+  const info = await dockerService.inspectVolume(name);
+  res.json(info);
+}));
+
 export default router;

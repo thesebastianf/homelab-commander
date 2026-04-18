@@ -4,6 +4,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { LoadingScreen } from '@/components/LoadingScreen'
 import { LoginScreen } from '@/components/LoginScreen'
 import { MetricCard } from '@/components/MetricCard'
@@ -21,6 +23,7 @@ import { BackupManagementDialog } from '@/components/BackupManagementDialog'
 import { SmartStartupDialog } from '@/components/SmartStartupDialog'
 import { PortRegistryDialog } from '@/components/PortRegistryDialog'
 import { ClockWidget } from '@/components/ClockWidget'
+import { Loader2, RefreshCw } from 'lucide-react'
 import {
   Box,
   Home,
@@ -53,6 +56,7 @@ import { useNetworks } from '@/hooks/useNetworks'
 import { useSettings, useSystemInfo, useUpdateSettings, usePruneSystem } from '@/hooks/useSettings'
 import type { Stack, AppSettings } from '@/lib/types'
 import { getStoredCredentials } from '@/lib/api'
+import * as api from '@/lib/api'
 import { toast } from 'sonner'
 
 const defaultSettings: AppSettings = {
@@ -133,6 +137,17 @@ function App() {
   const [smartStartupOpen, setSmartStartupOpen] = useState(false)
   const [portRegistryOpen, setPortRegistryOpen] = useState(false)
 
+  // Inspect / logs dialog state
+  const [inspectVolumeName, setInspectVolumeName] = useState<string | null>(null)
+  const [inspectVolumeData, setInspectVolumeData] = useState<any>(null)
+  const [inspectVolumeLoading, setInspectVolumeLoading] = useState(false)
+  const [inspectNetworkId, setInspectNetworkId] = useState<string | null>(null)
+  const [inspectNetworkData, setInspectNetworkData] = useState<any>(null)
+  const [inspectNetworkLoading, setInspectNetworkLoading] = useState(false)
+  const [logsContainerId, setLogsContainerId] = useState<string | null>(null)
+  const [logsData, setLogsData] = useState<string>('')
+  const [logsLoading, setLogsLoading] = useState(false)
+
   // Extract data from queries
   const containers = containersQuery.data ?? []
   const images = imagesQuery.data ?? []
@@ -212,9 +227,21 @@ function App() {
     })
   }
 
-  const handleViewLogs = (id: string) => {
+  const handleViewLogs = async (id: string) => {
     const container = containers.find(c => c.id === id)
-    toast.info(`Opening logs for ${container?.name}`)
+    setLogsContainerId(id)
+    setLogsData('')
+    setLogsLoading(true)
+    try {
+      const logs = await api.fetchContainerLogs(id, 300)
+      setLogsData(logs)
+    } catch (e: any) {
+      toast.error(`Failed to fetch logs: ${e.message}`)
+      setLogsContainerId(null)
+    } finally {
+      setLogsLoading(false)
+    }
+    if (!container?.name) return
   }
 
   const handleOpenTerminal = (id: string) => {
@@ -224,6 +251,38 @@ function App() {
       return
     }
     toast.info(`Opening terminal for ${container?.name}`)
+  }
+
+  const handleVolumeInspect = async (name: string) => {
+    setInspectVolumeName(name)
+    setInspectVolumeData(null)
+    setInspectVolumeLoading(true)
+    try {
+      const data = await api.inspectVolume(name)
+      setInspectVolumeData(data)
+    } catch (e: any) {
+      toast.error(`Inspect failed: ${e.message}`)
+      setInspectVolumeName(null)
+    } finally {
+      setInspectVolumeLoading(false)
+    }
+  }
+
+  const handleNetworkInspect = async (id: string) => {
+    const network = networks.find(n => n.id === id)
+    setInspectNetworkId(id)
+    setInspectNetworkData(null)
+    setInspectNetworkLoading(true)
+    try {
+      const data = await api.inspectNetwork(id)
+      setInspectNetworkData(data)
+    } catch (e: any) {
+      toast.error(`Inspect failed: ${e.message}`)
+      setInspectNetworkId(null)
+    } finally {
+      setInspectNetworkLoading(false)
+    }
+    if (!network?.name) return
   }
 
   const handlePurgeImages = async () => { await pruneSystem.mutateAsync(); }
@@ -532,7 +591,7 @@ function App() {
                   key={volume.id}
                   volume={volume}
                   onRemove={() => toast.success(`Removed volume ${volume.name}`)}
-                  onInspect={() => toast.info(`Inspecting volume ${volume.name}`)}
+                  onInspect={() => handleVolumeInspect(volume.name)}
                 />
               ))}
             </div>
@@ -551,7 +610,7 @@ function App() {
                   key={network.id}
                   network={network}
                   onRemove={() => toast.success(`Removed network ${network.name}`)}
-                  onInspect={() => toast.info(`Inspecting network ${network.name}`)}
+                  onInspect={() => handleNetworkInspect(network.id)}
                 />
               ))}
             </div>
@@ -587,10 +646,6 @@ function App() {
         open={backupManagementOpen}
         onOpenChange={setBackupManagementOpen}
         stacks={stacks}
-        backupsBasePath={currentSettings.backupsBasePath || '/mnt/backups'}
-        onUpdateBackupsPath={(path) => {
-          updateSettings.mutate({ ...currentSettings, backupsBasePath: path })
-        }}
       />
 
       <SmartStartupDialog
@@ -605,6 +660,82 @@ function App() {
         containers={containers}
         stacks={stacks}
       />
+
+      {/* Container Logs Dialog */}
+      <Dialog open={logsContainerId !== null} onOpenChange={open => { if (!open) { setLogsContainerId(null); setLogsData('') } }}>
+        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-sm">
+              Logs — {containers.find(c => c.id === logsContainerId)?.name}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Last 300 lines · docker logs --tail 300 {containers.find(c => c.id === logsContainerId)?.name}
+            </DialogDescription>
+          </DialogHeader>
+          {logsLoading ? (
+            <div className="flex-1 flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-end mb-1">
+                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={async () => {
+                  if (!logsContainerId) return
+                  setLogsLoading(true)
+                  try { setLogsData(await api.fetchContainerLogs(logsContainerId, 300)) } finally { setLogsLoading(false) }
+                }}>
+                  <RefreshCw className="w-3 h-3" /> Refresh
+                </Button>
+              </div>
+              <ScrollArea className="flex-1 rounded-lg border bg-black/80">
+                <pre className="font-mono text-xs text-foreground/80 p-3 whitespace-pre-wrap break-all">{logsData || 'No log output.'}</pre>
+              </ScrollArea>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Volume Inspect Dialog */}
+      <Dialog open={inspectVolumeName !== null} onOpenChange={open => { if (!open) { setInspectVolumeName(null); setInspectVolumeData(null) } }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-sm">Volume Inspect — {inspectVolumeName}</DialogTitle>
+            <DialogDescription className="text-xs">docker volume inspect {inspectVolumeName}</DialogDescription>
+          </DialogHeader>
+          {inspectVolumeLoading ? (
+            <div className="flex-1 flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <ScrollArea className="flex-1 rounded-lg border bg-black/80">
+              <pre className="font-mono text-xs text-foreground/80 p-3 whitespace-pre-wrap">{JSON.stringify(inspectVolumeData, null, 2)}</pre>
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Network Inspect Dialog */}
+      <Dialog open={inspectNetworkId !== null} onOpenChange={open => { if (!open) { setInspectNetworkId(null); setInspectNetworkData(null) } }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-sm">
+              Network Inspect — {networks.find(n => n.id === inspectNetworkId)?.name}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              docker network inspect {networks.find(n => n.id === inspectNetworkId)?.name}
+            </DialogDescription>
+          </DialogHeader>
+          {inspectNetworkLoading ? (
+            <div className="flex-1 flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <ScrollArea className="flex-1 rounded-lg border bg-black/80">
+              <pre className="font-mono text-xs text-foreground/80 p-3 whitespace-pre-wrap">{JSON.stringify(inspectNetworkData, null, 2)}</pre>
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Footer */}
       <footer className="mt-8 pb-4 text-center">

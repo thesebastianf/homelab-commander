@@ -130,6 +130,10 @@ export async function removeVolume(name: string): Promise<void> {
   await request(`/volumes/${encodeURIComponent(name)}`, { method: 'DELETE' });
 }
 
+export async function inspectVolume(name: string): Promise<any> {
+  return request(`/volumes/${encodeURIComponent(name)}/inspect`);
+}
+
 // ---- Networks ----
 
 export async function fetchNetworks(): Promise<Network[]> {
@@ -142,6 +146,10 @@ export async function createNetwork(name: string, driver = 'bridge'): Promise<vo
 
 export async function removeNetwork(id: string): Promise<void> {
   await request(`/networks/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function inspectNetwork(id: string): Promise<any> {
+  return request(`/networks/${encodeURIComponent(id)}/inspect`);
 }
 
 // ---- System ----
@@ -190,8 +198,8 @@ export async function fetchExternalStacks(): Promise<Stack[]> {
   return request('/stacks/external');
 }
 
-export async function adoptStack(name: string, stackPath: string): Promise<Stack> {
-  return request('/stacks/adopt', { method: 'POST', body: JSON.stringify({ name, stackPath }) });
+export async function adoptStack(name: string, stackPath: string, composeFiles?: string[]): Promise<Stack> {
+  return request('/stacks/adopt', { method: 'POST', body: JSON.stringify({ name, stackPath, composeFiles }) });
 }
 
 export async function fetchStack(id: string): Promise<Stack> {

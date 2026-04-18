@@ -14,6 +14,7 @@ RUN npm run build
 # -- Stage 2: Backend dev (npm run dev) ---------------------------------------
 FROM node:${NODE_VERSION} AS development
 WORKDIR /app
+RUN apk add --no-cache docker-cli
 COPY backend/package.json backend/package-lock.json* ./
 RUN npm install
 COPY backend/ ./

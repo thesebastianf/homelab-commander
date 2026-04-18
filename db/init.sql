@@ -66,6 +66,9 @@ CREATE TABLE IF NOT EXISTS settings (
 -- Insert default settings row
 INSERT INTO settings (id) VALUES (1) ON CONFLICT DO NOTHING;
 
+-- Migrate existing installs: add copy_paste_helpers column if missing
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS copy_paste_helpers JSONB DEFAULT '[]'::jsonb;
+
 -- Stacks
 CREATE TABLE IF NOT EXISTS stacks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

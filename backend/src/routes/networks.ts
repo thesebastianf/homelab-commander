@@ -26,4 +26,10 @@ router.delete('/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+router.get('/:id/inspect', asyncHandler(async (req, res) => {
+  const id = String(req.params.id);
+  const info = await dockerService.inspectNetwork(id);
+  res.json(info);
+}));
+
 export default router;

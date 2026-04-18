@@ -55,6 +55,7 @@ router.get('/', asyncHandler(async (_req, res) => {
       treatAsLocal: aiConfig.treatAsLocal ?? true,
       allowEnvToLocal: aiConfig.allowEnvToLocal ?? false,
     },
+    copyPasteHelpers: settings.copy_paste_helpers ?? [],
   });
 }));
 
@@ -77,6 +78,7 @@ router.put('/', validateBody(updateSettingsBody), asyncHandler(async (req, res) 
   if (b.gitIntegration !== undefined) { updates.push(`git_integration_config = $${idx++}`); values.push(JSON.stringify(b.gitIntegration)); }
   if (b.autoUpdateSchedule !== undefined) { updates.push(`auto_update_schedule = $${idx++}`); values.push(JSON.stringify(b.autoUpdateSchedule)); }
   if (b.ai !== undefined) { updates.push(`ai_config = $${idx++}`); values.push(JSON.stringify(b.ai)); }
+  if (b.copyPasteHelpers !== undefined) { updates.push(`copy_paste_helpers = $${idx++}`); values.push(JSON.stringify(b.copyPasteHelpers)); }
 
   if (updates.length === 0) {
     res.json({ ok: true });

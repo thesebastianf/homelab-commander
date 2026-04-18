@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Settings, FolderOpen, Bell, Link, Snowflake, CloudDownload, Github, AlertTriangle, FlaskConical, Loader2, CheckCircle, XCircle } from 'lucide-react'
+import { Settings, FolderOpen, Bell, Link, Snowflake, CloudDownload, Github, AlertTriangle, FlaskConical, Loader2, CheckCircle, XCircle, Clipboard, Plus, Trash2 } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -55,7 +55,7 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="w-6 h-6 text-primary" />
@@ -67,22 +67,21 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
         </DialogHeader>
 
         <Tabs defaultValue="general" className="mt-4">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="general" className="gap-2">
-              <FolderOpen className="w-4 h-4" />
+          <TabsList className="grid w-full grid-cols-5 h-9">
+            <TabsTrigger value="general" className="text-xs px-2">
               General
             </TabsTrigger>
-            <TabsTrigger value="notifications" className="gap-2">
-              <Bell className="w-4 h-4" />
+            <TabsTrigger value="notifications" className="text-xs px-2">
               Notifications
             </TabsTrigger>
-            <TabsTrigger value="integrations" className="gap-2">
-              <Link className="w-4 h-4" />
+            <TabsTrigger value="integrations" className="text-xs px-2">
               Integrations
             </TabsTrigger>
-            <TabsTrigger value="ai" className="gap-2">
-              <Github className="w-4 h-4" />
+            <TabsTrigger value="ai" className="text-xs px-2">
               AI
+            </TabsTrigger>
+            <TabsTrigger value="helpers" className="text-xs px-2">
+              Helpers
             </TabsTrigger>
           </TabsList>
 
@@ -634,6 +633,68 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                 </div>
               )}
             </Card>
+          </TabsContent>
+
+          <TabsContent value="helpers" className="space-y-4 mt-6">
+            <div className="space-y-2">
+              <h3 className="font-mono font-semibold text-sm flex items-center gap-2">
+                <Clipboard className="w-[18px] h-[18px]" />
+                Copy-Paste Helpers
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Global snippets accessible from the Stack Editor's Helpers panel — path prefixes, service names, volume mounts, or any text you paste frequently.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              {(localSettings.copyPasteHelpers || []).map((helper, i) => (
+                <div key={helper.id} className="flex gap-2 items-center">
+                  <Input
+                    className="w-36 font-mono text-xs"
+                    placeholder="Label"
+                    value={helper.label}
+                    onChange={(e) => {
+                      const helpers = [...(localSettings.copyPasteHelpers || [])]
+                      helpers[i] = { ...helpers[i], label: e.target.value }
+                      setLocalSettings(prev => ({ ...prev, copyPasteHelpers: helpers }))
+                    }}
+                  />
+                  <Input
+                    className="flex-1 font-mono text-xs"
+                    placeholder="Value (path, snippet, etc.)"
+                    value={helper.value}
+                    onChange={(e) => {
+                      const helpers = [...(localSettings.copyPasteHelpers || [])]
+                      helpers[i] = { ...helpers[i], value: e.target.value }
+                      setLocalSettings(prev => ({ ...prev, copyPasteHelpers: helpers }))
+                    }}
+                  />
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => {
+                      const helpers = (localSettings.copyPasteHelpers || []).filter((_, idx) => idx !== i)
+                      setLocalSettings(prev => ({ ...prev, copyPasteHelpers: helpers }))
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => {
+                const helpers = [...(localSettings.copyPasteHelpers || []), { id: crypto.randomUUID(), label: '', value: '' }]
+                setLocalSettings(prev => ({ ...prev, copyPasteHelpers: helpers }))
+              }}
+            >
+              <Plus className="w-4 h-4" /> Add Helper
+            </Button>
           </TabsContent>
         </Tabs>
 

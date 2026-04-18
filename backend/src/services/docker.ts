@@ -156,6 +156,10 @@ export async function removeVolume(name: string) {
   logger.info({ name }, 'Volume removed');
 }
 
+export async function inspectVolume(name: string) {
+  return docker.getVolume(name).inspect();
+}
+
 // ---- Networks ----
 
 export async function listNetworks() {
@@ -179,6 +183,10 @@ export async function createNetwork(name: string, driver = 'bridge') {
 export async function removeNetwork(id: string) {
   await docker.getNetwork(id).remove();
   logger.info({ id }, 'Network removed');
+}
+
+export async function inspectNetwork(id: string) {
+  return docker.getNetwork(id).inspect();
 }
 
 // ---- System ----
