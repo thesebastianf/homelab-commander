@@ -16,7 +16,23 @@ router.get('/:stackId/config', asyncHandler(async (req, res) => {
     'SELECT * FROM backup_configs WHERE stack_id = $1', [req.params.stackId]
   );
   if (!config) {
-    res.json({ enabled: false, cronSchedule: '0 2 * * *', retentionDays: 7 });
+    res.json({
+      enabled: false,
+      cronSchedule: '0 22 * * 3',
+      retentionDays: 7,
+      includeStackFolder: true,
+      includeVolumes: true,
+      includeDatabases: false,
+      useAdvancedRetention: false,
+      retentionPolicy: {
+        keepLast: 10,
+        keepHourly: 24,
+        keepDaily: 7,
+        keepWeekly: 4,
+        keepMonthly: 6,
+        keepYearly: 2,
+      },
+    });
     return;
   }
   res.json(mapBackupConfig(config));
@@ -39,11 +55,18 @@ router.put('/:stackId/config', validateBody(backupConfigBody), asyncHandler(asyn
         retention_policy = $13, updated_at = NOW()
       WHERE stack_id = $14`,
       [
-        b.enabled, b.cronSchedule || '0 2 * * *', b.retentionDays || 7,
+        b.enabled, b.cronSchedule || '0 22 * * 3', b.retentionDays || 7,
         b.includeStackFolder ?? true, b.includeVolumes ?? true, b.includeDatabases ?? false,
         b.databaseType || 'none', JSON.stringify(b.databaseConfig || {}), b.compressionLevel ?? 6,
         b.encrypted ?? false, b.incremental ?? false, b.useAdvancedRetention ?? false,
-        JSON.stringify(b.retentionPolicy || { daily: 7, weekly: 4, monthly: 6, yearly: 1 }),
+        JSON.stringify(b.retentionPolicy || {
+          keepLast: 10,
+          keepHourly: 24,
+          keepDaily: 7,
+          keepWeekly: 4,
+          keepMonthly: 6,
+          keepYearly: 2,
+        }),
         req.params.stackId,
       ]
     );
@@ -55,11 +78,18 @@ router.put('/:stackId/config', validateBody(backupConfigBody), asyncHandler(asyn
         use_advanced_retention, retention_policy)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
       [
-        req.params.stackId, b.enabled, b.cronSchedule || '0 2 * * *', b.retentionDays || 7,
+        req.params.stackId, b.enabled, b.cronSchedule || '0 22 * * 3', b.retentionDays || 7,
         b.includeStackFolder ?? true, b.includeVolumes ?? true, b.includeDatabases ?? false,
         b.databaseType || 'none', JSON.stringify(b.databaseConfig || {}), b.compressionLevel ?? 6,
         b.encrypted ?? false, b.incremental ?? false, b.useAdvancedRetention ?? false,
-        JSON.stringify(b.retentionPolicy || { daily: 7, weekly: 4, monthly: 6, yearly: 1 }),
+        JSON.stringify(b.retentionPolicy || {
+          keepLast: 10,
+          keepHourly: 24,
+          keepDaily: 7,
+          keepWeekly: 4,
+          keepMonthly: 6,
+          keepYearly: 2,
+        }),
       ]
     );
   }
@@ -72,15 +102,14 @@ router.put('/:stackId/config', validateBody(backupConfigBody), asyncHandler(asyn
     const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [req.params.stackId]);
     if (stack?.stack_path) {
       const scheduleLabels: Record<string, string> = {
-        '0 * * * *': 'Hourly',
-        '0 2 * * *': 'Daily at 02:00',
-        '0 2 * * 0': 'Weekly (Sunday at 02:00)',
-        '0 2 1 * *': 'Monthly (1st at 02:00)',
+        '0 22 * * 3': 'Every Wednesday at 22:00',
+        '0 22 * * 0': 'Every Sunday at 22:00',
+        '0 22 1 * *': 'Every 1st of Month at 22:00',
       };
       const scheduleLabel = scheduleLabels[b.cronSchedule || ''] || b.cronSchedule || 'Not set';
       const retentionInfo = b.useAdvancedRetention
-        ? `Advanced:\n  - Daily: ${b.retentionPolicy?.daily ?? 7}\n  - Weekly: ${b.retentionPolicy?.weekly ?? 4}\n  - Monthly: ${b.retentionPolicy?.monthly ?? 6}\n  - Yearly: ${b.retentionPolicy?.yearly ?? 2}`
-        : `Simple: ${b.retentionDays ?? 7} days`;
+        ? `Advanced:\n  - Keep Last: ${b.retentionPolicy?.keepLast ?? 10}\n  - Keep Hourly: ${b.retentionPolicy?.keepHourly ?? 24}\n  - Keep Daily: ${b.retentionPolicy?.keepDaily ?? 7}\n  - Keep Weekly: ${b.retentionPolicy?.keepWeekly ?? 4}\n  - Keep Monthly: ${b.retentionPolicy?.keepMonthly ?? 6}\n  - Keep Yearly: ${b.retentionPolicy?.keepYearly ?? 2}`
+        : `Simple: Keep last ${b.retentionDays ?? 7} backups`;
 
       const md = `# Backup Configuration: ${stack.name}
 
@@ -92,7 +121,7 @@ router.put('/:stackId/config', validateBody(backupConfigBody), asyncHandler(asyn
 |---------|-------|
 | Enabled | ${b.enabled ? '✓ Yes' : '✗ No'} |
 | Schedule | \`${b.cronSchedule || 'not set'}\` — ${scheduleLabel} |
-| Retention | ${b.useAdvancedRetention ? 'Advanced (see below)' : `${b.retentionDays ?? 7} days`} |
+| Retention | ${b.useAdvancedRetention ? 'Advanced (see below)' : `Keep last ${b.retentionDays ?? 7} backups`} |
 | Compression | Level ${b.compressionLevel ?? 6} / 9 |
 | Encrypted | ${b.encrypted ? '✓ Yes' : '✗ No'} |
 | Incremental | ${b.incremental ? '✓ Yes' : '✗ No'} |

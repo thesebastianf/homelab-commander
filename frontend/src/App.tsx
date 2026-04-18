@@ -22,6 +22,7 @@ import { StacksEditor } from '@/components/StacksEditor'
 import { BackupManagementDialog } from '@/components/BackupManagementDialog'
 import { SmartStartupDialog } from '@/components/SmartStartupDialog'
 import { PortRegistryDialog } from '@/components/PortRegistryDialog'
+import { DatabaseExplorer } from '@/components/DatabaseExplorer'
 import { ClockWidget } from '@/components/ClockWidget'
 import { Loader2, RefreshCw } from 'lucide-react'
 import {
@@ -131,6 +132,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState('dashboard')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [databaseExplorerOpen, setDatabaseExplorerOpen] = useState(false)
   const [maintenanceOpen, setMaintenanceOpen] = useState(false)
   const [notificationServicesOpen, setNotificationServicesOpen] = useState(false)
   const [backupManagementOpen, setBackupManagementOpen] = useState(false)
@@ -355,6 +357,10 @@ function App() {
               <Button variant="ghost" size="sm" onClick={() => setMaintenanceOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
                 <Paintbrush className="w-4 h-4" />
                 <span className="text-[10px] font-mono">Cleanup</span>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setDatabaseExplorerOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
+                <Database className="w-4 h-4" />
+                <span className="text-[10px] font-mono">Database</span>
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
                 <Settings className="w-4 h-4" />
@@ -615,8 +621,23 @@ function App() {
               ))}
             </div>
           </TabsContent>
+
         </Tabs>
       </main>
+
+      <Dialog open={databaseExplorerOpen} onOpenChange={setDatabaseExplorerOpen}>
+        <DialogContent className="w-[97vw] max-w-7xl h-[92vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Database</DialogTitle>
+            <DialogDescription>
+              Explore tables and run read-only SQL queries against the configured PostgreSQL database.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <DatabaseExplorer />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <SettingsDialog
         open={settingsOpen}

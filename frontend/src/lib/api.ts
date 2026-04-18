@@ -379,3 +379,24 @@ export async function updateSmartStartupConfig(id: string, data: Omit<SmartStart
 export async function deleteSmartStartupConfig(id: string): Promise<void> {
   await request(`/smart-startup/${id}`, { method: 'DELETE' });
 }
+
+// ---- Database ----
+
+export async function fetchDatabaseStats(): Promise<{ databaseSize: number; connections: number; tables: number; version: string }> {
+  return request('/database/stats');
+}
+
+export async function fetchDatabaseTables(): Promise<Array<{ tablename: string; schemaname: string; column_count: number; constraint_count: number }>> {
+  return request('/database/tables');
+}
+
+export async function fetchTableSchema(tableName: string): Promise<{ columns: Array<any>; constraints: Array<any>; rowCount: number }> {
+  return request(`/database/tables/${tableName}/schema`);
+}
+
+export async function queryDatabase(query: string, limit?: number, offset?: number): Promise<{ rows: Array<any>; total: number; limit: number; offset: number }> {
+  return request('/database/query', {
+    method: 'POST',
+    body: JSON.stringify({ query, limit: limit || 100, offset: offset || 0 }),
+  });
+}

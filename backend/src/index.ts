@@ -28,6 +28,7 @@ import notificationServiceRoutes from './routes/notificationServices.js';
 import portReservationRoutes from './routes/portReservations.js';
 import smartStartupRoutes from './routes/smartStartup.js';
 import aiRoutes from './routes/ai.js';
+import databaseRoutes from './routes/database.js';
 
 // Background services
 import { initBackupScheduler } from './services/backupScheduler.js';
@@ -95,6 +96,7 @@ app.use('/api/notifications', notificationServiceRoutes);
 app.use('/api/ports', portReservationRoutes);
 app.use('/api/smart-startup', smartStartupRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/database', databaseRoutes);
 
 // Serve React frontend static files
 const __filename = fileURLToPath(import.meta.url);

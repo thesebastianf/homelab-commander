@@ -6,8 +6,9 @@ import { createStackBody, updateStackBody } from '../validation/schemas.js';
 import { auditLog } from '../lib/audit.js';
 import { sendNotification } from '../services/notifications.js';
 import { config } from '../config.js';
-import { mkdir, writeFile, readFile, readdir, access } from 'fs/promises';
+import { mkdir, writeFile, readFile, readdir, access, mkdtemp, rm } from 'fs/promises';
 import { join, resolve, relative, dirname } from 'path';
+import { tmpdir } from 'os';
 import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import { getStackUpdateStatus } from '../services/updates.js';
@@ -39,12 +40,23 @@ interface OperationState {
 const operationStore = new Map<string, OperationState>();
 
 async function runUpdateOperation(id: string, stack: any, op: OperationState): Promise<void> {
+  let tempDir: string | null = null;
   try {
+    // Write compose + env to a temp dir so the operation always works regardless of whether
+    // stack_path is accessible inside the container (adopted stacks use host paths).
+    tempDir = await mkdtemp(join(tmpdir(), `hlc-update-`));
+    const composeSrc = stack.compose_content || '';
+    await writeFile(join(tempDir, 'docker-compose.yml'), composeSrc);
+    if (stack.env_content) {
+      await writeFile(join(tempDir, '.env'), stack.env_content);
+    }
+
     await new Promise<void>((resolve, reject) => {
       const proc = spawn(
         'docker',
-        ['compose', 'up', '-d', '--pull', 'always'],
-        { cwd: stack.stack_path }
+        // -p sets the project name so docker compose targets the correct existing containers
+        ['compose', '-p', stack.name.toLowerCase(), 'up', '-d', '--pull', 'always'],
+        { cwd: tempDir! }
       );
       const onData = (data: Buffer) => {
         data.toString('utf8').split('\n').filter(l => l.trim()).forEach(l => op.lines.push(l));
@@ -52,15 +64,38 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState): P
       proc.stdout.on('data', onData);
       proc.stderr.on('data', onData);
       proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`docker compose exited with code ${code}`))));
-      proc.on('error', reject);
+      proc.on('error', (err: NodeJS.ErrnoException) => {
+        if (err.code === 'ENOENT') {
+          reject(new Error('docker CLI not found in container PATH. Ensure the container image includes docker-cli.'));
+        } else {
+          reject(err);
+        }
+      });
     });
     await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
+    op.lines.push('✓ Update complete — containers restarted with latest images');
     await auditLog('update', 'stack', id);
   } catch (err: any) {
-    op.lines.push(`Error: ${err.message}`);
-    await pool.query("UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1", [id]);
+    op.lines.push(`✗ Error: ${err.message}`);
+    // Only mark as failed if containers are not still running
+    try {
+      const { stdout } = await execFileAsync(
+        'docker', ['compose', '-p', stack.name.toLowerCase(), 'ps', '-q', '--status', 'running'],
+        { timeout: 8000, cwd: tempDir ?? undefined }
+      );
+      if (stdout.trim()) {
+        // Containers are still up — keep status as running, don't mark failed
+        await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
+        op.lines.push('⚠ Update failed but existing containers are still running.');
+      } else {
+        await pool.query("UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1", [id]);
+      }
+    } catch {
+      await pool.query("UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1", [id]);
+    }
   } finally {
     op.done = true;
+    if (tempDir) await rm(tempDir, { recursive: true, force: true }).catch(() => { /* cleanup best-effort */ });
     setTimeout(() => operationStore.delete(id), 5 * 60 * 1000);
   }
 }
@@ -672,6 +707,28 @@ async function listFilesRecursive(dir: string, base: string, depth = 0): Promise
   }
 }
 
+// Detect if a compose file has any service with network_mode: host
+function hasHostNetworking(composeContent: string): boolean {
+  if (!composeContent) return false;
+  const lines = composeContent.split('\n');
+  let inServices = false;
+  for (const line of lines) {
+    if (line.match(/^services:\s*$/)) {
+      inServices = true;
+      continue;
+    }
+    if (inServices) {
+      // Stop at next top-level key (starts without indentation)
+      if (line.match(/^[a-zA-Z]/)) break;
+      // Check for network_mode: host at service level (6-space indent = inside service definition)
+      if (line.match(/^\s{4,6}network_mode:\s*host\s*$/)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function mapStack(row: any) {
   return {
     id: row.id,
@@ -691,6 +748,7 @@ function mapStack(row: any) {
     updateAvailable: getStackUpdateStatus(row.name),
     lastBackupAt: row.last_backup_at || null,
     gitRepoConfig: row.git_repo_config,
+    hasHostNetworking: hasHostNetworking(row.compose_content),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     backupConfig: row.backup_config_id ? {

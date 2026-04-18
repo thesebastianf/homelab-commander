@@ -48,6 +48,7 @@ export interface Stack {
   autoUpdate?: boolean
   runBackupBeforeUpdate?: boolean
   updateAvailable?: boolean
+  hasHostNetworking?: boolean
   createdAt?: string
   updatedAt?: string
   versions?: StackVersion[]
@@ -194,6 +195,7 @@ export interface NotificationService {
 export interface BackupConfig {
   enabled: boolean
   cronSchedule: string
+  // In simple mode this is the "keep last N backups" count.
   retentionDays: number
   includeStackFolder: boolean
   includeVolumes: boolean
@@ -214,10 +216,12 @@ export interface BackupConfig {
   incremental?: boolean
   useAdvancedRetention: boolean
   retentionPolicy?: {
-    daily: number
-    weekly: number
-    monthly: number
-    yearly: number
+    keepLast: number
+    keepHourly: number
+    keepDaily: number
+    keepWeekly: number
+    keepMonthly: number
+    keepYearly: number
   }
 }
 

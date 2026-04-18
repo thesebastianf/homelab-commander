@@ -8,9 +8,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Layers, MoreHorizontal, Play, Square, RotateCw, Trash2, FileText, Code, Pencil, Save, Zap, Clock, HardDrive } from 'lucide-react'
+import { Layers, MoreHorizontal, Play, Square, RotateCw, Trash2, FileText, Code, Pencil, Save, Zap, Clock, HardDrive, AlertTriangle, Network } from 'lucide-react'
 import type { Stack } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { formatDistanceToNow } from 'date-fns'
 
 interface StackCardProps {
@@ -43,6 +49,7 @@ export function StackCard({ stack, onStart, onStop, onRestart, onRemove, onViewC
   const isRunning = stack.status === 'running'
 
   return (
+    <TooltipProvider delayDuration={200}>
     <Card className="p-6 hover:shadow-lg transition-all duration-200 group relative overflow-hidden border-l-4" style={{
       borderLeftColor: stack.status === 'running' ? 'var(--success)' : stack.status === 'failed' ? 'var(--destructive)' : 'var(--border)'
     }}>
@@ -60,6 +67,19 @@ export function StackCard({ stack, onStart, onStop, onRestart, onRemove, onViewC
           <Badge className={cn(getStatusColor(stack.status), isRunning && "animate-pulse-glow")}>
             {stack.status}
           </Badge>
+          {stack.hasHostNetworking && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="destructive" className="gap-1.5 bg-orange-500/20 text-orange-400 border-orange-500/30 hover:bg-orange-500/30">
+                  <Network className="w-3.5 h-3.5" />
+                  Host Network
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p className="text-xs">This stack uses host networking mode. All container ports are directly exposed on the host network without explicit port mappings.</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -166,5 +186,6 @@ export function StackCard({ stack, onStart, onStop, onRestart, onRemove, onViewC
         <pre className="whitespace-pre-wrap break-all">{stack.compose.slice(0, 200)}...</pre>
       </div>
     </Card>
+    </TooltipProvider>
   )
 }

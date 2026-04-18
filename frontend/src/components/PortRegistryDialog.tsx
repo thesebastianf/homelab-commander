@@ -59,31 +59,32 @@ export function PortRegistryDialog({
   const [newGroup, setNewGroup] = useState('Custom')
   const [newColor, setNewColor] = useState('#6b7280')
 
-  // Build port usage map — deduplicate so TCP+UDP bindings don't create false conflicts
+  // Build host port usage map — only host-published ports are considered for conflicts.
   const usedPorts = useMemo(() => {
     const map = new Map<number, string[]>()
     // Track (portNum, name) pairs already recorded to avoid TCP/UDP duplicates
     const seen = new Set<string>()
 
     containers.forEach(c => {
-      if (c.ports) {
-        c.ports.forEach(p => {
-          const portStr = p.split(':')[0]
-          const portNum = parseInt(portStr, 10)
-          if (!isNaN(portNum)) {
-            const key = `${portNum}:${c.name}`
-            if (!seen.has(key)) {
-              seen.add(key)
-              if (!map.has(portNum)) map.set(portNum, [])
-              map.get(portNum)!.push(c.name)
-            }
-          }
-        })
-      }
+      if (!c.ports) return
+      c.ports.forEach(p => {
+        // Expected format for published ports is "host:container/proto".
+        // Internal-only ports are like "5432/tcp" and are intentionally ignored.
+        const hostMatch = p.match(/^(\d+):/)
+        if (!hostMatch) return
+        const portNum = parseInt(hostMatch[1], 10)
+        if (isNaN(portNum)) return
+
+        const key = `${portNum}:${c.name}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          if (!map.has(portNum)) map.set(portNum, [])
+          map.get(portNum)!.push(c.name)
+        }
+      })
     })
-    // Only include stack-level ports if the stack has no running containers already recorded
-    // to avoid double-counting (stack ports are already reflected by their containers)
-    const containerNames = new Set(containers.map(c => c.name))
+
+    // Include stack-level host ports as additional source data.
     stacks.forEach(s => {
       if (s.ports) {
         s.ports.forEach(port => {
@@ -167,19 +168,32 @@ export function PortRegistryDialog({
   return (
     <TooltipProvider delayDuration={350}>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] max-w-6xl h-[90vh] overflow-hidden">
+        <div className="flex h-full min-h-0 flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ListOrdered className="w-6 h-6 text-primary" />
             Port Registry
           </DialogTitle>
           <DialogDescription>
-            Track and manage port allocations across your homelab
+            Track port allocations and range reservations to avoid collisions across your homelab
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="underline decorations-dotted ml-1 cursor-help">Learn more</span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p className="text-xs">
+                  <strong>Port Reservations</strong> are a planning tool to prevent your team from assigning overlapping ports to different services.
+                  They are <strong>not automatically enforced</strong> by the server — you manage range allocations manually via this UI.
+                  Use this alongside stack configuration to maintain port discipline.
+                </p>
+              </TooltipContent>
+            </Tooltip>
           </DialogDescription>
         </DialogHeader>
 
         {/* Stats Bar */}
-        <div className="grid grid-cols-6 gap-2 mt-2">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 mt-2">
           {([
             ['Total Used', stats.total],
             ['Conflicts', stats.conflicts],
@@ -206,63 +220,62 @@ export function PortRegistryDialog({
           />
         </div>
 
-        <Tabs defaultValue="mappings" className="mt-2">
+        <Tabs defaultValue="overview" className="mt-2 flex-1 min-h-0 flex flex-col">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="timeline">Timeline</TabsTrigger>
-            <TabsTrigger value="mappings">Port Mappings</TabsTrigger>
-            <TabsTrigger value="reservations">Range Reservations</TabsTrigger>
+            <TabsTrigger value="overview" className="flex items-center gap-2">
+              <ListOrdered className="w-4 h-4" />
+              Port Overview & Conflicts
+            </TabsTrigger>
+            <TabsTrigger value="hostnetworks" className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              Host Networks
+            </TabsTrigger>
+            <TabsTrigger value="reservations" className="flex items-center gap-2">
+              <Palette className="w-4 h-4" />
+              Range Reservations
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="timeline" className="mt-4">
-            <ScrollArea className="h-[400px]">
-              <div className="space-y-1.5">
-                {/* Visual port range bars for reservations */}
-                {reservations.map(res => {
-                  const rangeSize = res.portRangeEnd - res.portRangeStart + 1
-                  const usedCount = getPortsUsedInRange(res.portRangeStart, res.portRangeEnd)
-                  const pct = rangeSize > 0 ? (usedCount / rangeSize) * 100 : 0
-                  return (
-                    <div key={res.id} className="p-3 rounded-lg border border-border bg-card">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: res.color }} />
-                          <span className="text-sm font-medium">{res.name}</span>
-                          <Badge variant="outline" className={`text-[10px] ${GROUP_COLORS[res.groupName] || GROUP_COLORS.Custom}`}>
-                            {res.groupName}
-                          </Badge>
+          <TabsContent value="overview" className="mt-4 space-y-4 flex-1 min-h-0 overflow-y-auto pr-1">
+            {/* Reserved ranges section */}
+            {reservations.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Reserved Ranges</p>
+                <ScrollArea className="h-auto">
+                  <div className="space-y-1.5 pr-4">
+                    {reservations.map(res => {
+                      const rangeSize = res.portRangeEnd - res.portRangeStart + 1
+                      const usedCount = getPortsUsedInRange(res.portRangeStart, res.portRangeEnd)
+                      const pct = rangeSize > 0 ? (usedCount / rangeSize) * 100 : 0
+                      return (
+                        <div key={res.id} className="p-3 rounded-lg border border-border bg-card">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: res.color }} />
+                              <span className="text-sm font-medium">{res.name}</span>
+                              <Badge variant="outline" className={`text-[10px] ${GROUP_COLORS[res.groupName] || GROUP_COLORS.Custom}`}>
+                                {res.groupName}
+                              </Badge>
+                            </div>
+                            <span className="text-xs font-mono text-muted-foreground">
+                              {res.portRangeStart}–{res.portRangeEnd}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Progress value={pct} className="h-2 flex-1" />
+                            <span className="text-xs text-muted-foreground font-mono">{usedCount}/{rangeSize}</span>
+                          </div>
                         </div>
-                        <span className="text-xs font-mono text-muted-foreground">
-                          {res.portRangeStart}–{res.portRangeEnd} ({usedCount}/{rangeSize})
-                        </span>
-                      </div>
-                      <Progress value={pct} className="h-2" />
-                    </div>
-                  )
-                })}
-                {/* Unranged active ports */}
-                {sortedPorts
-                  .filter(([port]) => !reservations.some(r => port >= r.portRangeStart && port <= r.portRangeEnd))
-                  .map(([port, users]) => (
-                    <div key={port} className="flex items-center justify-between p-2 rounded border border-border bg-card/50">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="font-mono w-16 justify-center text-xs">{port}</Badge>
-                        <span className="text-xs">{users.join(', ')}</span>
-                      </div>
-                      {users.length > 1 && (
-                        <Badge variant="destructive" className="text-[10px]">Conflict</Badge>
-                      )}
-                    </div>
-                  ))}
-                {sortedPorts.length === 0 && reservations.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-12">No port data</p>
-                )}
+                      )
+                    })}
+                  </div>
+                </ScrollArea>
               </div>
-            </ScrollArea>
-          </TabsContent>
+            )}
 
-          <TabsContent value="mappings" className="mt-4">
+            {/* Conflicts section */}
             {conflicts.length > 0 && (
-              <Card className="border-destructive bg-destructive/5 mb-3">
+              <Card className="border-destructive bg-destructive/5">
                 <CardContent className="pt-3 pb-3">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertTriangle className="w-4 h-4 text-destructive" />
@@ -280,31 +293,121 @@ export function PortRegistryDialog({
               </Card>
             )}
 
-            <ScrollArea className="h-[380px]">
-              <div className="space-y-1.5">
-                {filteredPorts.map(([port, users]) => (
-                  <div key={port} className="flex items-center justify-between p-2 rounded border border-border bg-card">
-                    <div className="flex items-center gap-3">
-                      <Badge variant="outline" className="font-mono w-16 justify-center">{port}</Badge>
-                      <span className="text-sm">{users.join(', ')}</span>
+            {/* All ports */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">All Ports in Use</p>
+              <ScrollArea className="h-[300px]">
+                <div className="space-y-1.5 pr-4">
+                  {filteredPorts.map(([port, users]) => (
+                    <div key={port} className="flex items-center justify-between p-2 rounded border border-border bg-card hover:bg-card/80">
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className="font-mono w-16 justify-center">{port}</Badge>
+                        <span className="text-sm">{users.join(', ')}</span>
+                      </div>
+                      {users.length > 1 && (
+                        <Badge variant="destructive" className="text-[10px]">Conflict</Badge>
+                      )}
                     </div>
-                    {users.length > 1 && (
-                      <Badge variant="destructive" className="text-[10px]">Conflict</Badge>
-                    )}
-                  </div>
-                ))}
-                {filteredPorts.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-12">No ports match your search</p>
-                )}
-              </div>
-            </ScrollArea>
+                  ))}
+                  {filteredPorts.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-12">No ports match your search</p>
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
           </TabsContent>
 
-          <TabsContent value="reservations" className="mt-4 space-y-4">
+          <TabsContent value="hostnetworks" className="mt-4 space-y-4 flex-1 min-h-0 overflow-y-auto pr-1">
+            {/* Host Network Warning */}
+            <Card className="border-orange-500/30 bg-orange-500/5">
+              <CardContent className="pt-3 pb-3">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-sm text-orange-400 mb-1">Host Networking Mode</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Stacks using host networking mode bypass Docker's port mapping and expose all container ports directly on the host network. This can pose security risks if not properly managed.
+                      All exposed ports are directly accessible without explicit mappings.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Host Mode Stacks */}
+            {(() => {
+              const hostStacks = stacks.filter(s => s.hasHostNetworking)
+              if (hostStacks.length === 0) {
+                return (
+                  <Card className="p-8 text-center">
+                    <p className="text-sm text-muted-foreground">No stacks using host networking mode</p>
+                  </Card>
+                )
+              }
+              return (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">
+                    Stacks with Host Networking ({hostStacks.length})
+                  </p>
+                  <ScrollArea className="h-[400px]">
+                    <div className="space-y-2 pr-4">
+                      {hostStacks.map(stack => (
+                        <Card key={stack.id} className="p-3 border-orange-500/20 bg-orange-500/5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-2 min-w-0 flex-1">
+                              <div className="w-2 h-2 rounded-full bg-orange-400 mt-1.5 flex-shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <p className="font-mono font-semibold text-sm truncate">{stack.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {stack.services} service{stack.services !== 1 ? 's' : ''} •
+                                  {stack.status === 'running' && ' Running'}
+                                  {stack.status === 'stopped' && ' Stopped'}
+                                  {stack.status === 'failed' && ' Failed'}
+                                  {stack.status === 'deploying' && ' Deploying'}
+                                </p>
+                              </div>
+                            </div>
+                            <Badge 
+                              variant="outline"
+                              className={
+                                stack.status === 'running'
+                                  ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                  : stack.status === 'failed'
+                                  ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                                  : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                              }
+                            >
+                              {stack.status}
+                            </Badge>
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-orange-500/10">
+                            <p className="text-xs text-muted-foreground">
+                              ⚠ All exposed container ports are directly accessible on host network
+                            </p>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )
+            })()}
+          </TabsContent>
+
+          <TabsContent value="reservations" className="mt-4 space-y-4 flex-1 min-h-0 overflow-y-auto pr-1">
+            {/* Description */}
+            <Card className="p-3 bg-primary/5 border-primary/20">
+              <p className="text-xs text-muted-foreground">
+                <strong>Range Reservations</strong> help coordinate port allocation across your team by blocking out ranges for specific services.
+                They serve as a planning tool but are <strong>not automatically enforced by the server</strong> — you must manually ensure your stack configs respect these ranges.
+                Use presets for common categories or create custom ranges.
+              </p>
+            </Card>
+
             {/* Create form */}
             <Card className="p-4 space-y-3">
               <Label className="text-sm font-semibold">Create Range Reservation</Label>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5 mb-2">
                 {RANGE_PRESETS.map(p => (
                   <Tooltip key={p.label}>
                     <TooltipTrigger asChild>
@@ -314,22 +417,22 @@ export function PortRegistryDialog({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p className="text-xs">Pre-fill reservation {p.start}-{p.end} in group {p.group}</p>
+                      <p className="text-xs">{p.start}–{p.end} ({p.end - p.start + 1} ports) for {p.group}</p>
                     </TooltipContent>
                   </Tooltip>
                 ))}
               </div>
-              <div className="grid grid-cols-5 gap-2 items-end">
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
                 <div className="space-y-1">
                   <Label className="text-xs">Name</Label>
                   <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Range name" className="h-8 text-xs" />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Start Port</Label>
+                  <Label className="text-xs">Start</Label>
                   <Input type="number" value={newStart} onChange={(e) => setNewStart(e.target.value)} placeholder="8080" className="h-8 text-xs font-mono" min={1} max={65535} />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">End Port</Label>
+                  <Label className="text-xs">End</Label>
                   <Input type="number" value={newEnd} onChange={(e) => setNewEnd(e.target.value)} placeholder="8099" className="h-8 text-xs font-mono" min={1} max={65535} />
                 </div>
                 <div className="space-y-1">
@@ -345,6 +448,10 @@ export function PortRegistryDialog({
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Color</Label>
+                  <input type="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} className="h-8 w-full cursor-pointer rounded border border-border" />
+                </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button size="sm" onClick={handleAddReservation} className="h-8">
@@ -352,62 +459,66 @@ export function PortRegistryDialog({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="text-xs">Create a reserved range so teams avoid collisions in this port block</p>
+                    <p className="text-xs">Create a reserved range to prevent your team from using these ports elsewhere</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
             </Card>
 
             {/* Existing reservations */}
-            <ScrollArea className="h-[280px]">
-              <div className="space-y-2">
-                {reservations.map(res => {
-                  const rangeSize = res.portRangeEnd - res.portRangeStart + 1
-                  const usedCount = getPortsUsedInRange(res.portRangeStart, res.portRangeEnd)
-                  const pct = rangeSize > 0 ? (usedCount / rangeSize) * 100 : 0
-                  return (
-                    <Card key={res.id} className="p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: res.color }} />
-                          <span className="text-sm font-medium">{res.name}</span>
-                          <Badge variant="outline" className={`text-[10px] ${GROUP_COLORS[res.groupName] || GROUP_COLORS.Custom}`}>
-                            {res.groupName}
-                          </Badge>
-                          <span className="text-xs font-mono text-muted-foreground">
-                            {res.portRangeStart}–{res.portRangeEnd}
-                          </span>
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Existing Reservations</p>
+              <ScrollArea className="h-[320px]">
+                <div className="space-y-2 pr-4">
+                  {reservations.map(res => {
+                    const rangeSize = res.portRangeEnd - res.portRangeStart + 1
+                    const usedCount = getPortsUsedInRange(res.portRangeStart, res.portRangeEnd)
+                    const pct = rangeSize > 0 ? (usedCount / rangeSize) * 100 : 0
+                    return (
+                      <Card key={res.id} className="p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: res.color }} />
+                            <span className="text-sm font-medium">{res.name}</span>
+                            <Badge variant="outline" className={`text-[10px] ${GROUP_COLORS[res.groupName] || GROUP_COLORS.Custom}`}>
+                              {res.groupName}
+                            </Badge>
+                            <span className="text-xs font-mono text-muted-foreground">
+                              {res.portRangeStart}–{res.portRangeEnd}
+                            </span>
+                          </div>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => onDeleteReservation?.(res.id)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Delete this reservation</p>
+                            </TooltipContent>
+                          </Tooltip>
                         </div>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => onDeleteReservation?.(res.id)}
-                            >
-                              <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="text-xs">Delete reservation {res.portRangeStart}-{res.portRangeEnd}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Progress value={pct} className="h-2 flex-1" />
-                        <span className="text-xs text-muted-foreground font-mono">{usedCount}/{rangeSize}</span>
-                      </div>
-                    </Card>
-                  )
-                })}
-                {reservations.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-8">No range reservations yet. Use the presets above or create a custom range.</p>
-                )}
-              </div>
-            </ScrollArea>
+                        <div className="flex items-center gap-2">
+                          <Progress value={pct} className="h-2 flex-1" />
+                          <span className="text-xs text-muted-foreground font-mono">{usedCount}/{rangeSize} used</span>
+                        </div>
+                      </Card>
+                    )
+                  })}
+                  {reservations.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-12">No range reservations yet. Create one above to block out ports for your services.</p>
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
           </TabsContent>
         </Tabs>
+        </div>
       </DialogContent>
     </Dialog>
     </TooltipProvider>

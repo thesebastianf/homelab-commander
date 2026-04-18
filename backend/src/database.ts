@@ -121,7 +121,7 @@ async function initSchema(client: pg.PoolClient): Promise<void> {
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       stack_id UUID NOT NULL UNIQUE REFERENCES stacks(id) ON DELETE CASCADE,
       enabled BOOLEAN DEFAULT FALSE,
-      cron_schedule TEXT DEFAULT '0 2 * * *',
+      cron_schedule TEXT DEFAULT '0 22 * * 3',
       retention_days INTEGER DEFAULT 7,
       include_stack_folder BOOLEAN DEFAULT TRUE,
       include_volumes BOOLEAN DEFAULT TRUE,

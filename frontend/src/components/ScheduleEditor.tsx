@@ -4,12 +4,9 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 export const SCHEDULE_PRESETS = [
-  { label: 'Hourly', value: '0 * * * *' },
-  { label: 'Daily at 02:00', value: '0 2 * * *' },
-  { label: 'Weekdays at 02:00', value: '0 2 * * 1-5' },
-  { label: 'Weekends at 02:00', value: '0 2 * * 6,0' },
-  { label: 'Weekly (Sunday)', value: '0 2 * * 0' },
-  { label: 'Monthly (1st)', value: '0 2 1 * *' },
+  { label: 'Every Wednesday at 22:00', value: '0 22 * * 3' },
+  { label: 'Every Sunday at 22:00', value: '0 22 * * 0' },
+  { label: 'Every 1st of Month at 22:00', value: '0 22 1 * *' },
   { label: 'Custom…', value: '__custom__' },
 ] as const
 
@@ -46,7 +43,8 @@ export function parseCustomCron(cron: string): { days: number[]; hour: number; m
 }
 
 export function buildCron(days: number[], hour: number, minute: number): string {
-  const dayStr = days.length > 0 ? days.join(',') : '*'
+  // Never emit wildcard for custom weekdays; keep at least one selected day.
+  const dayStr = (days.length > 0 ? days : [1]).join(',')
   return `${minute} ${hour} * * ${dayStr}`
 }
 
@@ -78,6 +76,10 @@ export function ScheduleEditor({ value, onChange }: ScheduleEditorProps) {
   }
 
   const toggleDay = (day: number) => {
+    // Prevent empty day selection; this avoids generating a non-parseable custom state.
+    if (customDays.includes(day) && customDays.length === 1) {
+      return
+    }
     const next = customDays.includes(day)
       ? customDays.filter((d) => d !== day)
       : [...customDays, day]

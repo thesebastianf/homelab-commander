@@ -1,10 +1,11 @@
-﻿import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { YamlEditor } from '@/components/YamlEditor'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -60,7 +61,7 @@ import { useSettings } from '@/hooks/useSettings'
 import { ScheduleEditor } from '@/components/ScheduleEditor'
 import { ComposeAiPanel } from '@/components/ComposeAiPanel'
 
-// ── FullBackupPanel — matches BackupManagementDialog options ────────────────
+// -- FullBackupPanel - matches BackupManagementDialog options ----------------
 interface FullBackupPanelProps {
   config: Partial<BackupConfig>
   onChange: (cfg: Partial<BackupConfig>) => void
@@ -90,7 +91,7 @@ function FullBackupPanel({ config: cfg, onChange: u, onSave, isSaving, onRunNow,
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Schedule</Label>
-                <ScheduleEditor value={cfg.cronSchedule || '0 2 * * *'} onChange={v => u({ ...cfg, cronSchedule: v })} />
+                <ScheduleEditor value={cfg.cronSchedule || '0 22 * * 3'} onChange={v => u({ ...cfg, cronSchedule: v })} />
               </div>
               {onRunNow && (
                 <div className="flex items-end">
@@ -109,7 +110,7 @@ function FullBackupPanel({ config: cfg, onChange: u, onSave, isSaving, onRunNow,
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
                 <Checkbox checked={!cfg.useAdvancedRetention} onCheckedChange={() => u({ ...cfg, useAdvancedRetention: false })} />
-                <Label className="text-xs">Simple (days)</Label>
+                <Label className="text-xs">Simple (keep last N)</Label>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <Checkbox checked={cfg.useAdvancedRetention || false} onCheckedChange={() => u({ ...cfg, useAdvancedRetention: true })} />
@@ -118,19 +119,31 @@ function FullBackupPanel({ config: cfg, onChange: u, onSave, isSaving, onRunNow,
             </div>
             {!cfg.useAdvancedRetention ? (
               <div className="space-y-1">
-                <Label className="text-xs">Keep backups for (days)</Label>
+                <Label className="text-xs">Keep last backups</Label>
                 <Input type="number" value={cfg.retentionDays ?? 7}
                   onChange={e => u({ ...cfg, retentionDays: Number(e.target.value) })}
-                  className="h-8 text-xs font-mono w-24" min={1} max={365} />
+                  className="h-8 text-xs font-mono w-24" min={1} max={5000} />
               </div>
             ) : (
-              <div className="grid grid-cols-4 gap-2">
-                {(['daily', 'weekly', 'monthly', 'yearly'] as const).map(period => (
-                  <div key={period} className="space-y-1">
-                    <Label className="text-xs capitalize">{period}</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { key: 'keepLast', label: 'keep-last', hint: 'Always keep the newest N snapshots', def: 10 },
+                  { key: 'keepHourly', label: 'keep-hourly', hint: 'Keep one snapshot per hour for N hours', def: 24 },
+                  { key: 'keepDaily', label: 'keep-daily', hint: 'Keep one snapshot per day for N days', def: 7 },
+                  { key: 'keepWeekly', label: 'keep-weekly', hint: 'Keep one snapshot per week for N weeks', def: 4 },
+                  { key: 'keepMonthly', label: 'keep-monthly', hint: 'Keep one snapshot per month for N months', def: 6 },
+                  { key: 'keepYearly', label: 'keep-yearly', hint: 'Keep one snapshot per year for N years', def: 2 },
+                ] as const).map(period => (
+                  <div key={period.key} className="space-y-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Label className="text-xs cursor-help">{period.label}</Label>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">{period.hint}</TooltipContent>
+                    </Tooltip>
                     <Input type="number"
-                      value={cfg.retentionPolicy?.[period] ?? (period === 'daily' ? 7 : period === 'weekly' ? 4 : period === 'monthly' ? 6 : 2)}
-                      onChange={e => u({ ...cfg, retentionPolicy: { daily: 7, weekly: 4, monthly: 6, yearly: 2, ...cfg.retentionPolicy, [period]: Number(e.target.value) } })}
+                      value={cfg.retentionPolicy?.[period.key] ?? period.def}
+                      onChange={e => u({ ...cfg, retentionPolicy: { keepLast: 10, keepHourly: 24, keepDaily: 7, keepWeekly: 4, keepMonthly: 6, keepYearly: 2, ...cfg.retentionPolicy, [period.key]: Number(e.target.value) } })}
                       className="h-8 text-xs font-mono" min={0} />
                   </div>
                 ))}
@@ -197,7 +210,7 @@ function FullBackupPanel({ config: cfg, onChange: u, onSave, isSaving, onRunNow,
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <FileArchive className="w-3.5 h-3.5 text-muted-foreground" />
-                  <Label className="text-xs">Compression Level (1–9)</Label>
+                  <Label className="text-xs">Compression Level (1-9)</Label>
                 </div>
                 <Input type="number" value={cfg.compressionLevel ?? 6}
                   onChange={e => u({ ...cfg, compressionLevel: Number(e.target.value) })}
@@ -232,7 +245,7 @@ function FullBackupPanel({ config: cfg, onChange: u, onSave, isSaving, onRunNow,
   )
 }
 
-// ── EditBackupPanel (wraps FullBackupPanel with live query) ─────────────────
+// -- EditBackupPanel (wraps FullBackupPanel with live query) -----------------
 function EditBackupPanel({ config, onSave, isSaving, stackId }: { config: BackupConfig; onSave: (cfg: Partial<BackupConfig>) => void; isSaving: boolean; stackId: string }) {
   const [local, setLocal] = useState<Partial<BackupConfig>>(config)
   const qc = useQueryClient()
@@ -254,13 +267,13 @@ function EditBackupPanel({ config, onSave, isSaving, stackId }: { config: Backup
   )
 }
 
-// â”€â”€ WebSocket URL helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── WebSocket URL helper ──────────────────────────────────────────────────────
 function wsUrl(path: string): string {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${proto}//${window.location.host}${path}`
 }
 
-// â”€â”€ WebSocket-based stack log aggregation hook â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── WebSocket-based stack log aggregation hook ────────────────────────────────
 interface LogLine { container: string; text: string; ts: number }
 
 function useStackLogs(
@@ -292,7 +305,7 @@ function useStackLogs(
         setLines(prev => [...prev.slice(-800), { container: name, text, ts: Date.now() }])
       }
       ws.onerror = () => {
-        setLines(prev => [...prev, { container: name, text: 'âš  WebSocket error', ts: Date.now() }])
+        setLines(prev => [...prev, { container: name, text: '⚠ WebSocket error', ts: Date.now() }])
       }
       return ws
     })
@@ -325,7 +338,7 @@ export function StacksEditor({
   onStopStack,
   onRestartStack,
 }: StacksEditorProps) {
-  // â”€â”€ Core state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Core state ───────────────────────────────────────────────────────────
   const [selectedStack, setSelectedStack] = useState<Stack | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const [newStackName, setNewStackName] = useState('')
@@ -348,13 +361,13 @@ export function StacksEditor({
   const [createRightPanel, setCreateRightPanel] = useState<'conflicts' | 'reference' | 'helpers' | 'backup' | 'autoupdate' | 'ai'>('conflicts')
   const [refStackId, setRefStackId] = useState<string | null>(null)
   const [createBackupConfig, setCreateBackupConfig] = useState<Partial<BackupConfig>>({
-    enabled: false, cronSchedule: '0 2 * * *', retentionDays: 7,
+    enabled: false, cronSchedule: '0 22 * * 3', retentionDays: 7,
     includeStackFolder: true, includeVolumes: true, includeDatabases: false, useAdvancedRetention: false,
   })
   const qc = useQueryClient()
   const { data: settings } = useSettings()
 
-  // â”€â”€ Queries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Queries ──────────────────────────────────────────────────────────────
   const { data: versions = [] } = useQuery({
     queryKey: ['stackVersions', selectedStack?.id],
     queryFn: () => api.fetchStackVersions(selectedStack!.id),
@@ -410,7 +423,7 @@ export function StacksEditor({
     onError: (e: any) => toast.error(`Backup save failed: ${e.message}`),
   })
 
-  // â”€â”€ Sync operation done â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Sync operation done ───────────────────────────────────────────────────
   useEffect(() => {
     if (operation?.done) {
       setIsOperating(false)
@@ -420,7 +433,7 @@ export function StacksEditor({
     }
   }, [operation?.done])
 
-  // â”€â”€ Sync custom file content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Sync custom file content ──────────────────────────────────────────────
   useEffect(() => {
     if (rawCustomFile !== undefined) {
       setCustomFileContent(rawCustomFile)
@@ -428,7 +441,7 @@ export function StacksEditor({
     }
   }, [rawCustomFile])
 
-  // â”€â”€ WebSocket logs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── WebSocket logs ────────────────────────────────────────────────────────
   const logsEnabled = rightPanel === 'logs' && !!selectedStack && !isCreating
   const logLines = useStackLogs(
     stackContainers.map((c: any) => ({ id: c.id, name: c.name })),
@@ -439,7 +452,7 @@ export function StacksEditor({
     if (logsEndRef.current) logsEndRef.current.scrollIntoView({ behavior: 'smooth' })
   }, [logLines.length])
 
-  // â”€â”€ Sync stack content when selection changes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Sync stack content when selection changes ─────────────────────────────
   useEffect(() => {
     if (selectedStack) {
       setComposeContent(selectedStack.composeContent || selectedStack.compose || '')
@@ -453,7 +466,7 @@ export function StacksEditor({
     }
   }, [selectedStack?.id])
 
-  // â”€â”€ Mutations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Mutations ─────────────────────────────────────────────────────────────
   const createStackMutation = useMutation({
     mutationFn: ({ name, composeContent, envContent }: { name: string; composeContent: string; envContent?: string }) =>
       api.createStack({ name, composeContent, envContent }),
@@ -471,7 +484,7 @@ export function StacksEditor({
           .then(() => qc.invalidateQueries({ queryKey: ['backupConfig', newStack.id] }))
           .catch(() => toast.error('Stack created, but backup config could not be saved'))
       }
-      setCreateBackupConfig({ enabled: false, cronSchedule: '0 2 * * *', retentionDays: 7, includeStackFolder: true, includeVolumes: true, includeDatabases: false, useAdvancedRetention: false })
+      setCreateBackupConfig({ enabled: false, cronSchedule: '0 22 * * 3', retentionDays: 7, includeStackFolder: true, includeVolumes: true, includeDatabases: false, useAdvancedRetention: false })
     },
     onError: (err: any) => {
       toast.error(err.message || 'Failed to create stack')
@@ -532,7 +545,7 @@ export function StacksEditor({
     mutationFn: ({ name, stackPath, composeFiles }: { name: string; stackPath: string; composeFiles?: string[] }) =>
       api.adoptStack(name, stackPath, composeFiles),
     onSuccess: (adopted) => {
-      toast.success(`“${adopted.name}” is now managed by THC`)
+      toast.success(`"${adopted.name}" is now managed by THC`)
       qc.invalidateQueries({ queryKey: ['stacks'] })
       qc.invalidateQueries({ queryKey: ['externalStacks'] })
       setSelectedStack(adopted)
@@ -742,7 +755,7 @@ export function StacksEditor({
                                 <TooltipContent className="text-xs">
                                   {stack.backupConfig.lastBackupAt
                                     ? `Last backup: ${formatDistanceToNow(new Date(stack.backupConfig.lastBackupAt), { addSuffix: true })}`
-                                    : 'Backup enabled — no backup run yet'}
+                                    : 'Backup enabled - no backup run yet'}
                                 </TooltipContent>
                               </Tooltip>
                             )}
@@ -770,7 +783,7 @@ export function StacksEditor({
                                   <ExternalLink className="w-2.5 h-2.5" />ext
                                 </span>
                               </TooltipTrigger>
-                              <TooltipContent className="text-xs">Detected from Docker Compose labels. Click “Adopt” to manage in THC without moving any files.</TooltipContent>
+                              <TooltipContent className="text-xs">Detected from Docker Compose labels. Click "Adopt" to manage in THC without moving any files.</TooltipContent>
                             </Tooltip>
                           </div>
                           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -803,7 +816,7 @@ export function StacksEditor({
                           onClick={() => adoptMutation.mutate({ name: stack.name, stackPath: stack.stackPath!, composeFiles: stack.composeFiles })}
                         >
                           <Rocket className="w-3 h-3" />
-                          {adoptMutation.isPending ? 'Adopting…' : 'Adopt into THC'}
+                          {adoptMutation.isPending ? 'Adopting...' : 'Adopt into THC'}
                         </Button>
                       )}
                     </Card>
@@ -814,7 +827,7 @@ export function StacksEditor({
           </ScrollArea>
         </div>
 
-        {/* â•â•â• MAIN AREA â•â•â• */}
+        {/* ═══ MAIN AREA ═══ */}
         <div className="flex-1 flex flex-col gap-3 min-w-0">
 
           {isCreating ? (
@@ -877,16 +890,10 @@ export function StacksEditor({
                       <p className="text-xs text-destructive font-mono break-all">{yamlError}</p>
                     </div>
                   )}
-                  <Textarea
-                    value={activeFile === 'env' ? envContent : composeContent}
-                    onChange={(e) => {
-                      if (activeFile === 'env') { setEnvContent(e.target.value) }
-                      else { setComposeContent(e.target.value); setIsDirty(true); validateYAML(e.target.value) }
-                    }}
-                    className={`flex-1 font-mono text-xs resize-none min-h-0 ${yamlError && activeFile === 'compose' ? 'border-destructive' : ''}`}
-                    spellCheck={false}
-                    placeholder={activeFile === 'env' ? 'MY_VAR=value\nANOTHER_VAR=value' : ''}
-                  />
+                  {activeFile === 'env'
+                    ? <Textarea value={envContent} onChange={e => setEnvContent(e.target.value)} className="flex-1 font-mono text-xs resize-none min-h-0" spellCheck={false} placeholder="MY_VAR=value" />
+                     : <YamlEditor value={composeContent} onChange={v => { setComposeContent(v); setIsDirty(true); validateYAML(v) }} minHeight="200px" className={`flex-1 ${yamlError ? 'border-destructive' : ''}`} />
+                  }
                   <div className="flex items-center justify-end gap-2 pt-2 border-t shrink-0 mt-2">
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1039,7 +1046,7 @@ export function StacksEditor({
                         </SelectContent>
                       </Select>
                       {refStackId ? (
-                        <Textarea value={refStackCompose} readOnly className="flex-1 font-mono text-xs resize-none bg-muted/30 min-h-0" />
+                        <YamlEditor value={refStackCompose} readOnly minHeight="180px" className="flex-1" />
                       ) : (
                         <div className="flex-1 flex items-center justify-center">
                           <p className="text-xs text-muted-foreground text-center">Select a stack above to view its compose as reference</p>
@@ -1048,14 +1055,14 @@ export function StacksEditor({
                     </div>
                   )}
 
-                  {/* COPY-PASTE HELPERS */}
+                    {/* COPY-PASTE HELPERS */}
                   {createRightPanel === 'helpers' && (
                     <div className="flex-1 overflow-y-auto space-y-2">
                       <p className="text-xs text-muted-foreground mb-1">
                         Global helpers from Settings. Click to copy.
                       </p>
                       {(settings?.copyPasteHelpers ?? []).length === 0 ? (
-                        <p className="text-xs text-muted-foreground italic px-1">No helpers configured. Add them in Settings → Helpers.</p>
+                        <p className="text-xs text-muted-foreground italic px-1">No helpers configured. Add them in Settings ? Helpers.</p>
                       ) : (
                         (settings?.copyPasteHelpers ?? []).map(h => (
                           <div key={h.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border/40 bg-muted/20">
@@ -1323,16 +1330,13 @@ export function StacksEditor({
                     </div>
                   )}
 
-                  {/* Editor */}
-                  <Textarea
-                    value={editorValue}
-                    onChange={(e) => handleEditorChange(e.target.value)}
-                    className={`flex-1 font-mono text-xs resize-none min-h-0 ${yamlError && activeFile === 'compose' ? 'border-destructive' : ''}`}
-                    spellCheck={false}
-                    placeholder={activeFile === 'env' ? 'KEY=value\nANOTHER_KEY=value' : ''}
-                  />
+                  {/* Editor - YAML highlighting for compose, plain textarea for env/other */}
+                  {(activeFile === 'compose')
+                     ? <YamlEditor value={composeContent} onChange={v => handleEditorChange(v)} minHeight="100%" className={`flex-1 ${yamlError ? 'border-destructive' : ''}`} />
+                    : <Textarea value={editorValue} onChange={e => handleEditorChange(e.target.value)} className="flex-1 font-mono text-xs resize-none min-h-0" spellCheck={false} placeholder={activeFile === 'env' ? 'KEY=value' : ''} />
+                  }
 
-                  {/* Services panel — shown for compose.yml */}
+                  {/* Services panel - shown for compose.yml */}
                   {activeFile === 'compose' && parsedServices.length > 0 && (
                     <div className="shrink-0 mt-2 border rounded-md p-2 space-y-1 bg-muted/20">
                       {parsedServices.map(svc => (
@@ -1591,7 +1595,7 @@ export function StacksEditor({
                           <div className="flex items-center justify-between mb-1 shrink-0">
                             <label className="text-xs font-semibold text-muted-foreground">
                               v{compareVersionObj.version} &middot; {new Date(compareVersionObj.createdAt).toLocaleDateString()}
-                              {compareVersionObj.description && <span className="ml-1 text-muted-foreground/60">— {compareVersionObj.description}</span>}
+                              {compareVersionObj.description && <span className="ml-1 text-muted-foreground/60">- {compareVersionObj.description}</span>}
                             </label>
                             <button onClick={() => setCompareVersion(null)} className="text-muted-foreground hover:text-foreground">
                               <X className="w-3 h-3" />
@@ -1656,7 +1660,7 @@ export function StacksEditor({
                           stackId={selectedStack.id}
                         />
                       ) : (
-                        <div className="flex items-center justify-center h-32 text-muted-foreground text-xs font-mono">Loading backup config…</div>
+                        <div className="flex items-center justify-center h-32 text-muted-foreground text-xs font-mono">Loading backup config...</div>
                       )}
                     </div>
                   )}
@@ -1705,12 +1709,12 @@ export function StacksEditor({
                               {settings.globalUpdateFreeze && (
                                 <p className="text-xs text-destructive mt-1 flex items-center gap-1">
                                   <AlertTriangle className="w-3 h-3" />
-                                  Global Update Freeze is active — updates paused
+                                  Global Update Freeze is active - updates paused
                                 </p>
                               )}
                             </div>
                           ) : (
-                            <p className="text-xs text-muted-foreground">No schedule configured — go to Settings → Update Management</p>
+                            <p className="text-xs text-muted-foreground">No schedule configured - go to Settings &gt; Update Management</p>
                           )}
                         </Card>
                       )}
@@ -1799,7 +1803,7 @@ export function StacksEditor({
                         </SelectContent>
                       </Select>
                       {refStackId ? (
-                        <Textarea value={refStackCompose} readOnly className="flex-1 font-mono text-xs resize-none bg-muted/30 min-h-0" />
+                        <YamlEditor value={refStackCompose} readOnly minHeight="180px" className="flex-1" />
                       ) : (
                         <div className="flex-1 flex items-center justify-center">
                           <p className="text-xs text-muted-foreground text-center">Select a stack above to view its compose as reference</p>
@@ -1813,7 +1817,7 @@ export function StacksEditor({
                     <div className="flex-1 overflow-y-auto space-y-2">
                       <p className="text-xs text-muted-foreground mb-1">Global helpers from Settings. Click to copy.</p>
                       {(settings?.copyPasteHelpers ?? []).length === 0 ? (
-                        <p className="text-xs text-muted-foreground italic px-1">No helpers configured. Add them in Settings → Helpers.</p>
+                        <p className="text-xs text-muted-foreground italic px-1">No helpers configured. Add them in Settings ? Helpers.</p>
                       ) : (
                         (settings?.copyPasteHelpers ?? []).map(h => (
                           <div key={h.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border/40 bg-muted/20">
@@ -1839,7 +1843,7 @@ export function StacksEditor({
         </div>
       </div>
 
-      {/* â”€â”€â”€ Delete Confirm Dialog â”€â”€â”€ */}
+      {/* ─── Delete Confirm Dialog ─── */}
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1847,7 +1851,7 @@ export function StacksEditor({
             <AlertDialogDescription>
               Delete <span className="font-mono font-semibold">{selectedStack?.name}</span>? This cannot be undone.
               {selectedStack?.status === 'running' && (
-                <span className="block mt-2 text-amber-500 text-xs font-mono">âš  Stack is currently running. Stop it first.</span>
+                <span className="block mt-2 text-amber-500 text-xs font-mono">⚠ Stack is currently running. Stop it first.</span>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>

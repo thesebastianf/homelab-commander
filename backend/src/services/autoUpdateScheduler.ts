@@ -1,6 +1,8 @@
 import cron from 'node-cron';
 import { spawn } from 'child_process';
 import { join } from 'path';
+import { mkdtemp, writeFile, rm } from 'fs/promises';
+import { tmpdir } from 'os';
 import { pool } from '../database.js';
 import { logger } from '../logger.js';
 import { sendNotification } from './notifications.js';
@@ -97,20 +99,38 @@ async function runScheduledUpdates(): Promise<void> {
 }
 
 function updateStackImages(stack: any): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn(
-      'docker',
-      ['compose', '-f', join(stack.stack_path, 'docker-compose.yml'), 'up', '-d', '--pull', 'always'],
-      { cwd: stack.stack_path }
-    );
-    const onData = (data: Buffer) => {
-      data.toString('utf8').split('\n').filter(Boolean).forEach(line => {
-        logger.debug({ stackName: stack.name, line }, 'docker compose output');
+  return new Promise(async (resolve, reject) => {
+    let tempDir: string | null = null;
+    try {
+      tempDir = await mkdtemp(join(tmpdir(), `hlc-autoupdate-`));
+      await writeFile(join(tempDir, 'docker-compose.yml'), stack.compose_content || '');
+      if (stack.env_content) {
+        await writeFile(join(tempDir, '.env'), stack.env_content);
+      }
+
+      const proc = spawn(
+        'docker',
+        ['compose', '-p', stack.name.toLowerCase(), 'up', '-d', '--pull', 'always'],
+        { cwd: tempDir }
+      );
+      const onData = (data: Buffer) => {
+        data.toString('utf8').split('\n').filter(Boolean).forEach(line => {
+          logger.debug({ stackName: stack.name, line }, 'docker compose output');
+        });
+      };
+      proc.stdout.on('data', onData);
+      proc.stderr.on('data', onData);
+      proc.on('close', (code) => {
+        if (tempDir) rm(tempDir, { recursive: true, force: true }).catch(() => {});
+        code === 0 ? resolve() : reject(new Error(`docker compose exited with code ${code}`));
       });
-    };
-    proc.stdout.on('data', onData);
-    proc.stderr.on('data', onData);
-    proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`docker compose exited with code ${code}`))));
-    proc.on('error', reject);
+      proc.on('error', (err: NodeJS.ErrnoException) => {
+        if (tempDir) rm(tempDir, { recursive: true, force: true }).catch(() => {});
+        reject(new Error(err.code === 'ENOENT' ? 'docker CLI not found' : err.message));
+      });
+    } catch (err) {
+      if (tempDir) await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+      reject(err);
+    }
   });
 }

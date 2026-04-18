@@ -37,9 +37,21 @@ interface BackupManagementDialogProps {
 // ── per-stack self-contained components ────────────────────────────────────
 
 const DEFAULT_CONFIG: BackupConfig = {
-  enabled: false, cronSchedule: '0 2 * * *', retentionDays: 7,
-  includeStackFolder: true, includeVolumes: true, includeDatabases: false,
+  enabled: false,
+  cronSchedule: '0 22 * * 3',
+  retentionDays: 7,
+  includeStackFolder: true,
+  includeVolumes: true,
+  includeDatabases: false,
   useAdvancedRetention: false,
+  retentionPolicy: {
+    keepLast: 10,
+    keepHourly: 24,
+    keepDaily: 7,
+    keepWeekly: 4,
+    keepMonthly: 6,
+    keepYearly: 2,
+  },
 }
 
 function StackBackupItem({ stack }: { stack: Stack }) {
@@ -91,7 +103,7 @@ function StackBackupItem({ stack }: { stack: Stack }) {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Schedule</Label>
-                  <ScheduleEditor value={cfg.cronSchedule ?? '0 2 * * *'} onChange={(v) => u({ cronSchedule: v })} />
+                  <ScheduleEditor value={cfg.cronSchedule ?? '0 22 * * 3'} onChange={(v) => u({ cronSchedule: v })} />
                 </div>
                 <div className="flex items-end">
                   <Tooltip>
@@ -114,7 +126,7 @@ function StackBackupItem({ stack }: { stack: Stack }) {
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <Checkbox checked={!cfg.useAdvancedRetention} onCheckedChange={() => u({ useAdvancedRetention: false })} />
-                  <Label className="text-xs">Simple (days)</Label>
+                  <Label className="text-xs">Simple (keep last N)</Label>
                 </div>
                 <div className="flex items-center gap-2">
                   <Checkbox checked={cfg.useAdvancedRetention} onCheckedChange={() => u({ useAdvancedRetention: true })} />
@@ -123,16 +135,28 @@ function StackBackupItem({ stack }: { stack: Stack }) {
               </div>
               {!cfg.useAdvancedRetention ? (
                 <div className="space-y-1">
-                  <Label className="text-xs">Keep backups for (days)</Label>
-                  <Input type="number" value={cfg.retentionDays} onChange={(e) => u({ retentionDays: Number(e.target.value) })} className="h-8 text-xs font-mono w-24" min={1} max={365} />
+                  <Label className="text-xs">Keep last backups</Label>
+                  <Input type="number" value={cfg.retentionDays} onChange={(e) => u({ retentionDays: Number(e.target.value) })} className="h-8 text-xs font-mono w-24" min={1} max={5000} />
                 </div>
               ) : (
-                <div className="grid grid-cols-4 gap-2">
-                  {(['daily', 'weekly', 'monthly', 'yearly'] as const).map(period => (
-                    <div key={period} className="space-y-1">
-                      <Label className="text-xs capitalize">{period}</Label>
-                      <Input type="number" value={cfg.retentionPolicy?.[period] ?? (period === 'daily' ? 7 : period === 'weekly' ? 4 : period === 'monthly' ? 6 : 2)}
-                        onChange={(e) => u({ retentionPolicy: { ...{ daily: 7, weekly: 4, monthly: 6, yearly: 2, ...cfg.retentionPolicy }, [period]: Number(e.target.value) } })}
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { key: 'keepLast', label: 'keep-last', hint: 'Always keep the newest N snapshots', def: 10 },
+                    { key: 'keepHourly', label: 'keep-hourly', hint: 'Keep one snapshot per hour for N hours', def: 24 },
+                    { key: 'keepDaily', label: 'keep-daily', hint: 'Keep one snapshot per day for N days', def: 7 },
+                    { key: 'keepWeekly', label: 'keep-weekly', hint: 'Keep one snapshot per week for N weeks', def: 4 },
+                    { key: 'keepMonthly', label: 'keep-monthly', hint: 'Keep one snapshot per month for N months', def: 6 },
+                    { key: 'keepYearly', label: 'keep-yearly', hint: 'Keep one snapshot per year for N years', def: 2 },
+                  ] as const).map(period => (
+                    <div key={period.key} className="space-y-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Label className="text-xs cursor-help">{period.label}</Label>
+                        </TooltipTrigger>
+                        <TooltipContent><p className="text-xs">{period.hint}</p></TooltipContent>
+                      </Tooltip>
+                      <Input type="number" value={cfg.retentionPolicy?.[period.key] ?? period.def}
+                        onChange={(e) => u({ retentionPolicy: { ...{ keepLast: 10, keepHourly: 24, keepDaily: 7, keepWeekly: 4, keepMonthly: 6, keepYearly: 2, ...cfg.retentionPolicy }, [period.key]: Number(e.target.value) } })}
                         className="h-8 text-xs font-mono" min={0} />
                     </div>
                   ))}
@@ -273,8 +297,9 @@ echo "Backup sync completed at \$(date)"
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] max-w-5xl h-[90vh] overflow-hidden">
         <TooltipProvider delayDuration={350}>
+        <div className="flex h-full min-h-0 flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Save className="w-6 h-6 text-primary" />
@@ -285,15 +310,15 @@ echo "Backup sync completed at \$(date)"
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="stacks" className="mt-4">
+        <Tabs defaultValue="stacks" className="mt-4 flex-1 min-h-0 flex flex-col">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="stacks">Stack Backups</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="stacks" className="mt-4">
-            <ScrollArea className="h-[500px]">
+          <TabsContent value="stacks" className="mt-4 flex-1 min-h-0">
+            <ScrollArea className="h-full pr-1">
               <Accordion type="multiple" className="space-y-2">
                 {stacks.map((stack) => (
                   <StackBackupItem key={stack.id} stack={stack} />
@@ -302,8 +327,8 @@ echo "Backup sync completed at \$(date)"
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="history" className="mt-4">
-            <ScrollArea className="h-[500px]">
+          <TabsContent value="history" className="mt-4 flex-1 min-h-0">
+            <ScrollArea className="h-full pr-1">
               <div className="space-y-2">
                 {stacks.map((stack) => (
                   <StackJobHistoryItems key={stack.id} stack={stack} />
@@ -312,7 +337,7 @@ echo "Backup sync completed at \$(date)"
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="settings" className="mt-4 space-y-4">
+          <TabsContent value="settings" className="mt-4 space-y-4 flex-1 min-h-0 overflow-y-auto pr-1 pb-2">
             <Card className="p-4 space-y-2 border-border/60 bg-muted/10">
               <Label className="text-base">Backup Storage</Label>
               <p className="text-sm text-muted-foreground">
@@ -348,11 +373,12 @@ echo "Backup sync completed at \$(date)"
               <Textarea
                 value={nasScript}
                 readOnly
-                className="min-h-[160px] font-mono text-xs"
+                className="min-h-[220px] font-mono text-xs whitespace-pre overflow-x-auto resize-none"
               />
             </Card>
           </TabsContent>
         </Tabs>
+        </div>
         </TooltipProvider>
       </DialogContent>
     </Dialog>

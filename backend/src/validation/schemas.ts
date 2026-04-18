@@ -70,6 +70,11 @@ export const updateSettingsBody = z.object({
     treatAsLocal: z.boolean().optional(),
     allowEnvToLocal: z.boolean().optional(),
   }).optional(),
+  copyPasteHelpers: z.array(z.object({
+    id: z.string().min(1).max(100),
+    label: z.string().min(1).max(200),
+    value: z.string().max(2000),
+  })).optional(),
 });
 
 export const backupConfigBody = z.object({
@@ -95,10 +100,12 @@ export const backupConfigBody = z.object({
   incremental: z.boolean().optional(),
   useAdvancedRetention: z.boolean().optional(),
   retentionPolicy: z.object({
-    daily: z.number().int().min(0).max(365),
-    weekly: z.number().int().min(0).max(52),
-    monthly: z.number().int().min(0).max(120),
-    yearly: z.number().int().min(0).max(10),
+    keepLast: z.number().int().min(0).max(5000).optional(),
+    keepHourly: z.number().int().min(0).max(10000).optional(),
+    keepDaily: z.number().int().min(0).max(3650).optional(),
+    keepWeekly: z.number().int().min(0).max(1040).optional(),
+    keepMonthly: z.number().int().min(0).max(1200).optional(),
+    keepYearly: z.number().int().min(0).max(200).optional(),
   }).optional(),
 });
 

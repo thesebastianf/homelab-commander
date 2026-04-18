@@ -77,26 +77,104 @@ export async function checkForUpdates(): Promise<void> {
 }
 
 async function checkRegistryDigest(image: string, tag: string): Promise<string | null> {
-  const [namespace, repo] = image.includes('/')
-    ? [image.split('/')[0], image.split('/').slice(1).join('/')]
-    : ['library', image];
+  const manifestAccept = [
+    'application/vnd.oci.image.manifest.v1+json',
+    'application/vnd.docker.distribution.manifest.v2+json',
+    'application/vnd.docker.distribution.manifest.list.v2+json',
+    'application/vnd.oci.image.index.v1+json',
+  ].join(', ');
+
+  const getParsedImageRef = (name: string) => {
+    const parts = name.split('/');
+    const first = parts[0] || '';
+    const hasRegistry = first.includes('.') || first.includes(':') || first === 'localhost';
+
+    if (!hasRegistry) {
+      const repo = parts.length === 1 ? `library/${name}` : name;
+      return { registry: 'registry-1.docker.io', repo, isDockerHub: true };
+    }
+
+    return {
+      registry: first,
+      repo: parts.slice(1).join('/'),
+      isDockerHub: first === 'docker.io' || first === 'index.docker.io' || first === 'registry-1.docker.io',
+    };
+  };
+
+  const parseBearerChallenge = (header: string) => {
+    const realm = /realm="([^"]+)"/.exec(header)?.[1];
+    const service = /service="([^"]+)"/.exec(header)?.[1];
+    const scope = /scope="([^"]+)"/.exec(header)?.[1];
+    return { realm, service, scope };
+  };
+
+  const extractToken = (payload: unknown): string | null => {
+    if (!payload || typeof payload !== 'object') return null;
+    const record = payload as Record<string, unknown>;
+    const token = record.token;
+    const accessToken = record.access_token;
+    if (typeof token === 'string' && token.length > 0) return token;
+    if (typeof accessToken === 'string' && accessToken.length > 0) return accessToken;
+    return null;
+  };
 
   try {
-    const authRes = await fetch(
-      `https://auth.docker.io/token?service=registry.docker.io&scope=repository:${namespace}/${repo}:pull`
-    );
-    if (!authRes.ok) return null;
-    const { token } = await authRes.json() as { token: string };
+    const ref = getParsedImageRef(image);
+    const registryHost = ref.isDockerHub ? 'registry-1.docker.io' : ref.registry;
+    const manifestUrl = `https://${registryHost}/v2/${ref.repo}/manifests/${tag}`;
 
-    const manifestRes = await fetch(
-      `https://registry-1.docker.io/v2/${namespace}/${repo}/manifests/${tag}`,
-      {
+    if (ref.isDockerHub) {
+      const authRes = await fetch(
+        `https://auth.docker.io/token?service=registry.docker.io&scope=repository:${ref.repo}:pull`
+      );
+      if (!authRes.ok) return null;
+
+      const tokenPayload = await authRes.json();
+      const token = extractToken(tokenPayload);
+      if (!token) return null;
+
+      const manifestRes = await fetch(manifestUrl, {
+        method: 'HEAD',
         headers: {
           Authorization: `Bearer ${token}`,
-          Accept: 'application/vnd.docker.distribution.manifest.v2+json',
+          Accept: manifestAccept,
         },
+      });
+
+      return manifestRes.headers.get('docker-content-digest');
+    }
+
+    // Try generic OCI registry flow (unauthenticated first, then Bearer challenge if needed).
+    let manifestRes = await fetch(manifestUrl, {
+      method: 'HEAD',
+      headers: { Accept: manifestAccept },
+    });
+
+    if (manifestRes.status === 401) {
+      const challenge = manifestRes.headers.get('www-authenticate') || '';
+      if (challenge.toLowerCase().startsWith('bearer')) {
+        const { realm, service, scope } = parseBearerChallenge(challenge);
+        if (realm) {
+          const tokenUrl = new URL(realm);
+          if (service) tokenUrl.searchParams.set('service', service);
+          tokenUrl.searchParams.set('scope', scope || `repository:${ref.repo}:pull`);
+
+          const tokenRes = await fetch(tokenUrl.toString());
+          if (!tokenRes.ok) return null;
+          const tokenPayload = await tokenRes.json();
+          const token = extractToken(tokenPayload);
+          if (!token) return null;
+
+          manifestRes = await fetch(manifestUrl, {
+            method: 'HEAD',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: manifestAccept,
+            },
+          });
+        }
       }
-    );
+    }
 
     return manifestRes.headers.get('docker-content-digest');
   } catch {
