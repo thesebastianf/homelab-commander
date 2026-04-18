@@ -90,6 +90,41 @@ export function streamContainerStats(id: string) {
   return docker.getContainer(id).stats({ stream: true });
 }
 
+export async function openContainerShell(id: string, cols = 120, rows = 30) {
+  const container = docker.getContainer(id);
+  const info = await container.inspect();
+  if (!info?.State?.Running) {
+    throw new Error('Container is not running');
+  }
+
+  const exec = await container.exec({
+    AttachStdout: true,
+    AttachStderr: true,
+    AttachStdin: true,
+    Tty: true,
+    Cmd: ['sh', '-lc', 'if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi'],
+    Env: ['TERM=xterm-256color'],
+  });
+
+  const stream = await exec.start({
+    hijack: true,
+    stdin: true,
+    Tty: true,
+  } as any);
+
+  try {
+    await exec.resize({ h: rows, w: cols });
+  } catch {
+    // Some runtimes do not support resize immediately after start.
+  }
+
+  return { exec, stream };
+}
+
+export async function resizeContainerShell(exec: any, cols: number, rows: number) {
+  await exec.resize({ h: rows, w: cols });
+}
+
 // ---- Images ----
 
 export async function listImages() {

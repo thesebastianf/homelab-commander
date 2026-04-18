@@ -49,6 +49,7 @@ export interface Stack {
   runBackupBeforeUpdate?: boolean
   updateAvailable?: boolean
   hasHostNetworking?: boolean
+  backupCount?: number
   createdAt?: string
   updatedAt?: string
   versions?: StackVersion[]

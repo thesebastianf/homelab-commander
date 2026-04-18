@@ -87,3 +87,19 @@ export function useRestartStack() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['stacks'] }),
   });
 }
+
+export function useDeactivateStack() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deactivateStack(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['stacks'] }),
+  });
+}
+
+export function useRecreateStack() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.recreateStack(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['stacks'] }),
+  });
+}

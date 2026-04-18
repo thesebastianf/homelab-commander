@@ -54,8 +54,8 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState): P
     await new Promise<void>((resolve, reject) => {
       const proc = spawn(
         'docker',
-        // -p sets the project name so docker compose targets the correct existing containers
-        ['compose', '-p', stack.name.toLowerCase(), 'up', '-d', '--pull', 'always'],
+        // --project-name targets the existing compose project even when using a temp compose file
+        ['compose', '--project-name', stack.name.toLowerCase(), '--file', join(tempDir!, 'docker-compose.yml'), 'up', '-d', '--pull', 'always'],
         { cwd: tempDir! }
       );
       const onData = (data: Buffer) => {
@@ -80,7 +80,7 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState): P
     // Only mark as failed if containers are not still running
     try {
       const { stdout } = await execFileAsync(
-        'docker', ['compose', '-p', stack.name.toLowerCase(), 'ps', '-q', '--status', 'running'],
+        'docker', ['compose', '--project-name', stack.name.toLowerCase(), '--file', join(tempDir!, 'docker-compose.yml'), 'ps', '-q', '--status', 'running'],
         { timeout: 8000, cwd: tempDir ?? undefined }
       );
       if (stdout.trim()) {
@@ -119,7 +119,8 @@ const STACK_SELECT = `
       sc.trigger_value as trigger_type,
       FALSE as auto_start,
       sc.start_delay,
-      (SELECT completed_at FROM backup_jobs WHERE stack_id = s.id AND status = 'completed' ORDER BY completed_at DESC LIMIT 1) AS last_backup_at
+      (SELECT completed_at FROM backup_jobs WHERE stack_id = s.id AND status = 'completed' ORDER BY completed_at DESC LIMIT 1) AS last_backup_at,
+      (SELECT COUNT(*)::int FROM backup_jobs WHERE stack_id = s.id AND status = 'completed') AS backup_count
     FROM stacks s
     LEFT JOIN backup_configs bc ON s.id = bc.stack_id
     LEFT JOIN smart_startup_configs sc ON s.id::text = sc.target_id AND sc.target_type = 'stack'
@@ -407,11 +408,29 @@ router.post('/:id/stop', asyncHandler(async (req, res) => {
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
   try {
-    await execFileAsync('docker', ['compose', 'down'],
+    await execFileAsync('docker', ['compose', 'stop'],
       { cwd: stack.stack_path, timeout: 120000 }
     );
     await pool.query("UPDATE stacks SET status = 'stopped', updated_at = NOW() WHERE id = $1", [id]);
     await auditLog('stop', 'stack', id);
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}));
+
+// Deactivate stack (docker compose down)
+router.post('/:id/deactivate', asyncHandler(async (req, res) => {
+  const id = String(req.params.id);
+  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
+  if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
+
+  try {
+    await execFileAsync('docker', ['compose', 'down'],
+      { cwd: stack.stack_path, timeout: 120000 }
+    );
+    await pool.query("UPDATE stacks SET status = 'stopped', updated_at = NOW() WHERE id = $1", [id]);
+    await auditLog('deactivate', 'stack', id);
     res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -432,6 +451,27 @@ router.post('/:id/restart', asyncHandler(async (req, res) => {
     await auditLog('restart', 'stack', id);
     res.json({ ok: true });
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}));
+
+// Recreate stack containers (force new containers from current compose)
+router.post('/:id/recreate', asyncHandler(async (req, res) => {
+  const id = String(req.params.id);
+  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
+  if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
+
+  await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [id]);
+
+  try {
+    await execFileAsync('docker', ['compose', 'up', '-d', '--force-recreate'],
+      { cwd: stack.stack_path, timeout: 120000 }
+    );
+    await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
+    await auditLog('recreate', 'stack', id);
+    res.json({ ok: true });
+  } catch (err: any) {
+    await pool.query("UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1", [id]);
     res.status(500).json({ error: err.message });
   }
 }));
@@ -641,12 +681,18 @@ router.get('/:id/containers', asyncHandler(async (req, res) => {
   try {
     const { stdout } = await execFileAsync(
       'docker',
-      ['ps', '-a', '--filter', `label=com.docker.compose.project=${stack.name.toLowerCase()}`, '--format', '{{.ID}}\t{{.Names}}\t{{.State}}\t{{.Image}}'],
+      ['ps', '-a', '--filter', `label=com.docker.compose.project=${stack.name.toLowerCase()}`, '--format', '{{.ID}}\t{{.Names}}\t{{.State}}\t{{.Image}}\t{{.Label "com.docker.compose.service"}}'],
       { timeout: 10000 }
     );
     const containers = stdout.trim().split('\n').filter(Boolean).map(line => {
-      const [id, names, state, image] = line.split('\t');
-      return { id: id?.trim() || '', name: (names?.trim() || '').replace(/^\//, ''), status: state?.trim() || '', image: image?.trim() || '' };
+      const [id, names, state, image, serviceName] = line.split('\t');
+      return {
+        id: id?.trim() || '',
+        name: (names?.trim() || '').replace(/^\//, ''),
+        status: state?.trim() || '',
+        image: image?.trim() || '',
+        serviceName: serviceName?.trim() || '',
+      };
     }).filter(c => c.id);
     res.json(containers);
   } catch {
@@ -749,6 +795,7 @@ function mapStack(row: any) {
     lastBackupAt: row.last_backup_at || null,
     gitRepoConfig: row.git_repo_config,
     hasHostNetworking: hasHostNetworking(row.compose_content),
+    backupCount: Number(row.backup_count || 0),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     backupConfig: row.backup_config_id ? {

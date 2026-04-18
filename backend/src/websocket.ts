@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { IncomingMessage, Server } from 'http';
 import { URL } from 'url';
+import { Duplex } from 'stream';
 import * as dockerService from './services/docker.js';
 import { logger } from './logger.js';
 
@@ -30,6 +31,9 @@ export function setupWebSocket(server: Server): void {
     } else if (pathname.startsWith('/ws/stats/')) {
       const containerId = pathname.split('/ws/stats/')[1];
       handleStatsStream(ws, containerId);
+    } else if (pathname.startsWith('/ws/exec/')) {
+      const containerId = pathname.split('/ws/exec/')[1];
+      handleExecShell(ws, decodeURIComponent(containerId));
     } else if (pathname === '/ws/events') {
       handleEventStream(ws);
     } else {
@@ -149,5 +153,79 @@ async function handleEventStream(ws: WebSocket): Promise<void> {
   } catch (err) {
     logger.error({ err }, 'Failed to start event stream');
     ws.close(4000, 'Failed to start stream');
+  }
+}
+
+async function handleExecShell(ws: WebSocket, containerId: string): Promise<void> {
+  let stream: Duplex | null = null;
+  let execRef: any = null;
+
+  try {
+    const { stream: shellStream, exec } = await dockerService.openContainerShell(containerId);
+    stream = shellStream as unknown as Duplex;
+    execRef = exec;
+
+    stream.on('data', (chunk: Buffer) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(chunk, { binary: true });
+      }
+    });
+
+    stream.on('end', () => {
+      if (ws.readyState === WebSocket.OPEN) ws.close();
+    });
+
+    stream.on('error', (err: Error) => {
+      logger.error({ err, containerId }, 'Exec stream error');
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Terminal stream failed' }));
+        ws.close(1011, 'Terminal stream failed');
+      }
+    });
+
+    ws.on('message', async (rawData, isBinary) => {
+      if (!stream) return;
+      try {
+        if (!isBinary) {
+          const text = rawData.toString();
+          try {
+            const msg = JSON.parse(text);
+            if (msg?.type === 'resize' && execRef) {
+              const cols = Number(msg.cols || 120);
+              const rows = Number(msg.rows || 30);
+              if (cols > 0 && rows > 0) {
+                await dockerService.resizeContainerShell(execRef, cols, rows);
+              }
+              return;
+            }
+          } catch {
+            // Not control JSON, treat as terminal input.
+          }
+          stream.write(Buffer.from(text, 'utf8'));
+          return;
+        }
+
+        if (Buffer.isBuffer(rawData)) {
+          stream.write(rawData);
+        } else if (Array.isArray(rawData)) {
+          stream.write(Buffer.concat(rawData as Buffer[]));
+        } else {
+          stream.write(Buffer.from(rawData as ArrayBuffer));
+        }
+      } catch (err) {
+        logger.error({ err, containerId }, 'Failed to relay terminal input');
+      }
+    });
+
+    ws.on('close', () => {
+      try { stream?.end(); } catch { /* ignore */ }
+      try { stream?.destroy(); } catch { /* ignore */ }
+    });
+  } catch (err: any) {
+    logger.error({ err, containerId }, 'Failed to start interactive shell');
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'error', message: err?.message || 'Failed to start shell' }));
+      ws.close(1011, 'Failed to start shell');
+    }
   }
 }

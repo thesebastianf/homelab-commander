@@ -226,8 +226,16 @@ export async function stopStack(id: string): Promise<void> {
   await request(`/stacks/${id}/stop`, { method: 'POST' });
 }
 
+export async function deactivateStack(id: string): Promise<void> {
+  await request(`/stacks/${id}/deactivate`, { method: 'POST' });
+}
+
 export async function restartStack(id: string): Promise<void> {
   await request(`/stacks/${id}/restart`, { method: 'POST' });
+}
+
+export async function recreateStack(id: string): Promise<void> {
+  await request(`/stacks/${id}/recreate`, { method: 'POST' });
 }
 
 export async function fetchStackVersions(id: string): Promise<any[]> {
@@ -238,7 +246,7 @@ export async function restoreStackVersion(id: string, version: number): Promise<
   await request(`/stacks/${id}/restore/${version}`, { method: 'POST' });
 }
 
-export async function fetchStackContainers(id: string): Promise<{ id: string; name: string; status: string; image: string }[]> {
+export async function fetchStackContainers(id: string): Promise<{ id: string; name: string; status: string; image: string; serviceName?: string }[]> {
   return request(`/stacks/${id}/containers`);
 }
 

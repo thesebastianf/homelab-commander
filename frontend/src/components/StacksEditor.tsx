@@ -9,7 +9,7 @@ import { YamlEditor } from '@/components/YamlEditor'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
@@ -60,6 +60,7 @@ import * as api from '@/lib/api'
 import { useSettings } from '@/hooks/useSettings'
 import { ScheduleEditor } from '@/components/ScheduleEditor'
 import { ComposeAiPanel } from '@/components/ComposeAiPanel'
+import { ContainerShellDialog } from '@/components/ContainerShellDialog'
 
 // -- FullBackupPanel - matches BackupManagementDialog options ----------------
 interface FullBackupPanelProps {
@@ -327,6 +328,8 @@ interface StacksEditorProps {
   onDeployStack: (id: string) => void
   onStopStack: (id: string) => void
   onRestartStack: (id: string) => void
+  onDeactivateStack: (id: string) => void
+  onRecreateStack: (id: string) => void
 }
 
 type SortedStackGroup = 'running' | 'stopped' | 'failed'
@@ -337,6 +340,8 @@ export function StacksEditor({
   onDeployStack,
   onStopStack,
   onRestartStack,
+  onDeactivateStack,
+  onRecreateStack,
 }: StacksEditorProps) {
   // ── Core state ───────────────────────────────────────────────────────────
   const [selectedStack, setSelectedStack] = useState<Stack | null>(null)
@@ -349,6 +354,10 @@ export function StacksEditor({
   const [searchQuery, setSearchQuery] = useState('')
   const [yamlError, setYamlError] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showDeleteFinalConfirm, setShowDeleteFinalConfirm] = useState(false)
+  const [showRestartAfterSaveConfirm, setShowRestartAfterSaveConfirm] = useState(false)
+  const [shellTarget, setShellTarget] = useState<{ containerId: string; containerName: string; serviceName: string; image?: string } | null>(null)
+  const promptRestartAfterSaveRef = useRef(false)
   // Two-panel state
   const [activeFile, setActiveFile] = useState<'compose' | 'env' | string>('compose')
   const [rightPanel, setRightPanel] = useState<'logs' | 'compare' | 'backup' | 'autoupdate' | 'ai' | 'conflicts' | 'reference' | 'helpers'>('logs')
@@ -499,8 +508,15 @@ export function StacksEditor({
       setIsDirty(false)
       qc.invalidateQueries({ queryKey: ['stacks'] })
       qc.invalidateQueries({ queryKey: ['stackVersions', selectedStack?.id] })
+      if (promptRestartAfterSaveRef.current) {
+        setShowRestartAfterSaveConfirm(true)
+      }
+      promptRestartAfterSaveRef.current = false
     },
-    onError: () => toast.error('Failed to save stack'),
+    onError: () => {
+      promptRestartAfterSaveRef.current = false
+      toast.error('Failed to save stack')
+    },
   })
 
   const saveFileMutation = useMutation({
@@ -514,6 +530,7 @@ export function StacksEditor({
     onSuccess: () => {
       toast.success('Stack deleted')
       setShowDeleteConfirm(false)
+      setShowDeleteFinalConfirm(false)
       setSelectedStack(null)
       setIsCreating(false)
       qc.invalidateQueries({ queryKey: ['stacks'] })
@@ -606,10 +623,13 @@ export function StacksEditor({
     } else if (selectedStack) {
       if (activeFile === 'compose') {
         if (!validateYAML(composeContent)) return
+        promptRestartAfterSaveRef.current = selectedStack.status === 'running'
         updateStackMutation.mutate({ id: selectedStack.id, composeContent, envContent })
       } else if (activeFile === 'env') {
+        promptRestartAfterSaveRef.current = selectedStack.status === 'running'
         updateStackMutation.mutate({ id: selectedStack.id, composeContent, envContent })
       } else {
+        promptRestartAfterSaveRef.current = false
         saveFileMutation.mutate()
       }
     }
@@ -637,7 +657,7 @@ export function StacksEditor({
 
   // Derived state
   const sortedStacks = [...stacks].sort((a, b) => {
-    const order = { running: 0, stopped: 1, failed: 2, deploying: 3 }
+    const order = { running: 0, deploying: 1, failed: 2, stopped: 3 }
     const ao = order[a.status as keyof typeof order] ?? 99
     const bo = order[b.status as keyof typeof order] ?? 99
     return ao !== bo ? ao - bo : a.name.localeCompare(b.name)
@@ -660,6 +680,49 @@ export function StacksEditor({
   const otherFiles = (stackFiles as any[]).filter(f => f.type !== 'directory' && f.name !== 'docker-compose.yml' && f.name !== '.env').slice(0, 6)
   const opLines: string[] = operation?.lines || []
   const parsedServices = parseServices(composeContent)
+  const stackPortConflictCounts = (() => {
+    const owners = new Map<number, Set<string>>()
+    for (const s of stacks) {
+      for (const p of s.ports || []) {
+        if (!owners.has(p)) owners.set(p, new Set<string>())
+        owners.get(p)!.add(s.name)
+      }
+    }
+
+    const counts = new Map<string, number>()
+    for (const s of stacks) {
+      const conflicts = new Set<number>()
+      for (const p of s.ports || []) {
+        if ((owners.get(p)?.size || 0) > 1) conflicts.add(p)
+      }
+      counts.set(s.id, conflicts.size)
+    }
+    return counts
+  })()
+
+  const serviceContainerByName = new Map(
+    (stackContainers as Array<{ id: string; name: string; status: string; image: string; serviceName?: string }>)
+      .filter(c => !!c.serviceName)
+      .map(c => [c.serviceName as string, c])
+  )
+
+  const handleOpenServiceShell = (serviceName: string) => {
+    const container = serviceContainerByName.get(serviceName)
+    if (!container) {
+      toast.error(`No container found for service "${serviceName}"`) 
+      return
+    }
+    if (!String(container.status || '').toLowerCase().includes('running')) {
+      toast.error(`Service "${serviceName}" is not running`) 
+      return
+    }
+    setShellTarget({
+      containerId: container.id,
+      containerName: container.name,
+      serviceName,
+      image: container.image,
+    })
+  }
   // Create mode derived
   const newPorts = isCreating ? extractPorts(composeContent) : []
   const refStackCompose = refStackId ? (stacks.find(s => s.id === refStackId) as any)?.composeContent ?? (stacks.find(s => s.id === refStackId) as any)?.compose ?? '' : ''
@@ -679,7 +742,7 @@ export function StacksEditor({
       <div className="flex h-[calc(100vh-200px)] gap-4">
 
         {/* LEFT SIDEBAR - Stack List */}
-        <div className="w-56 flex flex-col gap-3 shrink-0">
+        <div className="w-80 xl:w-[22rem] flex flex-col gap-3 shrink-0">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -709,7 +772,7 @@ export function StacksEditor({
                     <Card
                       key={stack.id}
                       onClick={() => { setSelectedStack(stack); setIsCreating(false) }}
-                      className={`p-2 cursor-pointer transition-all ${
+                      className={`p-3 cursor-pointer transition-all ${
                         selectedStack?.id === stack.id && !isCreating
                           ? 'border-primary bg-primary/5 ring-1 ring-primary'
                           : 'hover:border-muted-foreground/60'
@@ -735,6 +798,16 @@ export function StacksEditor({
                                 <TooltipContent className="text-xs">Update available in registry</TooltipContent>
                               </Tooltip>
                             )}
+                            {stack.hasHostNetworking && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-[10px] text-orange-400 flex items-center gap-0.5 cursor-default">
+                                    <AlertTriangle className="w-2.5 h-2.5" />host-net
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs">Host networking mode: ports may be exposed without explicit mappings</TooltipContent>
+                              </Tooltip>
+                            )}
                             {stack.autoUpdate && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -745,18 +818,32 @@ export function StacksEditor({
                                 <TooltipContent className="text-xs">Auto Update enabled</TooltipContent>
                               </Tooltip>
                             )}
-                            {stack.backupConfig?.enabled && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="text-[10px] text-blue-400 flex items-center gap-0.5 cursor-default">
+                                  <Archive className="w-2.5 h-2.5" />bkp:{stack.backupCount ?? 0}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs">Completed backups for this stack: {stack.backupCount ?? 0}</TooltipContent>
+                            </Tooltip>
+                            {stack.smartStartup?.enabled && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <span className="text-[10px] text-blue-400 flex items-center gap-0.5 cursor-default">
-                                    <Archive className="w-2.5 h-2.5" />bkp
+                                  <span className="text-[10px] text-emerald-400 flex items-center gap-0.5 cursor-default">
+                                    <Zap className="w-2.5 h-2.5" />smart
                                   </span>
                                 </TooltipTrigger>
-                                <TooltipContent className="text-xs">
-                                  {stack.backupConfig.lastBackupAt
-                                    ? `Last backup: ${formatDistanceToNow(new Date(stack.backupConfig.lastBackupAt), { addSuffix: true })}`
-                                    : 'Backup enabled - no backup run yet'}
-                                </TooltipContent>
+                                <TooltipContent className="text-xs">Smart Startup enabled</TooltipContent>
+                              </Tooltip>
+                            )}
+                            {(stackPortConflictCounts.get(stack.id) || 0) > 0 && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-[10px] text-destructive flex items-center gap-0.5 cursor-default">
+                                    <AlertCircle className="w-2.5 h-2.5" />conf:{stackPortConflictCounts.get(stack.id)}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs">This stack has host port conflicts with other stacks</TooltipContent>
                               </Tooltip>
                             )}
                           </div>
@@ -772,7 +859,7 @@ export function StacksEditor({
                 <>
                   <p className="px-1 pt-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/70">External Compose Projects</p>
                   {filteredExternalStacks.map(stack => (
-                    <Card key={stack.id} className="p-2 border-dashed border-border/60 bg-muted/10">
+                    <Card key={stack.id} className="p-3 border-dashed border-border/60 bg-muted/10">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 min-w-0">
@@ -1140,25 +1227,63 @@ export function StacksEditor({
             <>
               {/* Stack Header */}
               {/* -- Stack Header -- */}
-              <div className="flex items-center gap-2 pb-3 border-b shrink-0 flex-wrap">
-                <h2 className="text-lg font-mono font-bold truncate">{selectedStack.name}</h2>
-                <Badge variant={getStatusBadgeVariant(selectedStack.status)} className="capitalize shrink-0">
-                  {selectedStack.status}
-                </Badge>
-                <Badge variant="outline" className="text-xs shrink-0">
-                  {selectedStack.services} {selectedStack.services === 1 ? 'service' : 'services'}
-                </Badge>
-                {selectedStack.updateAvailable && (
-                  <Badge variant="outline" className="text-xs shrink-0 border-amber-500 text-amber-500 gap-1">
-                    <RefreshCw className="w-3 h-3" />
-                    Update available
+              <div className="pb-3 border-b shrink-0 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-lg font-mono font-bold truncate">{selectedStack.name}</h2>
+                  <Badge variant={getStatusBadgeVariant(selectedStack.status)} className="capitalize shrink-0">
+                    {selectedStack.status}
                   </Badge>
-                )}
-                {selectedStack.autoUpdate && (
-                  <Badge variant="outline" className="text-xs shrink-0 border-primary text-primary gap-1">
-                    <Zap className="w-3 h-3" />
-                    Auto Update
+                  <Badge variant="outline" className="text-xs shrink-0">
+                    {selectedStack.services} {selectedStack.services === 1 ? 'service' : 'services'}
                   </Badge>
+                  {selectedStack.updateAvailable && (
+                    <Badge variant="outline" className="text-xs shrink-0 border-amber-500 text-amber-500 gap-1">
+                      <RefreshCw className="w-3 h-3" />
+                      Update available
+                    </Badge>
+                  )}
+                  {selectedStack.autoUpdate && (
+                    <Badge variant="outline" className="text-xs shrink-0 border-primary text-primary gap-1">
+                      <Zap className="w-3 h-3" />
+                      Auto Update
+                    </Badge>
+                  )}
+                </div>
+
+                {parsedServices.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {parsedServices.map((svc) => {
+                      const container = serviceContainerByName.get(svc.name)
+                      const shellCommand = container
+                        ? `Open interactive shell in ${container.name}`
+                        : 'No running container for this service'
+                      return (
+                        <div key={svc.name} className="flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/20 px-2 py-1 min-w-0 max-w-full">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenServiceShell(svc.name)}
+                            className="font-mono text-xs font-semibold truncate hover:text-primary"
+                          >
+                            {svc.name}
+                          </button>
+                          <span className="text-xs text-muted-foreground">-&gt;</span>
+                          <span className="font-mono text-[11px] text-muted-foreground truncate" title={svc.image || 'No image set'}>{svc.image || 'no-image'}</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                className="font-mono text-xs px-1 py-0.5 rounded border border-border/60 hover:border-primary hover:text-primary transition-colors"
+                                onClick={() => handleOpenServiceShell(svc.name)}
+                              >
+                                &gt;_
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs">{shellCommand}</TooltipContent>
+                          </Tooltip>
+                        </div>
+                      )
+                    })}
+                  </div>
                 )}
               </div>
 
@@ -1215,7 +1340,7 @@ export function StacksEditor({
                               Restart
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent className="text-xs">docker compose restart</TooltipContent>
+                          <TooltipContent className="text-xs font-mono">docker compose restart</TooltipContent>
                         </Tooltip>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -1224,19 +1349,39 @@ export function StacksEditor({
                               Stop
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent className="text-xs">docker compose down</TooltipContent>
+                          <TooltipContent className="text-xs font-mono">docker compose stop</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="sm" variant="outline" onClick={() => onDeactivateStack(selectedStack.id)} disabled={isOperating} className="gap-1 text-xs">
+                              <XCircle className="w-3.5 h-3.5" />
+                              Deactivate
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs font-mono">docker compose down</TooltipContent>
                         </Tooltip>
                       </>
                     ) : (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button size="sm" onClick={() => onDeployStack(selectedStack.id)} disabled={isOperating} className="gap-1 text-xs">
-                            <Play className="w-3.5 h-3.5" />
-                            Deploy
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent className="text-xs">docker compose up -d</TooltipContent>
-                      </Tooltip>
+                      <>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="sm" onClick={() => onDeployStack(selectedStack.id)} disabled={isOperating} className="gap-1 text-xs">
+                              <Play className="w-3.5 h-3.5" />
+                              Start
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs font-mono">docker compose up -d</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="sm" variant="outline" onClick={() => onRecreateStack(selectedStack.id)} disabled={isOperating} className="gap-1 text-xs">
+                              <History className="w-3.5 h-3.5" />
+                              Recreate
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs font-mono">docker compose up -d --force-recreate</TooltipContent>
+                        </Tooltip>
+                      </>
                     )}
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1251,7 +1396,7 @@ export function StacksEditor({
                           Update
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent className="text-xs">Pull new images and redeploy</TooltipContent>
+                      <TooltipContent className="text-xs font-mono">docker compose --project-name &lt;stack&gt; --file &lt;temp-compose&gt; up -d --pull always</TooltipContent>
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1260,7 +1405,7 @@ export function StacksEditor({
                           Delete
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent className="text-xs">Delete this stack</TooltipContent>
+                      <TooltipContent className="text-xs font-mono">Removes stack from THC database (does not delete files by itself)</TooltipContent>
                     </Tooltip>
                   </div>
 
@@ -1843,16 +1988,65 @@ export function StacksEditor({
         </div>
       </div>
 
-      {/* ─── Delete Confirm Dialog ─── */}
+      {/* ─── Restart After Save Dialog ─── */}
+      <AlertDialog open={showRestartAfterSaveConfirm} onOpenChange={setShowRestartAfterSaveConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apply Saved Changes Now?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Compose/.env files were saved successfully, but running containers still use the previous runtime config.
+              <span className="block mt-2 font-mono text-xs text-muted-foreground">Command: docker compose restart</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogCancel>Later</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              if (!selectedStack) return
+              onRestartStack(selectedStack.id)
+              setShowRestartAfterSaveConfirm(false)
+            }}
+          >
+            Restart Now
+          </AlertDialogAction>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─── Delete Confirm Dialog (Step 1) ─── */}
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Stack?</AlertDialogTitle>
+            <AlertDialogTitle>Remove Stack from THC?</AlertDialogTitle>
             <AlertDialogDescription>
-              Delete <span className="font-mono font-semibold">{selectedStack?.name}</span>? This cannot be undone.
+              Remove <span className="font-mono font-semibold">{selectedStack?.name}</span> from the THC database and stack list.
+              This does not automatically remove compose files from disk.
               {selectedStack?.status === 'running' && (
-                <span className="block mt-2 text-amber-500 text-xs font-mono">⚠ Stack is currently running. Stop it first.</span>
+                <span className="block mt-2 text-amber-500 text-xs font-mono">Warning: stack is currently running. Deactivate first to avoid orphaned running containers.</span>
               )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowDeleteConfirm(false)
+                setShowDeleteFinalConfirm(true)
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─── Delete Confirm Dialog (Step 2) ─── */}
+      <AlertDialog open={showDeleteFinalConfirm} onOpenChange={setShowDeleteFinalConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Final Confirmation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Final step: delete stack record <span className="font-mono font-semibold">{selectedStack?.name}</span> from THC.
+              <span className="block mt-2 font-mono text-xs text-muted-foreground">API call: DELETE /api/stacks/{selectedStack?.id}</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -1861,10 +2055,19 @@ export function StacksEditor({
             disabled={deleteStackMutation.isPending}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {deleteStackMutation.isPending ? 'Deleting...' : 'Delete Stack'}
+            {deleteStackMutation.isPending ? 'Deleting...' : 'Delete Now'}
           </AlertDialogAction>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ContainerShellDialog
+        open={!!shellTarget}
+        onOpenChange={(open) => { if (!open) setShellTarget(null) }}
+        containerId={shellTarget?.containerId}
+        containerName={shellTarget?.containerName}
+        serviceName={shellTarget?.serviceName}
+        image={shellTarget?.image}
+      />
     </TooltipProvider>
   )
 }

@@ -51,7 +51,7 @@ import {
 } from 'lucide-react'
 import { useContainers, useStartContainer, useStopContainer, useRestartContainer, useRemoveContainer, useAggregatedLogs } from '@/hooks/useContainers'
 import { useImages } from '@/hooks/useImages'
-import { useStacks, useExternalStacks, useDeployStack, useStopStack, useRestartStack, useUpdateStack } from '@/hooks/useStacks'
+import { useStacks, useExternalStacks, useDeployStack, useStopStack, useRestartStack, useUpdateStack, useDeactivateStack, useRecreateStack } from '@/hooks/useStacks'
 import { useVolumes } from '@/hooks/useVolumes'
 import { useNetworks } from '@/hooks/useNetworks'
 import { useSettings, useSystemInfo, useUpdateSettings, usePruneSystem } from '@/hooks/useSettings'
@@ -124,6 +124,8 @@ function App() {
   const deployStack = useDeployStack()
   const stopStack = useStopStack()
   const restartStack = useRestartStack()
+  const deactivateStack = useDeactivateStack()
+  const recreateStack = useRecreateStack()
   const updateStack = useUpdateStack()
   const updateSettings = useUpdateSettings()
   const pruneSystem = usePruneSystem()
@@ -579,6 +581,18 @@ function App() {
                 restartStack.mutate(id, {
                   onSuccess: () => toast.success('Stack restarted'),
                   onError: () => toast.error('Failed to restart stack')
+                })
+              }}
+              onDeactivateStack={(id) => {
+                deactivateStack.mutate(id, {
+                  onSuccess: () => toast.success('Stack deactivated'),
+                  onError: () => toast.error('Failed to deactivate stack')
+                })
+              }}
+              onRecreateStack={(id) => {
+                recreateStack.mutate(id, {
+                  onSuccess: () => toast.success('Stack recreated'),
+                  onError: () => toast.error('Failed to recreate stack')
                 })
               }}
             />
