@@ -56,11 +56,12 @@ import { useVolumes } from '@/hooks/useVolumes'
 import { useNetworks } from '@/hooks/useNetworks'
 import { useSettings, useSystemInfo, useUpdateSettings, usePruneSystem } from '@/hooks/useSettings'
 import type { Stack, AppSettings } from '@/lib/types'
-import { getStoredCredentials } from '@/lib/api'
+import { clearStoredCredentials, getStoredCredentials } from '@/lib/api'
 import * as api from '@/lib/api'
 import { toast } from 'sonner'
 
 const defaultSettings: AppSettings = {
+  theme: 'dark',
   dockerHost: '/var/run/docker.sock',
   refreshInterval: 5,
   maxLogLines: 200,
@@ -163,13 +164,6 @@ function App() {
   const systemInfo = systemInfoQuery.data
   const aggregatedLogs = aggregatedLogsQuery.data ?? []
 
-  // Show loading screen while initial data is being fetched
-  const isLoading = containersQuery.isPending || imagesQuery.isPending || stacksQuery.isPending
-
-  if (isLoading) {
-    return <LoadingScreen />
-  }
-
   const currentSettings: AppSettings = {
     ...defaultSettings,
     ...settings,
@@ -179,6 +173,17 @@ function App() {
     },
     homeAssistant: settings?.homeAssistant ?? defaultSettings.homeAssistant,
     ai: settings?.ai ?? defaultSettings.ai,
+  }
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', currentSettings.theme || 'dark')
+  }, [currentSettings.theme])
+
+  // Show loading screen while initial data is being fetched
+  const isLoading = containersQuery.isPending || imagesQuery.isPending || stacksQuery.isPending
+
+  if (isLoading) {
+    return <LoadingScreen />
   }
 
   const systemStats = {
@@ -640,7 +645,7 @@ function App() {
       </main>
 
       <Dialog open={databaseExplorerOpen} onOpenChange={setDatabaseExplorerOpen}>
-        <DialogContent className="w-[97vw] max-w-7xl h-[92vh] overflow-hidden">
+        <DialogContent className="w-[92vw] sm:max-w-7xl h-[92vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Database</DialogTitle>
             <DialogDescription>
@@ -807,21 +812,30 @@ function App() {
 type AuthStatus = 'checking' | 'open' | 'required' | 'authenticated'
 
 function AuthGate() {
-  const [status, setStatus] = useState<AuthStatus>(() =>
-    // If we already have stored credentials, skip the probe and try directly.
-    // The first failing API call will dispatch hlc:unauthorized and reset to 'required'.
-    getStoredCredentials() !== null ? 'authenticated' : 'checking'
-  )
+  const [status, setStatus] = useState<AuthStatus>('checking')
 
   // Probe a real auth-protected endpoint ONCE on mount (not /healthz — that bypasses auth)
   useEffect(() => {
-    if (status !== 'checking') return
     let isMounted = true
-    fetch('/api/settings', { headers: { 'Content-Type': 'application/json' } })
+    const creds = getStoredCredentials()
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (creds) {
+      headers.Authorization = `Basic ${creds}`
+    }
+
+    fetch('/api/settings', { headers })
       .then(r => {
         if (!isMounted) return
-        if (r.status === 401) setStatus('required')
-        else setStatus('open')   // 200 = auth disabled, other errors = try to proceed anyway
+        if (r.status === 401) {
+          clearStoredCredentials()
+          setStatus('required')
+          return
+        }
+        if (r.ok) {
+          setStatus(creds ? 'authenticated' : 'open')
+          return
+        }
+        setStatus('open')
       })
       .catch(() => {
         if (!isMounted) return

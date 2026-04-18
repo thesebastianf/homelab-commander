@@ -1,8 +1,7 @@
-﻿import { useState } from 'react'
+﻿import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
@@ -26,6 +25,7 @@ function formatBytes(bytes: number): string {
 export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps) {
   const [pruning, setPruning] = useState<string | null>(null)
   const [pendingPrune, setPendingPrune] = useState<{ type: string; label: string; description: string } | null>(null)
+  const focusRef = useRef<HTMLDivElement | null>(null)
   const qc = useQueryClient()
 
   const { data: systemInfo } = useQuery({
@@ -93,10 +93,16 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
 
   return (
     <>
-    <TooltipProvider delayDuration={350}>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[88vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-5xl max-h-[90vh] overflow-y-auto"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault()
+          focusRef.current?.focus()
+        }}
+      >
         <DialogHeader>
+          <div ref={focusRef} tabIndex={-1} className="outline-none" />
           <DialogTitle className="flex items-center gap-2 font-mono">
             <Wrench className="w-5 h-5 text-primary" />
             System Maintenance
@@ -174,18 +180,13 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
                   </div>
                 </div>
               )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="sm" className="mt-auto bg-blue-600 hover:bg-blue-700 text-white w-fit"
-                    disabled={pruning !== null} onClick={() => handlePrune('images', 'Image prune', 'All unused images (not associated with any container) will be permanently deleted. This frees up disk space but images must be re-pulled to use again.')}>
-                    {pruning === 'images' ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Pruning...</> : 'Purge Images'}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="font-mono text-xs">docker image prune -a -f</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Delete unused images and reclaim space</p>
-                </TooltipContent>
-              </Tooltip>
+              <div className="flex flex-col gap-1">
+                <Button size="sm" className="mt-auto bg-blue-600 hover:bg-blue-700 text-white w-fit"
+                  disabled={pruning !== null} onClick={() => handlePrune('images', 'Image prune', 'All unused images (not associated with any container) will be permanently deleted. This frees up disk space but images must be re-pulled to use again.')}>
+                  {pruning === 'images' ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Pruning...</> : 'Purge Images'}
+                </Button>
+                <code className="text-[10px] font-mono text-muted-foreground/70">docker image prune -a -f</code>
+              </div>
             </div>
 
             {/* Prune Unused Volumes */}
@@ -207,18 +208,13 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
                   </div>
                 </div>
               )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="sm" className="mt-auto bg-primary hover:bg-primary/90 text-white w-fit"
-                    disabled={pruning !== null} onClick={() => handlePrune('volumes', 'Volume prune', 'All volumes not referenced by any container will be permanently deleted including their data. This cannot be undone.')}>
-                    {pruning === 'volumes' ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Pruning...</> : 'Prune Volumes'}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="font-mono text-xs">docker volume prune -f</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Delete dangling volumes and their stored data</p>
-                </TooltipContent>
-              </Tooltip>
+              <div className="flex flex-col gap-1">
+                <Button size="sm" className="mt-auto bg-primary hover:bg-primary/90 text-white w-fit"
+                  disabled={pruning !== null} onClick={() => handlePrune('volumes', 'Volume prune', 'All volumes not referenced by any container will be permanently deleted including their data. This cannot be undone.')}>
+                  {pruning === 'volumes' ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Pruning...</> : 'Prune Volumes'}
+                </Button>
+                <code className="text-[10px] font-mono text-muted-foreground/70">docker volume prune -f</code>
+              </div>
             </div>
 
             {/* Remove Stopped Containers */}
@@ -247,19 +243,14 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
                   <CheckCircle className="w-3.5 h-3.5" />No stopped containers
                 </div>
               )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="sm" className="mt-auto bg-warning/90 hover:bg-warning text-black w-fit"
-                    disabled={pruning !== null || stoppedContainers.length === 0}
-                    onClick={() => handlePrune('containers', 'Container prune', `${stoppedContainers.length} stopped container(s) will be permanently removed. Their writable layers will be lost. Volumes are not affected.`)}>
-                    {pruning === 'containers' ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Removing...</> : 'Remove Stopped'}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="font-mono text-xs">docker container prune -f</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Delete all stopped containers</p>
-                </TooltipContent>
-              </Tooltip>
+              <div className="flex flex-col gap-1">
+                <Button size="sm" className="mt-auto bg-warning/90 hover:bg-warning text-black w-fit"
+                  disabled={pruning !== null || stoppedContainers.length === 0}
+                  onClick={() => handlePrune('containers', 'Container prune', `${stoppedContainers.length} stopped container(s) will be permanently removed. Their writable layers will be lost. Volumes are not affected.`)}>
+                  {pruning === 'containers' ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Removing...</> : 'Remove Stopped'}
+                </Button>
+                <code className="text-[10px] font-mono text-muted-foreground/70">docker container prune -f</code>
+              </div>
             </div>
 
             {/* Full System Prune — Danger Zone */}
@@ -276,18 +267,13 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
               <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2 text-xs text-destructive/80">
                 This action is irreversible. Running containers will not be affected.
               </div>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="sm" variant="destructive" className="mt-auto w-fit"
-                    disabled={pruning !== null} onClick={() => handlePrune('all', 'Full system prune', 'ALL unused images, volumes, stopped containers, and networks will be permanently deleted. Running containers are not affected but this action cannot be undone.')}>
-                    {pruning === 'all' ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Pruning...</> : 'Full System Prune'}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="font-mono text-xs">docker system prune -a --volumes -f</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Aggressively remove all unused resources</p>
-                </TooltipContent>
-              </Tooltip>
+              <div className="flex flex-col gap-1">
+                <Button size="sm" variant="destructive" className="mt-auto w-fit"
+                  disabled={pruning !== null} onClick={() => handlePrune('all', 'Full system prune', 'ALL unused images, volumes, stopped containers, and networks will be permanently deleted. Running containers are not affected but this action cannot be undone.')}>
+                  {pruning === 'all' ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Pruning...</> : 'Full System Prune'}
+                </Button>
+                <code className="text-[10px] font-mono text-muted-foreground/70">docker system prune -a --volumes -f</code>
+              </div>
             </div>
           </div>
         </div>
@@ -316,7 +302,6 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-    </TooltipProvider>
     </>
   )
 }

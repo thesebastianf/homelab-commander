@@ -1,9 +1,51 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { IncomingMessage, Server } from 'http';
 import { URL } from 'url';
+import { timingSafeEqual } from 'crypto';
 import { Duplex } from 'stream';
 import * as dockerService from './services/docker.js';
+import { config } from './config.js';
 import { logger } from './logger.js';
+
+function isAuthorized(request: IncomingMessage, url: URL): boolean {
+  if (!config.authUser || !config.authPass) {
+    return true;
+  }
+
+  const headerAuth = request.headers.authorization;
+  const queryAuth = url.searchParams.get('auth');
+  const authValue = headerAuth?.startsWith('Basic ')
+    ? headerAuth.slice(6)
+    : (queryAuth || '');
+
+  if (!authValue) {
+    return false;
+  }
+
+  let decoded = '';
+  try {
+    decoded = Buffer.from(authValue, 'base64').toString();
+  } catch {
+    return false;
+  }
+
+  const colonIndex = decoded.indexOf(':');
+  if (colonIndex === -1) {
+    return false;
+  }
+
+  const user = decoded.slice(0, colonIndex);
+  const pass = decoded.slice(colonIndex + 1);
+
+  const userBuf = Buffer.from(user);
+  const passBuf = Buffer.from(pass);
+  const expectedUserBuf = Buffer.from(config.authUser);
+  const expectedPassBuf = Buffer.from(config.authPass);
+
+  const userMatch = userBuf.length === expectedUserBuf.length && timingSafeEqual(userBuf, expectedUserBuf);
+  const passMatch = passBuf.length === expectedPassBuf.length && timingSafeEqual(passBuf, expectedPassBuf);
+  return userMatch && passMatch;
+}
 
 export function setupWebSocket(server: Server): void {
   const wss = new WebSocketServer({ noServer: true });
@@ -13,6 +55,11 @@ export function setupWebSocket(server: Server): void {
     const pathname = url.pathname;
 
     if (pathname.startsWith('/ws/')) {
+      if (!isAuthorized(request, url)) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit('connection', ws, request);
       });

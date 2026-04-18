@@ -168,7 +168,7 @@ export function PortRegistryDialog({
   return (
     <TooltipProvider delayDuration={350}>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-6xl h-[90vh] overflow-hidden">
+      <DialogContent className="w-[90vw] sm:max-w-5xl h-[90vh] overflow-hidden">
         <div className="flex h-full min-h-0 flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -221,10 +221,11 @@ export function PortRegistryDialog({
         </div>
 
         <Tabs defaultValue="overview" className="mt-2 flex-1 min-h-0 flex flex-col">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="w-full flex gap-1 overflow-x-auto whitespace-nowrap justify-start">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <ListOrdered className="w-4 h-4" />
-              Port Overview & Conflicts
+              <span className="hidden sm:inline">Port Overview & Conflicts</span>
+              <span className="sm:hidden">Overview</span>
             </TabsTrigger>
             <TabsTrigger value="hostnetworks" className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4" />
@@ -232,7 +233,8 @@ export function PortRegistryDialog({
             </TabsTrigger>
             <TabsTrigger value="reservations" className="flex items-center gap-2">
               <Palette className="w-4 h-4" />
-              Range Reservations
+              <span className="hidden sm:inline">Range Reservations</span>
+              <span className="sm:hidden">Reservations</span>
             </TabsTrigger>
           </TabsList>
 

@@ -15,6 +15,7 @@ router.get('/', asyncHandler(async (_req, res) => {
   const scheduleConfig = settings.auto_update_schedule || {};
   const aiConfig = settings.ai_config || {};
   res.json({
+    theme: settings.ui_theme || 'dark',
     dockerHost: settings.docker_host,
     refreshInterval: settings.refresh_interval,
     maxLogLines: settings.max_log_lines,
@@ -65,6 +66,7 @@ router.put('/', validateBody(updateSettingsBody), asyncHandler(async (req, res) 
   const values: any[] = [];
   let idx = 1;
 
+  if (b.theme !== undefined) { updates.push(`ui_theme = $${idx++}`); values.push(b.theme); }
   if (b.dockerHost !== undefined) { updates.push(`docker_host = $${idx++}`); values.push(b.dockerHost); }
   if (b.refreshInterval !== undefined) { updates.push(`refresh_interval = $${idx++}`); values.push(b.refreshInterval); }
   if (b.maxLogLines !== undefined) { updates.push(`max_log_lines = $${idx++}`); values.push(b.maxLogLines); }

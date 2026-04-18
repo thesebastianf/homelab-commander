@@ -3,6 +3,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- Application settings (singleton row)
 CREATE TABLE IF NOT EXISTS settings (
   id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  ui_theme TEXT DEFAULT 'dark' CHECK (ui_theme IN ('dark', 'light', 'graphite', 'ocean', 'forest', 'sunset')),
   docker_host TEXT DEFAULT '/var/run/docker.sock',
   refresh_interval INTEGER DEFAULT 5,
   max_log_lines INTEGER DEFAULT 200,
@@ -68,6 +69,8 @@ INSERT INTO settings (id) VALUES (1) ON CONFLICT DO NOTHING;
 
 -- Migrate existing installs: add copy_paste_helpers column if missing
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS copy_paste_helpers JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS ui_theme TEXT DEFAULT 'dark';
+UPDATE settings SET ui_theme = 'dark' WHERE ui_theme IS NULL;
 
 -- Stacks
 CREATE TABLE IF NOT EXISTS stacks (

@@ -82,7 +82,7 @@ export function DatabaseExplorer() {
         <h2 className="text-lg font-semibold font-mono">Database Explorer</h2>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {statsLoading ? (
           <div className="col-span-4 flex justify-center py-4">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -109,8 +109,8 @@ export function DatabaseExplorer() {
         ) : null}
       </div>
 
-      <div className="grid grid-cols-12 gap-4 min-h-[60vh]">
-        <Card className="col-span-4 p-0 overflow-hidden">
+      <div className="grid grid-cols-12 gap-4 min-h-[70vh]">
+        <Card className="col-span-12 md:col-span-3 p-0 overflow-hidden">
           <div className="p-3 border-b border-border">
             <div className="flex items-center gap-2 mb-2">
               <Table2 className="w-4 h-4 text-muted-foreground" />
@@ -126,7 +126,7 @@ export function DatabaseExplorer() {
               />
             </div>
           </div>
-          <div className="h-[56vh] overflow-y-auto p-2 space-y-1">
+          <div className="h-[62vh] overflow-y-auto p-2 space-y-1">
             {tablesLoading ? (
               <div className="flex items-center justify-center py-6">
                 <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -153,7 +153,7 @@ export function DatabaseExplorer() {
           </div>
         </Card>
 
-        <div className="col-span-8 space-y-3">
+        <div className="col-span-12 md:col-span-9 space-y-3">
           <Card className="p-3 space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold">Query Editor</p>
@@ -172,7 +172,7 @@ export function DatabaseExplorer() {
             <textarea
               value={queryInput}
               onChange={(e) => setQueryInput(e.target.value)}
-              className="w-full h-28 rounded border border-border bg-background p-2 text-xs font-mono resize-none"
+              className="w-full h-36 rounded border border-border bg-background p-2 text-xs font-mono resize-none"
               spellCheck={false}
             />
           </Card>
@@ -203,7 +203,7 @@ export function DatabaseExplorer() {
                 </Button>
               </div>
             </div>
-            <div className="h-[44vh] overflow-auto">
+            <div className="h-[50vh] overflow-auto">
               {queryMutation.isPending ? (
                 <div className="flex items-center justify-center h-full">
                   <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />

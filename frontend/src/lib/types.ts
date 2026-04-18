@@ -129,6 +129,7 @@ export interface LogEntry {
 }
 
 export interface AppSettings {
+  theme: 'dark' | 'light' | 'graphite' | 'ocean' | 'forest' | 'sunset'
   dockerHost: string
   refreshInterval: number
   maxLogLines: number

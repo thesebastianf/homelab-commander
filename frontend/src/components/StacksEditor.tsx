@@ -271,7 +271,10 @@ function EditBackupPanel({ config, onSave, isSaving, stackId }: { config: Backup
 // ── WebSocket URL helper ──────────────────────────────────────────────────────
 function wsUrl(path: string): string {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${proto}//${window.location.host}${path}`
+  const creds = api.getStoredCredentials()
+  const sep = path.includes('?') ? '&' : '?'
+  const suffix = creds ? `${sep}auth=${encodeURIComponent(creds)}` : ''
+  return `${proto}//${window.location.host}${path}${suffix}`
 }
 
 // ── WebSocket-based stack log aggregation hook ────────────────────────────────

@@ -28,6 +28,7 @@ export const updateStackBody = z.object({
 });
 
 export const updateSettingsBody = z.object({
+  theme: z.enum(['dark', 'light', 'graphite', 'ocean', 'forest', 'sunset']).optional(),
   dockerHost: z.string().max(500).optional(),
   refreshInterval: z.number().int().min(1).max(3600).optional(),
   maxLogLines: z.number().int().min(10).max(10000).optional(),

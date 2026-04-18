@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { AlertTriangle } from 'lucide-react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { getStoredCredentials } from '@/lib/api'
 import '@xterm/xterm/css/xterm.css'
 
 interface ContainerShellDialogProps {
@@ -17,7 +18,10 @@ interface ContainerShellDialogProps {
 
 function wsUrl(path: string): string {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${proto}//${window.location.host}${path}`
+  const creds = getStoredCredentials()
+  const sep = path.includes('?') ? '&' : '?'
+  const suffix = creds ? `${sep}auth=${encodeURIComponent(creds)}` : ''
+  return `${proto}//${window.location.host}${path}${suffix}`
 }
 
 export function ContainerShellDialog({

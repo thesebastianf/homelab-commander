@@ -49,6 +49,7 @@ async function initSchema(client: pg.PoolClient): Promise<void> {
   await client.query(`
     CREATE TABLE IF NOT EXISTS settings (
       id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+      ui_theme TEXT DEFAULT 'dark' CHECK (ui_theme IN ('dark', 'light', 'graphite', 'ocean', 'forest', 'sunset')),
       docker_host TEXT DEFAULT '/var/run/docker.sock',
       refresh_interval INTEGER DEFAULT 5,
       max_log_lines INTEGER DEFAULT 200,
@@ -218,6 +219,21 @@ async function initSchema(client: pg.PoolClient): Promise<void> {
  */
 async function runMigrations(client: pg.PoolClient): Promise<void> {
   const statements = [
+    `ALTER TABLE settings ADD COLUMN IF NOT EXISTS ui_theme TEXT DEFAULT 'dark'`,
+    `DO $$
+      BEGIN
+        UPDATE settings
+        SET ui_theme = 'dark'
+        WHERE ui_theme IS NULL OR ui_theme NOT IN ('dark', 'light', 'graphite', 'ocean', 'forest', 'sunset');
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'settings_ui_theme_check'
+        ) THEN
+          ALTER TABLE settings
+          ADD CONSTRAINT settings_ui_theme_check
+          CHECK (ui_theme IN ('dark', 'light', 'graphite', 'ocean', 'forest', 'sunset'));
+        END IF;
+      END
+    $$`,
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS git_integration_config JSONB DEFAULT '{"enabled":false,"repoUrl":"","accessToken":"","syncOn":"manual"}'::jsonb`,
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS auto_update_schedule JSONB DEFAULT '{"enabled":false,"cron":"0 7 * * 6","label":"Saturdays at 07:00"}'::jsonb`,
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS ai_config JSONB DEFAULT '{"enabled":false,"provider":"ollama","baseUrl":"http://host.docker.internal:11434","apiKey":"","model":"llama3.1","treatAsLocal":true,"allowEnvToLocal":false}'::jsonb`,

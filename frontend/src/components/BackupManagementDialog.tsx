@@ -79,7 +79,7 @@ function StackBackupItem({ stack }: { stack: Stack }) {
   const u = (patch: Partial<BackupConfig>) => update.mutate(patch)
 
   return (
-    <AccordionItem value={stack.id} className="border rounded-lg px-4">
+    <AccordionItem value={stack.id} className="border rounded-lg px-4 !border-b">
       <AccordionTrigger className="hover:no-underline">
         <div className="flex items-center gap-3 flex-1">
           <span className="font-mono text-sm">{stack.name}</span>
@@ -297,7 +297,7 @@ echo "Backup sync completed at \$(date)"
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-5xl h-[90vh] overflow-hidden">
+      <DialogContent className="w-[90vw] sm:max-w-5xl h-[90vh] overflow-hidden">
         <TooltipProvider delayDuration={350}>
         <div className="flex h-full min-h-0 flex-col">
         <DialogHeader>
@@ -311,7 +311,7 @@ echo "Backup sync completed at \$(date)"
         </DialogHeader>
 
         <Tabs defaultValue="stacks" className="mt-4 flex-1 min-h-0 flex flex-col">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-3 h-auto">
             <TabsTrigger value="stacks">Stack Backups</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
@@ -337,7 +337,9 @@ echo "Backup sync completed at \$(date)"
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="settings" className="mt-4 space-y-4 flex-1 min-h-0 overflow-y-auto pr-1 pb-2">
+          <TabsContent value="settings" className="mt-4 flex-1 min-h-0">
+            <ScrollArea className="h-full pr-1">
+            <div className="space-y-4 pb-2">
             <Card className="p-4 space-y-2 border-border/60 bg-muted/10">
               <Label className="text-base">Backup Storage</Label>
               <p className="text-sm text-muted-foreground">
@@ -376,6 +378,8 @@ echo "Backup sync completed at \$(date)"
                 className="min-h-[220px] font-mono text-xs whitespace-pre overflow-x-auto resize-none"
               />
             </Card>
+            </div>
+            </ScrollArea>
           </TabsContent>
         </Tabs>
         </div>

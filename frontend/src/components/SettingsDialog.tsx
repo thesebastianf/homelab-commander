@@ -29,8 +29,24 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
   const [aiTestResult, setAiTestResult] = useState<{ success: boolean; message: string } | null>(null)
 
   useEffect(() => {
-    if (open) { setLocalSettings(settings); setAiTestResult(null) }
+    if (open) {
+      setLocalSettings(settings)
+      setAiTestResult(null)
+      // Restore actual saved theme when dialog reopens (in case previous session was cancelled)
+      document.documentElement.setAttribute('data-theme', settings.theme || 'dark')
+    }
   }, [open]) // intentionally not [settings] — avoids reset from background refetches
+
+  const handleCancel = () => {
+    // Revert preview to the saved theme
+    document.documentElement.setAttribute('data-theme', settings.theme || 'dark')
+    onOpenChange(false)
+  }
+
+  const handleSave = () => {
+    onSave(localSettings)
+    onOpenChange(false)
+  }
 
   const handleTestAi = async () => {
     setAiTesting(true)
@@ -48,13 +64,8 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
     }
   }
 
-  const handleSave = () => {
-    onSave(localSettings)
-    onOpenChange(false)
-  }
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) handleCancel(); else onOpenChange(true) }}>
       <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -87,6 +98,36 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
 
           <TabsContent value="general" className="space-y-6 mt-6">
             <div className="space-y-4">
+              <Card className="p-4 space-y-3">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <Label className="text-base">Theme</Label>
+                    <p className="text-sm text-muted-foreground mt-0.5">Choose the visual theme for the dashboard.</p>
+                  </div>
+                  <Select
+                    value={localSettings.theme || 'dark'}
+                    onValueChange={(value) => {
+                      const theme = value as AppSettings['theme']
+                      setLocalSettings({ ...localSettings, theme })
+                      // Apply immediately for live preview — save persists it to server
+                      document.documentElement.setAttribute('data-theme', value)
+                    }}
+                  >
+                    <SelectTrigger className="w-56">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="dark">Dark</SelectItem>
+                      <SelectItem value="light">Light</SelectItem>
+                      <SelectItem value="graphite">Graphite</SelectItem>
+                      <SelectItem value="ocean">Ocean</SelectItem>
+                      <SelectItem value="forest">Forest</SelectItem>
+                      <SelectItem value="sunset">Sunset</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </Card>
+
               <h3 className="font-mono font-semibold text-sm flex items-center gap-2">
                 <CloudDownload className="w-[18px] h-[18px]" />
                 Update Management
@@ -699,7 +740,7 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
         </Tabs>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={handleCancel}>Cancel</Button>
           <Button onClick={handleSave}>Save Settings</Button>
         </DialogFooter>
       </DialogContent>

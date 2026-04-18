@@ -27,7 +27,7 @@ export function clearStoredCredentials(): void {
 
 /** Attempts a lightweight auth probe. Returns true if auth passes (or auth is disabled). */
 export async function probeAuth(user: string, pass: string): Promise<boolean> {
-  const res = await fetch('/healthz', {
+  const res = await fetch('/api/settings', {
     headers: { Authorization: `Basic ${btoa(`${user}:${pass}`)}` },
   });
   return res.ok;
