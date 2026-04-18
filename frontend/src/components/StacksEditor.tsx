@@ -821,10 +821,15 @@ export function StacksEditor({
             <>
               <div className="flex items-center justify-between gap-3 pb-3 border-b shrink-0">
                 <h2 className="text-lg font-mono font-semibold">New Stack</h2>
-                <Button variant="outline" size="sm" onClick={() => { setIsCreating(false); setNewStackName(''); setComposeContent(''); setEnvContent(''); setActiveFile('compose'); setIsDirty(false) }} className="gap-1.5">
-                  <X className="w-4 h-4" />
-                  Cancel
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="sm" onClick={() => { setIsCreating(false); setNewStackName(''); setComposeContent(''); setEnvContent(''); setActiveFile('compose'); setIsDirty(false) }} className="gap-1.5">
+                      <X className="w-4 h-4" />
+                      Cancel
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent className="text-xs">Discard unsaved create-mode changes and return to editor</TooltipContent>
+                </Tooltip>
               </div>
 
               <div className="flex-1 flex gap-3 min-h-0">
@@ -840,20 +845,30 @@ export function StacksEditor({
                   />
                   {/* file tabs */}
                   <div className="flex items-center gap-1 mb-2 shrink-0">
-                    <button
-                      onClick={() => setActiveFile('compose')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono transition-colors ${activeFile === 'compose' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                    >
-                      <FileCode className="w-3 h-3" />
-                      compose.yml
-                    </button>
-                    <button
-                      onClick={() => setActiveFile('env')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono transition-colors ${activeFile === 'env' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                    >
-                      <File className="w-3 h-3" />
-                      .env
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setActiveFile('compose')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono transition-colors ${activeFile === 'compose' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <FileCode className="w-3 h-3" />
+                          compose.yml
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Edit the Docker Compose definition for this stack</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setActiveFile('env')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono transition-colors ${activeFile === 'env' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <File className="w-3 h-3" />
+                          .env
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Edit environment variables consumed by compose services</TooltipContent>
+                    </Tooltip>
                   </div>
                   {yamlError && activeFile === 'compose' && (
                     <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/5 px-3 py-2 mb-2 shrink-0">
@@ -872,63 +887,98 @@ export function StacksEditor({
                     placeholder={activeFile === 'env' ? 'MY_VAR=value\nANOTHER_VAR=value' : ''}
                   />
                   <div className="flex items-center justify-end gap-2 pt-2 border-t shrink-0 mt-2">
-                    <Button
-                      onClick={handleSave}
-                      disabled={!newStackName.trim() || createStackMutation.isPending || !!yamlError}
-                      className="gap-1.5"
-                      size="sm"
-                    >
-                      {createStackMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                      Create Stack
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={handleSave}
+                          disabled={!newStackName.trim() || createStackMutation.isPending || !!yamlError}
+                          className="gap-1.5"
+                          size="sm"
+                        >
+                          {createStackMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                          Create Stack
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Create stack folder, write compose/.env files, and register in THC</TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
 
                 {/* -- RIGHT: port conflicts / reference / volumes -- */}
                 <div className="flex-1 flex flex-col min-h-0">
                   <div className="flex items-center gap-1 mb-2 shrink-0">
-                    <button
-                      onClick={() => setCreateRightPanel('conflicts')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${createRightPanel === 'conflicts' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                    >
-                      <AlertCircle className="w-3 h-3" />
-                      Port Conflicts
-                    </button>
-                    <button
-                      onClick={() => setCreateRightPanel('reference')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${createRightPanel === 'reference' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                    >
-                      <FileCode className="w-3 h-3" />
-                      Reference
-                    </button>
-                    <button
-                      onClick={() => setCreateRightPanel('volumes')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${createRightPanel === 'volumes' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                    >
-                      <HardDrive className="w-3 h-3" />
-                      Volumes
-                    </button>
-                    <button
-                      onClick={() => setCreateRightPanel('backup')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${createRightPanel === 'backup' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                    >
-                      <Archive className="w-3 h-3" />
-                      Backup
-                    </button>
-                    <button
-                      onClick={() => setCreateRightPanel('autoupdate')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${createRightPanel === 'autoupdate' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                    >
-                      <Zap className="w-3 h-3" />
-                      Auto Update
-                    </button>
-                    <button
-                      onClick={() => setCreateRightPanel('ai')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${createRightPanel === 'ai' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                    >
-                      <WandSparkles className="w-3 h-3" />
-                      AI
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setCreateRightPanel('conflicts')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${createRightPanel === 'conflicts' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <AlertCircle className="w-3 h-3" />
+                          Port Conflicts
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">See host-port collisions against existing stacks</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setCreateRightPanel('reference')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${createRightPanel === 'reference' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <FileCode className="w-3 h-3" />
+                          Reference
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">View reference compose from another stack while creating</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setCreateRightPanel('volumes')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${createRightPanel === 'volumes' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <HardDrive className="w-3 h-3" />
+                          Volumes
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Preview mapped volumes and host path suggestions</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setCreateRightPanel('backup')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${createRightPanel === 'backup' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <Archive className="w-3 h-3" />
+                          Backup
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Configure backup policy before first deploy</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setCreateRightPanel('autoupdate')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${createRightPanel === 'autoupdate' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <Zap className="w-3 h-3" />
+                          Auto Update
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Set image update automation rules for this stack</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setCreateRightPanel('ai')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${createRightPanel === 'ai' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <WandSparkles className="w-3 h-3" />
+                          AI
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Open AI helper for compose generation and review</TooltipContent>
+                    </Tooltip>
                   </div>
 
                   {/* PORT CONFLICTS */}
@@ -1215,36 +1265,50 @@ export function StacksEditor({
                   {/* File tab bar */}
                   <div className="flex items-center gap-1 mb-2 shrink-0 flex-wrap">
                     {/* compose.yml tab */}
-                    <button
-                      onClick={() => setActiveFile('compose')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono transition-colors ${activeFile === 'compose' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                    >
-                      <FileCode className="w-3 h-3" />
-                      compose.yml
-                      {isDirty && activeFile === 'compose' && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setActiveFile('compose')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono transition-colors ${activeFile === 'compose' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <FileCode className="w-3 h-3" />
+                          compose.yml
+                          {isDirty && activeFile === 'compose' && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Edit the compose file used by docker compose commands</TooltipContent>
+                    </Tooltip>
 
                     {/* .env tab */}
-                    <button
-                      onClick={() => setActiveFile('env')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono transition-colors ${activeFile === 'env' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                    >
-                      <File className="w-3 h-3" />
-                      .env
-                      {isDirty && activeFile === 'env' && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setActiveFile('env')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono transition-colors ${activeFile === 'env' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <File className="w-3 h-3" />
+                          .env
+                          {isDirty && activeFile === 'env' && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Edit environment variables passed to compose services</TooltipContent>
+                    </Tooltip>
 
                     {/* Other files */}
                     {otherFiles.map((f: any) => (
-                      <button
-                        key={f.path}
-                        onClick={() => { setActiveFile(f.path); setIsDirty(false) }}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono transition-colors ${activeFile === f.path ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                      >
-                        <FileText className="w-3 h-3" />
-                        {f.name}
-                        {isDirty && activeFile === f.path && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
-                      </button>
+                      <Tooltip key={f.path}>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => { setActiveFile(f.path); setIsDirty(false) }}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono transition-colors ${activeFile === f.path ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                          >
+                            <FileText className="w-3 h-3" />
+                            {f.name}
+                            {isDirty && activeFile === f.path && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent className="text-xs">Open file {f.name} from stack directory</TooltipContent>
+                      </Tooltip>
                     ))}
                   </div>
 

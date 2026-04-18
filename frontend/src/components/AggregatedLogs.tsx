@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { LogEntry } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Search, RotateCw, Pause, Play, AlertTriangle, Info, X, Bug, CheckCircle } from 'lucide-react'
@@ -100,6 +101,7 @@ export function AggregatedLogs({ logs, onRefresh }: AggregatedLogsProps) {
   }
 
   return (
+    <TooltipProvider delayDuration={350}>
     <Card className="p-0 overflow-hidden relative">
       <div className="p-4 border-b border-border bg-card/50">
         <div className="flex items-center justify-between mb-4">
@@ -108,22 +110,34 @@ export function AggregatedLogs({ logs, onRefresh }: AggregatedLogsProps) {
             <p className="text-sm text-muted-foreground">Real-time logs from all containers</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => setIsPaused(!isPaused)}
-              title={isPaused ? 'Resume' : 'Pause'}
-            >
-              {isPaused ? <Play className="w-[18px] h-[18px]" /> : <Pause className="w-[18px] h-[18px]" />}
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={onRefresh}
-              title="Refresh"
-            >
-              <RotateCw className="w-[18px] h-[18px]" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={() => setIsPaused(!isPaused)}
+                >
+                  {isPaused ? <Play className="w-[18px] h-[18px]" /> : <Pause className="w-[18px] h-[18px]" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">{isPaused ? 'Resume live log streaming' : 'Pause live log streaming'}</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={onRefresh}
+                >
+                  <RotateCw className="w-[18px] h-[18px]" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">Re-fetch logs from backend and rebuild filters</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
@@ -145,63 +159,88 @@ export function AggregatedLogs({ logs, onRefresh }: AggregatedLogsProps) {
         <div className="space-y-3">
           <div className="flex gap-2 flex-wrap items-center">
             <span className="text-xs font-mono text-muted-foreground font-semibold uppercase tracking-wide">Log Level:</span>
-            <Button
-              variant={levelFilter === 'all' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setLevelFilter('all')}
-              className="h-8 gap-1.5 font-mono"
-            >
-              <CheckCircle className="w-3.5 h-3.5" />
-              All
-            </Button>
-            <Button
-              variant={levelFilter === 'info' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setLevelFilter('info')}
-              className={cn(
-                "h-8 gap-1.5 font-mono",
-                levelFilter === 'info' && "bg-info text-info-foreground hover:bg-info/90"
-              )}
-            >
-              <Info className="w-3.5 h-3.5" />
-              Info
-            </Button>
-            <Button
-              variant={levelFilter === 'warn' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setLevelFilter('warn')}
-              className={cn(
-                "h-8 gap-1.5 font-mono",
-                levelFilter === 'warn' && "bg-warning text-warning-foreground hover:bg-warning/90"
-              )}
-            >
-              <AlertTriangle className="w-3.5 h-3.5" />
-              Warning
-            </Button>
-            <Button
-              variant={levelFilter === 'error' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setLevelFilter('error')}
-              className={cn(
-                "h-8 gap-1.5 font-mono",
-                levelFilter === 'error' && "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              )}
-            >
-              <X className="w-3.5 h-3.5" />
-              Error
-            </Button>
-            <Button
-              variant={levelFilter === 'debug' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setLevelFilter('debug')}
-              className={cn(
-                "h-8 gap-1.5 font-mono",
-                levelFilter === 'debug' && "bg-info text-info-foreground hover:bg-info/90"
-              )}
-            >
-              <Bug className="w-3.5 h-3.5" />
-              Debug
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={levelFilter === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setLevelFilter('all')}
+                  className="h-8 gap-1.5 font-mono"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  All
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent><p className="text-xs">Show all log levels</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={levelFilter === 'info' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setLevelFilter('info')}
+                  className={cn(
+                    "h-8 gap-1.5 font-mono",
+                    levelFilter === 'info' && "bg-info text-info-foreground hover:bg-info/90"
+                  )}
+                >
+                  <Info className="w-3.5 h-3.5" />
+                  Info
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent><p className="text-xs">Show info, warning, and error logs</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={levelFilter === 'warn' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setLevelFilter('warn')}
+                  className={cn(
+                    "h-8 gap-1.5 font-mono",
+                    levelFilter === 'warn' && "bg-warning text-warning-foreground hover:bg-warning/90"
+                  )}
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Warning
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent><p className="text-xs">Show warning and error logs only</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={levelFilter === 'error' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setLevelFilter('error')}
+                  className={cn(
+                    "h-8 gap-1.5 font-mono",
+                    levelFilter === 'error' && "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  )}
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Error
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent><p className="text-xs">Show only error logs</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={levelFilter === 'debug' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setLevelFilter('debug')}
+                  className={cn(
+                    "h-8 gap-1.5 font-mono",
+                    levelFilter === 'debug' && "bg-info text-info-foreground hover:bg-info/90"
+                  )}
+                >
+                  <Bug className="w-3.5 h-3.5" />
+                  Debug
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent><p className="text-xs">Show debug, info, warning, and error logs</p></TooltipContent>
+            </Tooltip>
           </div>
 
           <div className="flex gap-2 flex-wrap">
@@ -278,5 +317,6 @@ export function AggregatedLogs({ logs, onRefresh }: AggregatedLogsProps) {
         </div>
       )}
     </Card>
+    </TooltipProvider>
   )
 }

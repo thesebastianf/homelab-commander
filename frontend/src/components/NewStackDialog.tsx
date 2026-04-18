@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { AlertTriangle, Copy } from 'lucide-react'
 import type { Stack } from '@/lib/types'
 import { toast } from 'sonner'
@@ -143,6 +144,7 @@ export function NewStackDialog({
   }
 
   return (
+    <TooltipProvider delayDuration={350}>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
@@ -211,9 +213,16 @@ export function NewStackDialog({
                 <span>
                   Port conflict{conflicts.length > 1 ? 's' : ''}: {conflicts.map(c => `${c.port} (${c.usedBy})`).join(', ')}
                 </span>
-                <Button size="sm" variant="outline" onClick={handleAutoResolve}>
-                  Auto-Resolve
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="sm" variant="outline" onClick={handleAutoResolve}>
+                      Auto-Resolve
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Increment conflicting host ports to next available values</p>
+                  </TooltipContent>
+                </Tooltip>
               </AlertDescription>
             </Alert>
           )}
@@ -240,11 +249,26 @@ export function NewStackDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => { resetForm(); onOpenChange(false) }}>Cancel</Button>
-          <Button onClick={handleSave}>Create Stack</Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" onClick={() => { resetForm(); onOpenChange(false) }}>Cancel</Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="text-xs">Close dialog and discard unsaved compose changes</p>
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button onClick={handleSave}>Create Stack</Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="text-xs">Create stack definition, path mapping, and initial version snapshot</p>
+            </TooltipContent>
+          </Tooltip>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </TooltipProvider>
   )
 }
 

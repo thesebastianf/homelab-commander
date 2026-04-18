@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Save, Clock, HardDrive, CheckCircle, XCircle, Loader2, Play, Database, Copy, ShieldCheck, FileArchive } from 'lucide-react'
 import type { Stack, BackupConfig, BackupJob } from '@/lib/types'
 import { toast } from 'sonner'
@@ -96,10 +97,17 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                   <ScheduleEditor value={cfg.cronSchedule ?? '0 2 * * *'} onChange={(v) => u({ cronSchedule: v })} />
                 </div>
                 <div className="flex items-end">
-                  <Button size="sm" variant="outline" disabled={run.isPending} onClick={() => run.mutate()}>
-                    {run.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Play className="w-3 h-3 mr-1" />}
-                    Run Now
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button size="sm" variant="outline" disabled={run.isPending} onClick={() => run.mutate()}>
+                        {run.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Play className="w-3 h-3 mr-1" />}
+                        Run Now
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">Start this stack backup immediately, independent of schedule</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
             </Card>
@@ -270,6 +278,7 @@ echo "Backup sync completed at $(date)"
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+        <TooltipProvider delayDuration={350}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Save className="w-6 h-6 text-primary" />
@@ -317,15 +326,22 @@ echo "Backup sync completed at $(date)"
                   className="font-mono"
                   placeholder="/mnt/backups"
                 />
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    onUpdateBackupsPath(localBackupsPath)
-                    toast.success('Backups path updated')
-                  }}
-                >
-                  Save
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        onUpdateBackupsPath(localBackupsPath)
+                        toast.success('Backups path updated')
+                      }}
+                    >
+                      Save
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Persist the base path used for all future backups</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </Card>
 
@@ -335,12 +351,19 @@ echo "Backup sync completed at $(date)"
                   <Label className="text-base">NAS Pull Script</Label>
                   <p className="text-xs text-muted-foreground">Run this script from your NAS to pull backups via rsync</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => {
-                  navigator.clipboard.writeText(nasScript)
-                  toast.success('Script copied to clipboard')
-                }}>
-                  <Copy className="w-3.5 h-3.5 mr-1" /> Copy
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="sm" onClick={() => {
+                      navigator.clipboard.writeText(nasScript)
+                      toast.success('Script copied to clipboard')
+                    }}>
+                      <Copy className="w-3.5 h-3.5 mr-1" /> Copy
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Copy the full NAS rsync pull script to your clipboard</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
               <Textarea
                 value={nasScript}
@@ -350,6 +373,7 @@ echo "Backup sync completed at $(date)"
             </Card>
           </TabsContent>
         </Tabs>
+        </TooltipProvider>
       </DialogContent>
     </Dialog>
   )

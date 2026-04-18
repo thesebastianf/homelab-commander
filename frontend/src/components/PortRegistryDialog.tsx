@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ListOrdered, Plus, Trash2, AlertTriangle, Search, Palette } from 'lucide-react'
 import type { Container, Stack, PortReservation } from '@/lib/types'
 import { toast } from 'sonner'
@@ -164,6 +165,7 @@ export function PortRegistryDialog({
   }
 
   return (
+    <TooltipProvider delayDuration={350}>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -304,10 +306,17 @@ export function PortRegistryDialog({
               <Label className="text-sm font-semibold">Create Range Reservation</Label>
               <div className="flex flex-wrap gap-1.5">
                 {RANGE_PRESETS.map(p => (
-                  <Button key={p.label} variant="outline" size="sm" className="text-xs h-7" onClick={() => applyPreset(p)}>
-                    <div className="w-2.5 h-2.5 rounded-full mr-1.5" style={{ backgroundColor: p.color }} />
-                    {p.label}
-                  </Button>
+                  <Tooltip key={p.label}>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => applyPreset(p)}>
+                        <div className="w-2.5 h-2.5 rounded-full mr-1.5" style={{ backgroundColor: p.color }} />
+                        {p.label}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">Pre-fill reservation {p.start}-{p.end} in group {p.group}</p>
+                    </TooltipContent>
+                  </Tooltip>
                 ))}
               </div>
               <div className="grid grid-cols-5 gap-2 items-end">
@@ -336,9 +345,16 @@ export function PortRegistryDialog({
                     </SelectContent>
                   </Select>
                 </div>
-                <Button size="sm" onClick={handleAddReservation} className="h-8">
-                  <Plus className="w-3.5 h-3.5 mr-1" /> Reserve
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="sm" onClick={handleAddReservation} className="h-8">
+                      <Plus className="w-3.5 h-3.5 mr-1" /> Reserve
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Create a reserved range so teams avoid collisions in this port block</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </Card>
 
@@ -362,14 +378,21 @@ export function PortRegistryDialog({
                             {res.portRangeStart}–{res.portRangeEnd}
                           </span>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => onDeleteReservation?.(res.id)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => onDeleteReservation?.(res.id)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">Delete reservation {res.portRangeStart}-{res.portRangeEnd}</p>
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
                       <div className="flex items-center gap-2">
                         <Progress value={pct} className="h-2 flex-1" />
@@ -387,5 +410,6 @@ export function PortRegistryDialog({
         </Tabs>
       </DialogContent>
     </Dialog>
+    </TooltipProvider>
   )
 }

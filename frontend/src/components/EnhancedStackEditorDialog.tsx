@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { FileCode, File, Clock, GitBranch, Diff, Copy, RefreshCw, FolderOpen, FileText, Save, Loader2, GitCommit, CheckCircle2 } from 'lucide-react'
 import type { Stack } from '@/lib/types'
 import { toast } from 'sonner'
@@ -183,6 +184,7 @@ export function EnhancedStackEditorDialog({
     : null
 
   return (
+    <TooltipProvider delayDuration={350}>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
@@ -281,14 +283,21 @@ export function EnhancedStackEditorDialog({
               <div className="flex-1 flex flex-col gap-2 min-w-0">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono text-muted-foreground truncate">{selectedFile ?? 'Select a file to edit'}</span>
-                  <Button
-                    size="sm"
-                    disabled={!fileDirty || saveFile.isPending || !selectedFile}
-                    onClick={() => saveFile.mutate()}
-                    className="h-7 text-xs gap-1.5 shrink-0">
-                    {saveFile.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                    Save
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        disabled={!fileDirty || saveFile.isPending || !selectedFile}
+                        onClick={() => saveFile.mutate()}
+                        className="h-7 text-xs gap-1.5 shrink-0">
+                        {saveFile.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                        Save
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">Write current file changes to disk inside the stack directory</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
                 <Textarea
                   value={fileContent}
@@ -370,10 +379,17 @@ export function EnhancedStackEditorDialog({
                   )}
                   <div className="space-y-2">
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" disabled={syncGit.isPending} onClick={() => syncGit.mutate()}>
-                        {syncGit.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-                        Sync Now
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="outline" size="sm" disabled={syncGit.isPending} onClick={() => syncGit.mutate()}>
+                            {syncGit.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                            Sync Now
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs">Run git pull flow for this stack repository and refresh status</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
                     <div className="flex gap-2 items-center">
                       <Input
@@ -382,10 +398,17 @@ export function EnhancedStackEditorDialog({
                         placeholder="Commit message (optional)"
                         className="font-mono text-sm h-8"
                       />
-                      <Button variant="outline" size="sm" disabled={pushGit.isPending} onClick={() => pushGit.mutate()}>
-                        {pushGit.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <GitBranch className="w-4 h-4 mr-2" />}
-                        Push Changes
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="outline" size="sm" disabled={pushGit.isPending} onClick={() => pushGit.mutate()}>
+                            {pushGit.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <GitBranch className="w-4 h-4 mr-2" />}
+                            Push Changes
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs">Commit local changes (if any) and push branch to remote</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
                 </div>
@@ -410,17 +433,31 @@ export function EnhancedStackEditorDialog({
                         <span className="text-sm">{version.description}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setCompareVersion(version.version)}
-                        >
-                          Compare
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setCompareVersion(version.version)}
+                            >
+                              Compare
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">Load this version into the compare tab against current compose</p>
+                          </TooltipContent>
+                        </Tooltip>
                         {version.version !== stack.version && (
-                          <Button size="sm" variant="outline" disabled={restoreVersion.isPending} onClick={() => restoreVersion.mutate(version.version)}>
-                            Restore
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="sm" variant="outline" disabled={restoreVersion.isPending} onClick={() => restoreVersion.mutate(version.version)}>
+                                Restore
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Rollback stack files to version v{version.version}</p>
+                            </TooltipContent>
+                          </Tooltip>
                         )}
                         <span className="text-xs text-muted-foreground">
                           {new Date(version.createdAt).toLocaleDateString()}
@@ -485,5 +522,6 @@ export function EnhancedStackEditorDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </TooltipProvider>
   )
 }

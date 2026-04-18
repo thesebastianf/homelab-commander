@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Settings, FolderOpen, Bell, Link, Snowflake, CloudDownload, Github, AlertTriangle, FlaskConical, Loader2, CheckCircle, XCircle } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { toast } from 'sonner'
 import * as api from '@/lib/api'
 import type { AppSettings } from '@/lib/types'
@@ -564,20 +565,29 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleTestAi}
-                      disabled={aiTesting}
-                      className="gap-2"
-                    >
-                      {aiTesting ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" />Testing Connection...</>
-                      ) : (
-                        <><FlaskConical className="w-4 h-4" />Test Connection</>
-                      )}
-                    </Button>
+                    <TooltipProvider delayDuration={350}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleTestAi}
+                          disabled={aiTesting}
+                          className="gap-2"
+                        >
+                          {aiTesting ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" />Testing Connection...</>
+                          ) : (
+                            <><FlaskConical className="w-4 h-4" />Test Connection</>
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-xs">Sends a minimal prompt and verifies endpoint, model, and credentials</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    </TooltipProvider>
                     <p className="text-xs text-muted-foreground">Sends a minimal test prompt to verify provider connectivity and credentials.</p>
                   </div>
 

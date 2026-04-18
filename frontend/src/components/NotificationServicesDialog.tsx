@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Plus, Trash2, Send, Mail, Globe, FlaskConical, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import * as api from '@/lib/api'
@@ -101,6 +102,7 @@ export function NotificationServicesDialog({ open, onOpenChange, services, onSav
   }
 
   return (
+    <TooltipProvider delayDuration={350}>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
@@ -124,10 +126,17 @@ export function NotificationServicesDialog({ open, onOpenChange, services, onSav
                 <SelectItem value="webhook">Webhook</SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={handleAddService} size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Service
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={handleAddService} size="sm">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Service
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">Add a new notification provider of the selected type</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           <div className="space-y-3">
@@ -158,28 +167,42 @@ export function NotificationServicesDialog({ open, onOpenChange, services, onSav
                         onCheckedChange={(checked) => handleUpdateService(service.id, { enabled: checked })}
                       />
                       {isSavedService(service.id) && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleTestService(service.id)}
-                          disabled={testingId !== null}
-                          className="gap-1.5"
-                        >
-                          {testingId === service.id ? (
-                            <><Loader2 className="w-3.5 h-3.5 animate-spin" />Testing...</>
-                          ) : (
-                            <><FlaskConical className="w-3.5 h-3.5" />Test</>
-                          )}
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleTestService(service.id)}
+                              disabled={testingId !== null}
+                              className="gap-1.5"
+                            >
+                              {testingId === service.id ? (
+                                <><Loader2 className="w-3.5 h-3.5 animate-spin" />Testing...</>
+                              ) : (
+                                <><FlaskConical className="w-3.5 h-3.5" />Test</>
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">Send a live test notification to verify this service configuration</p>
+                          </TooltipContent>
+                        </Tooltip>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveService(service.id)}
-                        className="text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveService(service.id)}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs">Remove this notification service from settings</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -209,5 +232,6 @@ export function NotificationServicesDialog({ open, onOpenChange, services, onSav
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </TooltipProvider>
   )
 }
