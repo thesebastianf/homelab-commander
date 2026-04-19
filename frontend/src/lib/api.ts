@@ -276,6 +276,10 @@ export async function saveStackFileContent(id: string, filePath: string, content
   });
 }
 
+export async function syncStackFromDisk(id: string): Promise<{ ok: boolean; compose: string; env: string; version: number }> {
+  return request(`/stacks/${id}/sync-from-disk`, { method: 'POST' });
+}
+
 // ---- Git Sync ----
 
 export async function fetchGitStatus(id: string): Promise<{ configured: boolean; branch?: string; lastCommit?: string; lastCommitMessage?: string; status?: string; lastSynced?: string }> {

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#0d1117"/>
+  <!-- Whale body -->
+  <ellipse cx="32" cy="42" rx="18" ry="10" fill="#1e88e5"/>
+  <!-- Dorsal fin (the "whale fin" of the logo) -->
+  <path d="M28 42 Q26 28 32 18 Q36 12 40 16 Q38 22 34 28 Q32 34 32 42 Z" fill="#42a5f5"/>
+  <!-- Tail fluke left -->
+  <path d="M14 48 Q10 44 14 40 Q18 46 22 44 Q18 48 14 48 Z" fill="#1565c0"/>
+  <!-- Tail fluke right -->
+  <path d="M50 48 Q54 44 50 40 Q46 46 42 44 Q46 48 50 48 Z" fill="#1565c0"/>
+  <!-- Eye -->
+  <circle cx="38" cy="38" r="2" fill="#e3f2fd"/>
+  <!-- Highlight on fin -->
+  <path d="M30 38 Q29 30 32 22 Q33.5 17 36 18 Q34 24 32 32 Q31 36 30 38 Z" fill="#90caf9" opacity="0.5"/>
+</svg>

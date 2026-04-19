@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Toaster } from '@/components/ui/sonner'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,7 +25,7 @@ import { SmartStartupDialog } from '@/components/SmartStartupDialog'
 import { PortRegistryDialog } from '@/components/PortRegistryDialog'
 import { DatabaseExplorer } from '@/components/DatabaseExplorer'
 import { ClockWidget } from '@/components/ClockWidget'
-import { Loader2, RefreshCw } from 'lucide-react'
+import { Loader2, RefreshCw, Maximize2, Minimize2 } from 'lucide-react'
 import {
   Box,
   Home,
@@ -366,26 +367,40 @@ function App() {
             </div>
 
             {compactMode ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 px-2.5 text-xs font-mono"
-                onClick={() => setMobileOverride(false)}
-              >
-                Full UI
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => setMobileOverride(false)}
+                    >
+                      <Maximize2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent className="text-xs">Switch to full UI</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             ) : (
               <>
                 {/* Status badges */}
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 px-2.5 text-xs font-mono"
-                    onClick={() => setMobileOverride(true)}
-                  >
-                    Compact UI
-                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => setMobileOverride(true)}
+                        >
+                          <Minimize2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Switch to compact UI</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   {currentSettings.globalUpdateFreeze && (
                     <Badge variant="destructive" className="gap-1 px-3 animate-pulse">
                       <Snowflake className="w-3 h-3" />

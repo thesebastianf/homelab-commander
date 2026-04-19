@@ -20,8 +20,11 @@ import {
   Zap,
   Archive,
   AlertCircle,
+  Snowflake,
+  CloudDownload,
 } from 'lucide-react'
 import type { Stack } from '@/lib/types'
+import { useSettings } from '@/hooks/useSettings'
 
 interface MobileStacksViewProps {
   stacks: Stack[]
@@ -60,36 +63,42 @@ export function MobileStacksView({
   isOperating = false,
 }: MobileStacksViewProps) {
   const [searchQuery, setSearchQuery] = useState('')
+  const { data: settings } = useSettings()
 
   const filteredStacks = stacks.filter(s =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  const stacksWithUpdates = stacks.filter(s => s.updateAvailable).length
+  const updateFreezeActive = !!settings?.globalUpdateFreeze
+  const autoUpdateActive = !!settings?.autoUpdate && !updateFreezeActive
+
   return (
     <TooltipProvider>
       <div className="h-[calc(100vh-70px)] min-h-0 flex flex-col gap-3 bg-background p-4">
-        {/* Header with THC logo and mode toggle */}
-        <div className="flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-bold font-mono text-primary">THC</span>
-            <span className="text-xs text-muted-foreground">Mobile</span>
+        {/* Status strip — replaces duplicate THC header */}
+        {(updateFreezeActive || autoUpdateActive || stacksWithUpdates > 0) && (
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {updateFreezeActive && (
+              <Badge variant="destructive" className="gap-1 animate-pulse text-xs">
+                <Snowflake className="w-3 h-3" />
+                UPDATE FREEZE
+              </Badge>
+            )}
+            {autoUpdateActive && (
+              <Badge variant="secondary" className="gap-1 text-xs">
+                <Zap className="w-3 h-3" />
+                Auto-Update ON
+              </Badge>
+            )}
+            {stacksWithUpdates > 0 && (
+              <Badge variant="outline" className="border-warning text-warning gap-1 text-xs">
+                <CloudDownload className="w-3 h-3" />
+                {stacksWithUpdates} update{stacksWithUpdates !== 1 ? 's' : ''}
+              </Badge>
+            )}
           </div>
-          {onToggleMobileMode && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onToggleMobileMode}
-                  className="text-xs h-7"
-                >
-                  Desktop
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Switch to desktop view</TooltipContent>
-            </Tooltip>
-          )}
-        </div>
+        )}
 
         {/* Search */}
         <div className="relative shrink-0">

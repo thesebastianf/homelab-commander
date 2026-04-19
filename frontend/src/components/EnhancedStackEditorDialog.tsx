@@ -12,10 +12,22 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { FileCode, File, Clock, GitBranch, Diff, Copy, RefreshCw, FolderOpen, FileText, Save, Loader2, GitCommit, CheckCircle2 } from 'lucide-react'
+import { FileCode, File, Clock, GitBranch, Diff, Copy, RefreshCw, FolderOpen, FileText, Save, Loader2, GitCommit, CheckCircle2, AlertTriangle, HardDriveDownload } from 'lucide-react'
 import type { Stack } from '@/lib/types'
 import { toast } from 'sonner'
 import * as api from '@/lib/api'
+
+/** Flatten the nested file tree returned by the backend into a list with depth */
+function flattenFileTree(nodes: any[], depth = 0): any[] {
+  const result: any[] = []
+  for (const node of nodes) {
+    result.push({ ...node, depth })
+    if (node.type === 'directory' && Array.isArray(node.children)) {
+      result.push(...flattenFileTree(node.children, depth + 1))
+    }
+  }
+  return result
+}
 
 interface EnhancedStackEditorDialogProps {
   open: boolean
@@ -49,14 +61,28 @@ export function EnhancedStackEditorDialog({
   const [fileContent, setFileContent] = useState('')
   const [fileDirty, setFileDirty] = useState(false)
   const [pushMessage, setPushMessage] = useState('')
+  const [externalChangeDismissed, setExternalChangeDismissed] = useState(false)
 
   const qc = useQueryClient()
+
+  // Fetch fresh stack data (with disk change detection) when dialog opens
+  const { data: freshStack } = useQuery({
+    queryKey: ['stack-detail', stack?.id],
+    queryFn: () => api.fetchStack(stack!.id),
+    enabled: open && !!stack,
+    staleTime: 0,
+  })
+
+  const hasExternalChanges = !externalChangeDismissed && !!freshStack?.hasExternalChanges
+  const diskComposeContent = freshStack?.diskComposeContent
+  const diskEnvContent = freshStack?.diskEnvContent
 
   const { data: stackFiles = [] } = useQuery({
     queryKey: ['stackFiles', stack?.id],
     queryFn: () => api.fetchStackFiles(stack!.id),
     enabled: open && activeTab === 'files' && !!stack,
   })
+  const flatFiles = flattenFileTree(stackFiles as any[])
 
   const { data: rawFileContent } = useQuery({
     queryKey: ['stackFileContent', stack?.id, selectedFile],
@@ -76,6 +102,19 @@ export function EnhancedStackEditorDialog({
     queryFn: () => api.fetchGitStatus(stack!.id),
     enabled: open && activeTab === 'git' && !!stack,
     refetchInterval: 30000,
+  })
+
+  const syncFromDisk = useMutation({
+    mutationFn: () => api.syncStackFromDisk(stack!.id),
+    onSuccess: (data) => {
+      toast.success('Synced from disk — DB updated to match host files')
+      setCompose(data.compose)
+      setEnvFile(data.env)
+      setExternalChangeDismissed(true)
+      qc.invalidateQueries({ queryKey: ['stacks'] })
+      qc.invalidateQueries({ queryKey: ['stack-detail', stack?.id] })
+    },
+    onError: (e: any) => toast.error(`Sync failed: ${e.message}`),
   })
 
   const saveFile = useMutation({
@@ -124,6 +163,7 @@ export function EnhancedStackEditorDialog({
       setEnvFile(stack.envFile || stack.envContent || '')
       setStackPath(stack.stackPath || '')
       setVolumePath(stack.volumePath || '')
+      setExternalChangeDismissed(false)
       const git = (stack as any).gitRepoConfig
       if (git) {
         setGitEnabled(git.enabled || false)
@@ -225,6 +265,51 @@ export function EnhancedStackEditorDialog({
           </TabsList>
 
           <TabsContent value="compose" className="mt-4 space-y-3">
+            {hasExternalChanges && (
+              <div className="flex items-start gap-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-3 py-2.5">
+                <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-yellow-300">External changes detected</p>
+                  <p className="text-xs text-yellow-400/80 mt-0.5">The compose file on disk differs from the DB version. Someone edited it directly on the host.</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1.5 border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/20"
+                        onClick={() => {
+                          if (diskComposeContent) setCompose(diskComposeContent)
+                          if (diskEnvContent !== null && diskEnvContent !== undefined) setEnvFile(diskEnvContent)
+                          setExternalChangeDismissed(true)
+                          toast.info('Loaded disk version into editor — save to persist')
+                        }}
+                      >
+                        <HardDriveDownload className="w-3 h-3" />
+                        Load disk
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p className="text-xs">Load the on-disk version into the editor (does not save yet)</p></TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs gap-1.5"
+                        disabled={syncFromDisk.isPending}
+                        onClick={() => syncFromDisk.mutate()}
+                      >
+                        {syncFromDisk.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                        Sync to DB
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p className="text-xs">Save the disk version to the database and create a version snapshot</p></TooltipContent>
+                  </Tooltip>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setExternalChangeDismissed(true)}>Dismiss</Button>
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Badge variant="outline" className="font-mono text-xs gap-1">
                 {stackPath}
@@ -259,18 +344,18 @@ export function EnhancedStackEditorDialog({
                 </div>
                 <ScrollArea className="flex-1">
                   <div className="py-1">
-                    {stackFiles.length === 0 && (
+                    {flatFiles.length === 0 && (
                       <p className="text-xs text-muted-foreground text-center py-4 px-2">No files found</p>
                     )}
-                    {(stackFiles as any[]).map((f: any) => (
+                    {flatFiles.map((f: any) => (
                       <button
                         key={f.path}
-                        onClick={() => f.type !== 'dir' && setSelectedFile(f.path)}
+                        onClick={() => f.type !== 'directory' && setSelectedFile(f.path)}
                         className={`w-full flex items-center gap-1.5 text-left py-1.5 text-xs font-mono hover:bg-muted/40 transition-colors ${
                           selectedFile === f.path ? 'bg-primary/10 text-primary' : 'text-foreground/80'
-                        } ${f.type === 'dir' ? 'cursor-default' : 'cursor-pointer'}`}
-                        style={{ paddingLeft: `${(f.depth ?? 0) * 12 + 12}px` }}>
-                        {f.type === 'dir'
+                        } ${f.type === 'directory' ? 'cursor-default opacity-70' : 'cursor-pointer'}`}
+                        style={{ paddingLeft: `${f.depth * 12 + 12}px` }}>
+                        {f.type === 'directory'
                           ? <FolderOpen className="w-3 h-3 shrink-0 text-muted-foreground" />
                           : <FileText className="w-3 h-3 shrink-0" />}
                         <span className="truncate">{f.name}</span>

@@ -31,6 +31,31 @@ async function findComposeFile(dir: string): Promise<string> {
   return 'docker-compose.yml'; // fallback for stacks created by THC
 }
 
+/**
+ * Resolve where to run docker compose for a given stack.
+ * - Preferred: use the real stack_path directly (works when mounted as volume, e.g. /data/stacks).
+ *   This means relative bind mounts in the compose file resolve correctly.
+ * - Fallback: write compose content to a temp dir (for adopted stacks whose host path is not
+ *   accessible from within the container).
+ */
+async function resolveStackCwd(stack: any): Promise<{ cwd: string; cleanup: (() => Promise<void>) | null }> {
+  try {
+    await access(stack.stack_path);
+    return { cwd: stack.stack_path, cleanup: null };
+  } catch {
+    // Path not accessible (external/adopted stack) — fall back to in-container temp dir
+    const tempDir = await mkdtemp(join(tmpdir(), 'hlc-'));
+    await writeFile(join(tempDir, 'docker-compose.yml'), stack.compose_content || '');
+    if (stack.env_content) {
+      await writeFile(join(tempDir, '.env'), stack.env_content);
+    }
+    return {
+      cwd: tempDir,
+      cleanup: async () => { try { await rm(tempDir, { recursive: true, force: true }); } catch {} },
+    };
+  }
+}
+
 // ---- In-memory operation store for streaming output ----
 interface OperationState {
   lines: string[];
@@ -40,23 +65,13 @@ interface OperationState {
 const operationStore = new Map<string, OperationState>();
 
 async function runUpdateOperation(id: string, stack: any, op: OperationState): Promise<void> {
-  let tempDir: string | null = null;
+  const { cwd, cleanup } = await resolveStackCwd(stack);
   try {
-    // Write compose + env to a temp dir so the operation always works regardless of whether
-    // stack_path is accessible inside the container (adopted stacks use host paths).
-    tempDir = await mkdtemp(join(tmpdir(), `hlc-update-`));
-    const composeSrc = stack.compose_content || '';
-    await writeFile(join(tempDir, 'docker-compose.yml'), composeSrc);
-    if (stack.env_content) {
-      await writeFile(join(tempDir, '.env'), stack.env_content);
-    }
-
     await new Promise<void>((resolve, reject) => {
       const proc = spawn(
         'docker',
-        // --project-name targets the existing compose project even when using a temp compose file
-        ['compose', '--project-name', stack.name.toLowerCase(), '--file', join(tempDir!, 'docker-compose.yml'), 'up', '-d', '--pull', 'always'],
-        { cwd: tempDir! }
+        ['compose', '--project-name', stack.name.toLowerCase(), 'up', '-d', '--pull', 'always'],
+        { cwd }
       );
       const onData = (data: Buffer) => {
         data.toString('utf8').split('\n').filter(l => l.trim()).forEach(l => op.lines.push(l));
@@ -80,11 +95,10 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState): P
     // Only mark as failed if containers are not still running
     try {
       const { stdout } = await execFileAsync(
-        'docker', ['compose', '--project-name', stack.name.toLowerCase(), '--file', join(tempDir!, 'docker-compose.yml'), 'ps', '-q', '--status', 'running'],
-        { timeout: 8000, cwd: tempDir ?? undefined }
+        'docker', ['compose', '--project-name', stack.name.toLowerCase(), 'ps', '-q', '--status', 'running'],
+        { timeout: 8000, cwd }
       );
       if (stdout.trim()) {
-        // Containers are still up — keep status as running, don't mark failed
         await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
         op.lines.push('⚠ Update failed but existing containers are still running.');
       } else {
@@ -95,7 +109,7 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState): P
     }
   } finally {
     op.done = true;
-    if (tempDir) await rm(tempDir, { recursive: true, force: true }).catch(() => { /* cleanup best-effort */ });
+    await cleanup?.();
     setTimeout(() => operationStore.delete(id), 5 * 60 * 1000);
   }
 }
@@ -257,7 +271,27 @@ router.get('/:id', asyncHandler(async (req, res) => {
     [req.params.id]
   );
 
-  res.json({ ...mapStack(stack), versions: versions.map(mapVersion) });
+  // Detect external changes: read live files from disk and compare with DB content
+  let hasExternalChanges = false;
+  let diskComposeContent: string | null = null;
+  let diskEnvContent: string | null = null;
+  try {
+    await access(stack.stack_path);
+    const composeName = await findComposeFile(stack.stack_path);
+    diskComposeContent = await readFile(join(stack.stack_path, composeName), 'utf8').catch(() => null);
+    diskEnvContent = await readFile(join(stack.stack_path, '.env'), 'utf8').catch(() => null);
+    if (diskComposeContent !== null && diskComposeContent.trim() !== (stack.compose_content || '').trim()) {
+      hasExternalChanges = true;
+    }
+  } catch { /* stack_path not accessible from container — skip disk check */ }
+
+  res.json({
+    ...mapStack(stack),
+    versions: versions.map(mapVersion),
+    hasExternalChanges,
+    diskComposeContent,
+    diskEnvContent,
+  });
 }));
 
 // Create stack
@@ -386,9 +420,10 @@ router.post('/:id/deploy', asyncHandler(async (req, res) => {
 
   await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [id]);
 
+  const { cwd, cleanup } = await resolveStackCwd(stack);
   try {
-    await execFileAsync('docker', ['compose', 'up', '-d'],
-      { cwd: stack.stack_path, timeout: 120000 }
+    await execFileAsync('docker', ['compose', '--project-name', stack.name.toLowerCase(), 'up', '-d'],
+      { cwd, timeout: 120000 }
     );
     await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
     await sendNotification('stackDeployed', { name: stack.name });
@@ -398,6 +433,8 @@ router.post('/:id/deploy', asyncHandler(async (req, res) => {
     await pool.query("UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1", [id]);
     await sendNotification('stackFailed', { name: stack.name, error: err.message });
     res.status(500).json({ error: err.message });
+  } finally {
+    await cleanup?.();
   }
 }));
 
@@ -407,15 +444,18 @@ router.post('/:id/stop', asyncHandler(async (req, res) => {
   const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
+  const { cwd, cleanup } = await resolveStackCwd(stack);
   try {
-    await execFileAsync('docker', ['compose', 'stop'],
-      { cwd: stack.stack_path, timeout: 120000 }
+    await execFileAsync('docker', ['compose', '--project-name', stack.name.toLowerCase(), 'stop'],
+      { cwd, timeout: 120000 }
     );
     await pool.query("UPDATE stacks SET status = 'stopped', updated_at = NOW() WHERE id = $1", [id]);
     await auditLog('stop', 'stack', id);
     res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  } finally {
+    await cleanup?.();
   }
 }));
 
@@ -425,15 +465,18 @@ router.post('/:id/deactivate', asyncHandler(async (req, res) => {
   const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
+  const { cwd, cleanup } = await resolveStackCwd(stack);
   try {
-    await execFileAsync('docker', ['compose', 'down'],
-      { cwd: stack.stack_path, timeout: 120000 }
+    await execFileAsync('docker', ['compose', '--project-name', stack.name.toLowerCase(), 'down'],
+      { cwd, timeout: 120000 }
     );
     await pool.query("UPDATE stacks SET status = 'stopped', updated_at = NOW() WHERE id = $1", [id]);
     await auditLog('deactivate', 'stack', id);
     res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  } finally {
+    await cleanup?.();
   }
 }));
 
@@ -443,15 +486,18 @@ router.post('/:id/restart', asyncHandler(async (req, res) => {
   const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
+  const { cwd, cleanup } = await resolveStackCwd(stack);
   try {
-    await execFileAsync('docker', ['compose', 'restart'],
-      { cwd: stack.stack_path, timeout: 120000 }
+    await execFileAsync('docker', ['compose', '--project-name', stack.name.toLowerCase(), 'restart'],
+      { cwd, timeout: 120000 }
     );
     await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
     await auditLog('restart', 'stack', id);
     res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  } finally {
+    await cleanup?.();
   }
 }));
 
@@ -463,9 +509,10 @@ router.post('/:id/recreate', asyncHandler(async (req, res) => {
 
   await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [id]);
 
+  const { cwd, cleanup } = await resolveStackCwd(stack);
   try {
-    await execFileAsync('docker', ['compose', 'up', '-d', '--force-recreate'],
-      { cwd: stack.stack_path, timeout: 120000 }
+    await execFileAsync('docker', ['compose', '--project-name', stack.name.toLowerCase(), 'up', '-d', '--force-recreate'],
+      { cwd, timeout: 120000 }
     );
     await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
     await auditLog('recreate', 'stack', id);
@@ -473,6 +520,8 @@ router.post('/:id/recreate', asyncHandler(async (req, res) => {
   } catch (err: any) {
     await pool.query("UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1", [id]);
     res.status(500).json({ error: err.message });
+  } finally {
+    await cleanup?.();
   }
 }));
 
@@ -573,9 +622,25 @@ router.put('/:id/file', asyncHandler(async (req, res) => {
   await mkdir(dirname(safePath), { recursive: true });
   await writeFile(safePath, content, 'utf8');
 
-  // Sync key files to DB
-  if (filePath === 'docker-compose.yml') {
-    await pool.query('UPDATE stacks SET compose_content = $1, updated_at = NOW() WHERE id = $2', [content, req.params.id]);
+  // Sync compose/env files to DB and save a version
+  const isCompose = COMPOSE_FILENAMES.includes(filePath);
+  if (isCompose) {
+    const newVersion = stack.version + 1;
+    await pool.query(
+      'UPDATE stacks SET compose_content = $1, version = $2, services = $3, updated_at = NOW() WHERE id = $4',
+      [content, newVersion, countServices(content), req.params.id]
+    );
+    await pool.query(
+      `INSERT INTO stack_versions (stack_id, version, compose_content, env_content, description)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [req.params.id, newVersion, content, stack.env_content || '', `Edited via file browser: ${filePath}`]
+    );
+    await pool.query(
+      `DELETE FROM stack_versions WHERE stack_id = $1 AND version NOT IN (
+         SELECT version FROM stack_versions WHERE stack_id = $1 ORDER BY version DESC LIMIT 10
+       )`,
+      [req.params.id]
+    );
   }
   if (filePath === '.env') {
     await pool.query('UPDATE stacks SET env_content = $1, updated_at = NOW() WHERE id = $2', [content, req.params.id]);
@@ -583,6 +648,44 @@ router.put('/:id/file', asyncHandler(async (req, res) => {
 
   await auditLog('file_update', 'stack', String(req.params.id), { filePath });
   res.json({ ok: true });
+}));
+
+// Sync DB with live files on disk (external changes — user edited host files directly)
+router.post('/:id/sync-from-disk', asyncHandler(async (req, res) => {
+  const id = String(req.params.id);
+  const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
+  if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
+
+  try {
+    await access(stack.stack_path);
+  } catch {
+    res.status(400).json({ error: 'Stack directory is not accessible from the container. Only stacks in mounted paths (e.g. /data/stacks) can be synced.' });
+    return;
+  }
+
+  const composeName = await findComposeFile(stack.stack_path);
+  const diskCompose = await readFile(join(stack.stack_path, composeName), 'utf8');
+  const diskEnv = await readFile(join(stack.stack_path, '.env'), 'utf8').catch(() => '');
+
+  const newVersion = stack.version + 1;
+  await pool.query(
+    `INSERT INTO stack_versions (stack_id, version, compose_content, env_content, description)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [id, newVersion, diskCompose, diskEnv, 'Synced from disk (external change detected)']
+  );
+  await pool.query(
+    `DELETE FROM stack_versions WHERE stack_id = $1 AND version NOT IN (
+       SELECT version FROM stack_versions WHERE stack_id = $1 ORDER BY version DESC LIMIT 10
+     )`,
+    [id]
+  );
+  await pool.query(
+    `UPDATE stacks SET compose_content = $1, env_content = $2, version = $3, services = $4, updated_at = NOW() WHERE id = $5`,
+    [diskCompose, diskEnv, newVersion, countServices(diskCompose), id]
+  );
+
+  await auditLog('sync_from_disk', 'stack', id);
+  res.json({ ok: true, compose: diskCompose, env: diskEnv, version: newVersion });
 }));
 
 // ---- Git Sync ----
@@ -733,11 +836,12 @@ router.post('/:id/update', asyncHandler(async (req, res) => {
 
 async function listFilesRecursive(dir: string, base: string, depth = 0): Promise<any[]> {
   if (depth > 5) return [];
+  const SKIP = new Set(['.git', 'node_modules', '__pycache__', '.DS_Store']);
   try {
     const entries = await readdir(dir, { withFileTypes: true });
     const result: any[] = [];
     for (const entry of entries) {
-      if (entry.name === '.git') continue;
+      if (SKIP.has(entry.name)) continue;
       const fullPath = join(dir, entry.name);
       const relPath = relative(base, fullPath);
       if (entry.isDirectory()) {
@@ -747,6 +851,11 @@ async function listFilesRecursive(dir: string, base: string, depth = 0): Promise
         result.push({ name: entry.name, path: relPath, type: 'file' });
       }
     }
+    // Directories first, then files, both alphabetical
+    result.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
     return result;
   } catch {
     return [];

@@ -54,6 +54,10 @@ export interface Stack {
   updatedAt?: string
   versions?: StackVersion[]
   ports?: number[]
+  // External change detection (populated by GET /api/stacks/:id)
+  hasExternalChanges?: boolean
+  diskComposeContent?: string | null
+  diskEnvContent?: string | null
   backupConfig?: {
     enabled: boolean
     schedule?: string

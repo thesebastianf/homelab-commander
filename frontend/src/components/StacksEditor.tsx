@@ -53,6 +53,11 @@ import {
   Rocket,
   BookOpen,
   Clipboard,
+  HardDriveDownload,
+  FolderOpen,
+  Folder,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react'
 import type { Stack, BackupConfig } from '@/lib/types'
 import { toast } from 'sonner'
@@ -270,6 +275,18 @@ function EditBackupPanel({ config, onSave, isSaving, stackId }: { config: Backup
   )
 }
 
+/** Flatten backend nested file tree into flat list with depth */
+function flattenFileTree(nodes: any[], depth = 0): any[] {
+  const result: any[] = []
+  for (const node of nodes) {
+    result.push({ ...node, depth })
+    if (node.type === 'directory' && Array.isArray(node.children)) {
+      result.push(...flattenFileTree(node.children, depth + 1))
+    }
+  }
+  return result
+}
+
 // ── WebSocket URL helper ──────────────────────────────────────────────────────
 function wsUrl(path: string): string {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -369,7 +386,7 @@ export function StacksEditor({
   const promptRestartAfterSaveRef = useRef(false)
   // Two-panel state
   const [activeFile, setActiveFile] = useState<'compose' | 'env' | string>('compose')
-  const [rightPanel, setRightPanel] = useState<'logs' | 'compare' | 'backup' | 'autoupdate' | 'ai' | 'conflicts' | 'reference' | 'helpers'>('logs')
+  const [rightPanel, setRightPanel] = useState<'logs' | 'compare' | 'backup' | 'autoupdate' | 'ai' | 'conflicts' | 'reference' | 'helpers' | 'files'>('logs')
   const [compareVersion, setCompareVersion] = useState<number | null>(null)
   // Operation terminal
   const [isOperating, setIsOperating] = useState(false)
@@ -421,6 +438,32 @@ export function StacksEditor({
     queryFn: () => api.fetchStackFiles(selectedStack!.id),
     enabled: !!selectedStack && !isCreating,
   })
+
+  // Disk-sync awareness: poll every 30 s to detect external host file changes
+  const [externalChangeDismissed, setExternalChangeDismissed] = useState(false)
+  const { data: stackDetail } = useQuery({
+    queryKey: ['stack-detail', selectedStack?.id],
+    queryFn: () => api.fetchStack(selectedStack!.id),
+    enabled: !!selectedStack && !isCreating,
+    staleTime: 0,
+    refetchInterval: 30000,
+  })
+  const syncFromDiskMutation = useMutation({
+    mutationFn: () => api.syncStackFromDisk(selectedStack!.id),
+    onSuccess: (data) => {
+      toast.success('Synced from disk — DB updated to match host files')
+      setComposeContent(data.compose)
+      setEnvContent(data.env)
+      setExternalChangeDismissed(true)
+      setIsDirty(false)
+      qc.invalidateQueries({ queryKey: ['stacks'] })
+      qc.invalidateQueries({ queryKey: ['stack-detail', selectedStack?.id] })
+    },
+    onError: (e: any) => toast.error(`Sync failed: ${e.message}`),
+  })
+  const hostPathAccessible = !!stackDetail?.diskComposeContent !== false && stackDetail !== undefined
+  const usingHostPath = stackDetail !== undefined && (stackDetail.diskComposeContent !== null && stackDetail.diskComposeContent !== undefined)
+  const hasExternalChanges = !externalChangeDismissed && !!stackDetail?.hasExternalChanges
 
   const { data: rawCustomFile } = useQuery({
     queryKey: ['stackFileContent', selectedStack?.id, activeFile],
@@ -474,7 +517,7 @@ export function StacksEditor({
     logsViewportRef.current.scrollTop = logsViewportRef.current.scrollHeight
   }, [logLines.length])
 
-  // ── Sync stack content when selection changes ─────────────────────────────
+  // Sync stack content when selection changes
   useEffect(() => {
     if (selectedStack) {
       setComposeContent(selectedStack.composeContent || selectedStack.compose || '')
@@ -485,6 +528,7 @@ export function StacksEditor({
       setYamlError(null)
       setIsOperating(false)
       setOperationDone(false)
+      setExternalChangeDismissed(false)
     }
   }, [selectedStack?.id])
 
@@ -690,7 +734,8 @@ export function StacksEditor({
   const ports = activeFile === 'compose' ? extractPorts(composeContent) : []
   const portConflicts = getPortConflicts(ports)
   const compareVersionObj = versions.find((v: any) => v.version === compareVersion) ?? null
-  const otherFiles = (stackFiles as any[]).filter(f => f.type !== 'directory' && f.name !== 'docker-compose.yml' && f.name !== '.env').slice(0, 6)
+  const flatFiles = flattenFileTree(stackFiles as any[])
+  const otherFiles = flatFiles.filter(f => f.type !== 'directory' && f.name !== 'docker-compose.yml' && f.name !== 'docker-compose.yaml' && f.name !== 'compose.yml' && f.name !== 'compose.yaml' && f.name !== '.env').slice(0, 8)
   const opLines: string[] = operation?.lines || []
   const parsedServices = parseServices(composeContent)
   const stackPortConflictCounts = (() => {
@@ -1109,14 +1154,42 @@ export function StacksEditor({
 
                   {/* PORT CONFLICTS */}
                   {createRightPanel === 'conflicts' && (
-                    <div className="flex-1 overflow-y-auto space-y-2">
+                    <div className="flex-1 overflow-y-auto space-y-3">
+                      {/* System / well-known port warnings */}
+                      {(() => {
+                        const SYSTEM_PORTS: Record<number, string> = {
+                          20: 'FTP data', 21: 'FTP control', 22: 'SSH', 23: 'Telnet',
+                          25: 'SMTP', 53: 'DNS', 67: 'DHCP', 68: 'DHCP', 80: 'HTTP',
+                          110: 'POP3', 123: 'NTP', 143: 'IMAP', 161: 'SNMP', 194: 'IRC',
+                          443: 'HTTPS', 445: 'SMB', 465: 'SMTPS', 587: 'SMTP submission',
+                          993: 'IMAPS', 995: 'POP3S',
+                          3306: 'MySQL', 5432: 'PostgreSQL', 6379: 'Redis', 27017: 'MongoDB',
+                        }
+                        const sysHits = newPorts.filter(p => SYSTEM_PORTS[p])
+                        if (sysHits.length === 0) return null
+                        return (
+                          <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/8 px-3 py-2 space-y-1">
+                            <p className="text-[10px] font-semibold text-yellow-400 uppercase tracking-wide flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" /> Well-known port{sysHits.length > 1 ? 's' : ''} in use
+                            </p>
+                            {sysHits.map(p => (
+                              <p key={p} className="text-xs text-yellow-300 font-mono">
+                                :{p} <span className="text-yellow-400/70">— {SYSTEM_PORTS[p]}</span>
+                              </p>
+                            ))}
+                            <p className="text-[10px] text-yellow-400/60 mt-1">These ports are typically reserved by the OS or standard services. Consider using ports above 1024.</p>
+                          </div>
+                        )
+                      })()}
+
+                      {/* Per-port conflict list */}
                       {newPorts.length === 0 ? (
-                        <div className="flex items-center justify-center h-32">
+                        <div className="flex items-center justify-center h-24">
                           <p className="text-xs text-muted-foreground font-mono">No ports defined in compose yet</p>
                         </div>
                       ) : (
                         <>
-                          <p className="text-xs text-muted-foreground mb-2">Ports declared in your compose:</p>
+                          <p className="text-xs text-muted-foreground">Ports declared in your compose:</p>
                           {newPorts.map(port => {
                             const conflict = stacks.find(s => (s.ports || []).includes(port))
                             return (
@@ -1135,7 +1208,9 @@ export function StacksEditor({
                           })}
                         </>
                       )}
-                      <p className="text-xs text-muted-foreground pt-3 pb-1">All ports in use across stacks:</p>
+
+                      {/* All ports in use */}
+                      <p className="text-xs text-muted-foreground pt-1 pb-1">All ports in use across stacks:</p>
                       <div className="flex flex-wrap gap-1">
                         {stacks.flatMap(s => (s.ports || []).map(p => ({ p, name: s.name }))).map(({ p, name }, i) => (
                           <Tooltip key={i}>
@@ -1146,6 +1221,26 @@ export function StacksEditor({
                           </Tooltip>
                         ))}
                         {stacks.every(s => !s.ports?.length) && <span className="text-xs text-muted-foreground italic">No ports in use across stacks</span>}
+                      </div>
+
+                      {/* Best-practice port ranges reference */}
+                      <div className="rounded-lg border border-border/40 bg-muted/10 px-3 py-2 mt-2 space-y-1.5">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                          <BookOpen className="w-3 h-3" /> Homelab port conventions
+                        </p>
+                        {[
+                          { range: '1024–1999', label: 'General homelab / self-hosted services' },
+                          { range: '3000–3999', label: 'Web UIs & dashboards (Grafana :3000, THC :3210)' },
+                          { range: '5000–5999', label: 'Dev / build tools (Registry :5000)' },
+                          { range: '8000–8999', label: 'Proxies & web apps (nginx :8080, Traefik :8080/:8443)' },
+                          { range: '9000–9999', label: 'Monitoring (Portainer :9000, Prometheus :9090)' },
+                          { range: '10000–19999', label: 'Custom app ports' },
+                        ].map(({ range, label }) => (
+                          <div key={range} className="flex items-baseline gap-2">
+                            <span className="font-mono text-[10px] text-primary/80 shrink-0 w-20">{range}</span>
+                            <span className="text-[10px] text-muted-foreground">{label}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -1459,6 +1554,26 @@ export function StacksEditor({
 
                   {/* File tab bar */}
                   <div className="flex items-center gap-1 mb-2 shrink-0 flex-wrap">
+                    {/* Source indicator */}
+                    {stackDetail !== undefined && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono shrink-0 border ${
+                            usingHostPath
+                              ? 'border-green-500/40 text-green-400 bg-green-500/10'
+                              : 'border-yellow-500/40 text-yellow-400 bg-yellow-500/10'
+                          }`}>
+                            <HardDriveDownload className="w-2.5 h-2.5" />
+                            {usingHostPath ? 'HOST' : 'DB'}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="text-xs max-w-60">
+                          {usingHostPath
+                            ? `Files are read/written directly on the host at ${selectedStack.stackPath}. Changes you make here persist on disk.`
+                            : 'Stack path is not mounted — edits are stored in the database only. Ensure the stacks volume is mounted to persist changes on host.'}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                     {/* compose.yml tab */}
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1512,6 +1627,45 @@ export function StacksEditor({
                     <div className="flex items-start gap-2 rounded-lg border border-destructive/50 bg-destructive/5 px-3 py-2 mb-2 shrink-0">
                       <AlertTriangle className="w-3.5 h-3.5 text-destructive mt-0.5 shrink-0" />
                       <p className="text-xs text-destructive font-mono break-all">{yamlError}</p>
+                    </div>
+                  )}
+
+                  {/* External change banner */}
+                  {hasExternalChanges && (
+                    <div className="flex items-start gap-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 mb-2 shrink-0">
+                      <AlertTriangle className="w-3.5 h-3.5 text-yellow-400 shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-yellow-300">External change detected on host</p>
+                        <p className="text-xs text-yellow-400/80 mt-0.5">The compose file on disk differs from the DB version. Someone edited it directly on the host.</p>
+                      </div>
+                      <div className="flex gap-1.5 shrink-0">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/20 px-2"
+                              onClick={() => {
+                                if (stackDetail?.diskComposeContent) setComposeContent(stackDetail.diskComposeContent)
+                                if (stackDetail?.diskEnvContent !== null && stackDetail?.diskEnvContent !== undefined) setEnvContent(stackDetail.diskEnvContent)
+                                setExternalChangeDismissed(true)
+                                setIsDirty(true)
+                                toast.info('Loaded disk version into editor')
+                              }}>
+                              <HardDriveDownload className="w-2.5 h-2.5" />Load
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs">Load on-disk content into editor (does not save yet)</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="sm" className="h-6 text-[10px] gap-1 px-2"
+                              disabled={syncFromDiskMutation.isPending}
+                              onClick={() => syncFromDiskMutation.mutate()}>
+                              {syncFromDiskMutation.isPending ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <RefreshCw className="w-2.5 h-2.5" />}Sync
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs">Save disk version to DB + create version snapshot</TooltipContent>
+                        </Tooltip>
+                        <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setExternalChangeDismissed(true)}>✕</Button>
+                      </div>
                     </div>
                   )}
 
@@ -1677,6 +1831,18 @@ export function StacksEditor({
                         </button>
                       </TooltipTrigger>
                       <TooltipContent className="text-xs">Global copy-paste helpers from Settings</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setRightPanel('files')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'files' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                        >
+                          <FolderOpen className="w-3 h-3" />
+                          Files
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">Browse all files in this stack's directory</TooltipContent>
                     </Tooltip>
                     <div className="flex-1" />
                     {rightPanel === 'logs' && (
@@ -1976,6 +2142,45 @@ export function StacksEditor({
                               <Copy className="w-3.5 h-3.5" />
                             </button>
                           </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {/* FILE BROWSER (edit mode) */}
+                  {rightPanel === 'files' && (
+                    <div className="flex-1 overflow-y-auto space-y-0.5">
+                      {(stackFiles as any[]).length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-32 gap-2">
+                          <FolderOpen className="w-8 h-8 text-muted-foreground opacity-40" />
+                          <p className="text-xs text-muted-foreground">No files found in stack directory</p>
+                          <p className="text-[10px] text-muted-foreground/60">Stack may use DB-only storage</p>
+                        </div>
+                      ) : (
+                        flatFiles.map((f: any, i: number) => (
+                          <button
+                            key={f.path ?? i}
+                            onClick={() => {
+                              if (f.type === 'directory') return
+                              setActiveFile(f.path)
+                              setIsDirty(false)
+                            }}
+                            disabled={f.type === 'directory'}
+                            className={`w-full flex items-center gap-1.5 px-2 py-1 rounded text-xs text-left transition-colors ${
+                              f.type === 'directory'
+                                ? 'text-muted-foreground/70 cursor-default'
+                                : activeFile === f.path
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                            }`}
+                            style={{ paddingLeft: `${8 + (f.depth ?? 0) * 14}px` }}
+                          >
+                            {f.type === 'directory'
+                              ? <Folder className="w-3 h-3 shrink-0 text-blue-400" />
+                              : <FileText className="w-3 h-3 shrink-0" />
+                            }
+                            <span className="font-mono truncate">{f.name}</span>
+                          </button>
                         ))
                       )}
                     </div>
