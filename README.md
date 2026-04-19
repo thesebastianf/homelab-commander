@@ -58,6 +58,16 @@ It combines day to day Docker operations, stack lifecycle tooling, backup automa
 - Port registry and conflict visibility
 - Global update freeze and scheduled auto update window
 
+
+### Links
+Smartphone View Enforced:
+Compact Stacks:
+http://localhost:3210/?mobile=1&tab=stacks
+Compact Dashboard:
+http://localhost:3210/?mobile=1&tab=dashboard
+Full UI forced:
+http://localhost:3210/?mobile=0&tab=stacks
+
 ## Visual Tour
 
 ### Main Dashboard

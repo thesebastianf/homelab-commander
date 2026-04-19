@@ -55,10 +55,18 @@ import { useStacks, useExternalStacks, useDeployStack, useStopStack, useRestartS
 import { useVolumes } from '@/hooks/useVolumes'
 import { useNetworks } from '@/hooks/useNetworks'
 import { useSettings, useSystemInfo, useUpdateSettings, usePruneSystem } from '@/hooks/useSettings'
+import { useIsMobile } from '@/hooks/use-mobile'
 import type { Stack, AppSettings } from '@/lib/types'
 import { clearStoredCredentials, getStoredCredentials } from '@/lib/api'
 import * as api from '@/lib/api'
 import { toast } from 'sonner'
+
+const APP_TABS = ['dashboard', 'stacks', 'containers', 'volumes', 'images', 'networks'] as const
+type AppTab = (typeof APP_TABS)[number]
+
+function isAppTab(value: string | null): value is AppTab {
+  return !!value && APP_TABS.includes(value as AppTab)
+}
 
 const defaultSettings: AppSettings = {
   theme: 'dark',
@@ -132,8 +140,20 @@ function App() {
   const pruneSystem = usePruneSystem()
 
   // State hooks - MUST BE HERE BEFORE EARLY RETURN
+  const isViewportMobile = useIsMobile()
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeTab, setActiveTab] = useState('dashboard')
+  const [activeTab, setActiveTab] = useState<AppTab>(() => {
+    const params = new URLSearchParams(window.location.search)
+    const tabParam = params.get('tab')
+    return isAppTab(tabParam) ? tabParam : 'dashboard'
+  })
+  const [mobileOverride, setMobileOverride] = useState<boolean | null>(() => {
+    const params = new URLSearchParams(window.location.search)
+    const mobileParam = params.get('mobile')
+    if (mobileParam === '1' || mobileParam === 'true') return true
+    if (mobileParam === '0' || mobileParam === 'false') return false
+    return null
+  })
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [databaseExplorerOpen, setDatabaseExplorerOpen] = useState(false)
   const [maintenanceOpen, setMaintenanceOpen] = useState(false)
@@ -163,6 +183,7 @@ function App() {
   const settings = settingsQuery.data
   const systemInfo = systemInfoQuery.data
   const aggregatedLogs = aggregatedLogsQuery.data ?? []
+  const compactMode = mobileOverride ?? isViewportMobile
 
   const currentSettings: AppSettings = {
     ...defaultSettings,
@@ -178,6 +199,26 @@ function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', currentSettings.theme || 'dark')
   }, [currentSettings.theme])
+
+  useEffect(() => {
+    if (!compactMode) return
+    if (activeTab !== 'dashboard' && activeTab !== 'stacks') {
+      setActiveTab('dashboard')
+    }
+  }, [compactMode, activeTab])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    params.set('tab', activeTab)
+    if (mobileOverride === null) {
+      params.delete('mobile')
+    } else {
+      params.set('mobile', mobileOverride ? '1' : '0')
+    }
+    const query = params.toString()
+    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}`
+    window.history.replaceState(null, '', nextUrl)
+  }, [activeTab, mobileOverride])
 
   // Show loading screen while initial data is being fetched
   const isLoading = containersQuery.isPending || imagesQuery.isPending || stacksQuery.isPending
@@ -296,6 +337,9 @@ function App() {
 
   const handlePurgeImages = async () => { await pruneSystem.mutateAsync(); }
   const handlePruneSystems = async () => { await pruneSystem.mutateAsync(); }
+  const handleTabChange = (value: string) => {
+    if (isAppTab(value)) setActiveTab(value)
+  }
 
   const containersWithUpdates = containers.filter(c => c.updateAvailable).length
   const autoUpdateEnabled = currentSettings.autoUpdate
@@ -309,78 +353,101 @@ function App() {
     <div className="min-h-screen bg-background">
       <Toaster position="top-right" richColors />
       <header className="border-b border-border bg-card sticky top-0 z-50 backdrop-blur-sm bg-card/80">
-        <div className="px-6 py-3">
+        <div className={compactMode ? 'px-4 py-2.5' : 'px-6 py-3'}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <img src="/thc_small_.png" alt="THC Logo" className="h-12 w-12 object-contain" />
-              <div>
-                <h1 className="text-xl font-bold font-mono tracking-tight">THC</h1>
-                <p className="text-xs text-muted-foreground">The Homelab Commander · highly addictive.</p>
-              </div>
-            </div>
-
-            {/* Status badges */}
-            <div className="flex items-center gap-2">
-              {currentSettings.globalUpdateFreeze && (
-                <Badge variant="destructive" className="gap-1 px-3 animate-pulse">
-                  <Snowflake className="w-3 h-3" />
-                  UPDATE FREEZE
-                </Badge>
-              )}
-              {autoUpdateEnabled && !currentSettings.globalUpdateFreeze && (
-                <Badge variant="secondary" className="gap-1 px-3 font-mono text-xs">
-                  Auto-Update ON
-                </Badge>
-              )}
-              {containersWithUpdates > 0 && (
-                <Badge variant="outline" className="border-warning text-warning gap-1 font-mono text-xs">
-                  <CloudDownload className="w-3 h-3" />
-                  {containersWithUpdates} Updates
-                </Badge>
+              <img src="/thc_small_.png" alt="THC Logo" className={compactMode ? 'h-8 w-8 object-contain' : 'h-12 w-12 object-contain'} />
+              {!compactMode && (
+                <div>
+                  <h1 className="text-xl font-bold font-mono tracking-tight">THC</h1>
+                  <p className="text-xs text-muted-foreground">The Homelab Commander · highly addictive.</p>
+                </div>
               )}
             </div>
 
-            {/* Clock + timezone */}
-            <ClockWidget />
+            {compactMode ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2.5 text-xs font-mono"
+                onClick={() => setMobileOverride(false)}
+              >
+                Full UI
+              </Button>
+            ) : (
+              <>
+                {/* Status badges */}
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2.5 text-xs font-mono"
+                    onClick={() => setMobileOverride(true)}
+                  >
+                    Compact UI
+                  </Button>
+                  {currentSettings.globalUpdateFreeze && (
+                    <Badge variant="destructive" className="gap-1 px-3 animate-pulse">
+                      <Snowflake className="w-3 h-3" />
+                      UPDATE FREEZE
+                    </Badge>
+                  )}
+                  {autoUpdateEnabled && !currentSettings.globalUpdateFreeze && (
+                    <Badge variant="secondary" className="gap-1 px-3 font-mono text-xs">
+                      Auto-Update ON
+                    </Badge>
+                  )}
+                  {containersWithUpdates > 0 && (
+                    <Badge variant="outline" className="border-warning text-warning gap-1 font-mono text-xs">
+                      <CloudDownload className="w-3 h-3" />
+                      {containersWithUpdates} Updates
+                    </Badge>
+                  )}
+                </div>
 
-            {/* Action buttons with labels */}
-            <div className="flex items-center gap-1">
-              <Button variant="ghost" size="sm" onClick={() => setPortRegistryOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
-                <ListOrdered className="w-4 h-4" />
-                <span className="text-[10px] font-mono">Ports</span>
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setSmartStartupOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
-                <Zap className="w-4 h-4" />
-                <span className="text-[10px] font-mono">Startup</span>
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setBackupManagementOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
-                <Save className="w-4 h-4" />
-                <span className="text-[10px] font-mono">Backup</span>
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setNotificationServicesOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
-                <Bell className="w-4 h-4" />
-                <span className="text-[10px] font-mono">Alerts</span>
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setMaintenanceOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
-                <Paintbrush className="w-4 h-4" />
-                <span className="text-[10px] font-mono">Cleanup</span>
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setDatabaseExplorerOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
-                <Database className="w-4 h-4" />
-                <span className="text-[10px] font-mono">Database</span>
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
-                <Settings className="w-4 h-4" />
-                <span className="text-[10px] font-mono">Settings</span>
-              </Button>
-            </div>
+                {/* Clock + timezone */}
+                <ClockWidget />
+
+                {/* Action buttons with labels */}
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => setPortRegistryOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
+                    <ListOrdered className="w-4 h-4" />
+                    <span className="text-[10px] font-mono">Ports</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setSmartStartupOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
+                    <Zap className="w-4 h-4" />
+                    <span className="text-[10px] font-mono">Startup</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setBackupManagementOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
+                    <Save className="w-4 h-4" />
+                    <span className="text-[10px] font-mono">Backup</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setNotificationServicesOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
+                    <Bell className="w-4 h-4" />
+                    <span className="text-[10px] font-mono">Alerts</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setMaintenanceOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
+                    <Paintbrush className="w-4 h-4" />
+                    <span className="text-[10px] font-mono">Cleanup</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDatabaseExplorerOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
+                    <Database className="w-4 h-4" />
+                    <span className="text-[10px] font-mono">Database</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
+                    <Settings className="w-4 h-4" />
+                    <span className="text-[10px] font-mono">Settings</span>
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </header>
 
-      <main className="px-6 py-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
+      <main className={compactMode ? 'px-4 py-3' : 'px-6 py-6'}>
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
+          <TabsList className={compactMode ? 'mb-3 w-full grid grid-cols-2' : 'mb-6'}>
             <TabsTrigger value="dashboard" className="gap-2">
               <Home className="w-4 h-4" />
               Dashboard
@@ -392,25 +459,29 @@ function App() {
                 {stacks.length}
               </span>
             </TabsTrigger>
-            <TabsTrigger value="containers" className="gap-2">
-              <Box className="w-4 h-4" />
-              Containers
-              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-mono">
-                {systemStats.containers.total}
-              </span>
-            </TabsTrigger>
-            <TabsTrigger value="volumes" className="gap-2">
-              <HardDrive className="w-4 h-4" />
-              Volumes
-            </TabsTrigger>
-            <TabsTrigger value="images" className="gap-2">
-              <ImageIcon className="w-4 h-4" />
-              Images
-            </TabsTrigger>
-            <TabsTrigger value="networks" className="gap-2">
-              <Network className="w-4 h-4" />
-              Networks
-            </TabsTrigger>
+            {!compactMode && (
+              <>
+                <TabsTrigger value="containers" className="gap-2">
+                  <Box className="w-4 h-4" />
+                  Containers
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-mono">
+                    {systemStats.containers.total}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger value="volumes" className="gap-2">
+                  <HardDrive className="w-4 h-4" />
+                  Volumes
+                </TabsTrigger>
+                <TabsTrigger value="images" className="gap-2">
+                  <ImageIcon className="w-4 h-4" />
+                  Images
+                </TabsTrigger>
+                <TabsTrigger value="networks" className="gap-2">
+                  <Network className="w-4 h-4" />
+                  Networks
+                </TabsTrigger>
+              </>
+            )}
           </TabsList>
 
           {/* ═══ DASHBOARD ═══ */}
@@ -570,6 +641,8 @@ function App() {
               stacks={stacks}
               externalStacks={externalStacks}
               containers={containers}
+              forcedMobileMode={compactMode}
+              onExitForcedMobileMode={() => setMobileOverride(false)}
               onDeployStack={(id) => {
                 deployStack.mutate(id, {
                   onSuccess: () => toast.success('Stack deployed'),

@@ -330,6 +330,8 @@ interface StacksEditorProps {
   stacks: Stack[]
   externalStacks?: Stack[]
   containers: { id: string; name: string; stackId?: string; ports?: string[] }[]
+  forcedMobileMode?: boolean
+  onExitForcedMobileMode?: () => void
   onDeployStack: (id: string) => void
   onStopStack: (id: string) => void
   onRestartStack: (id: string) => void
@@ -342,6 +344,8 @@ type SortedStackGroup = 'running' | 'stopped' | 'failed'
 export function StacksEditor({
   stacks,
   externalStacks = [],
+  forcedMobileMode,
+  onExitForcedMobileMode,
   onDeployStack,
   onStopStack,
   onRestartStack,
@@ -380,7 +384,7 @@ export function StacksEditor({
   })
   const [mobileModeEnabled, setMobileModeEnabled] = useState(false)
   const isMobile = useIsMobile()
-  const effectiveMobileMode = isMobile || mobileModeEnabled
+  const effectiveMobileMode = forcedMobileMode ?? (isMobile || mobileModeEnabled)
   const qc = useQueryClient()
   const { data: settings } = useSettings()
 
@@ -758,7 +762,7 @@ export function StacksEditor({
         onRecreateStack={onRecreateStack}
         onDeactivateStack={onDeactivateStack}
         onCreateNew={handleCreateNew}
-        onToggleMobileMode={() => setMobileModeEnabled(!mobileModeEnabled)}
+        onToggleMobileMode={onExitForcedMobileMode ?? (() => setMobileModeEnabled(!mobileModeEnabled))}
         isOperating={isOperating}
       />
     )
