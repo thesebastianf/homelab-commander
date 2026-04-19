@@ -750,7 +750,15 @@ function App() {
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         settings={currentSettings}
-        onSave={(s) => updateSettings.mutate(s)}
+        onSave={async (s) => {
+          try {
+            await updateSettings.mutateAsync(s)
+            toast.success('Settings saved!')
+          } catch (err: any) {
+            toast.error(`Failed to save settings: ${err.message || 'Unknown error'}`)
+            throw err
+          }
+        }}
       />
 
       <MaintenanceDialog

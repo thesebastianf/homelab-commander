@@ -4,6 +4,7 @@ import { asyncHandler } from '../lib/asyncHandler.js';
 import { validateBody } from '../middleware/validate.js';
 import { updateSettingsBody } from '../validation/schemas.js';
 import { rescheduleAutoUpdater } from '../services/autoUpdateScheduler.js';
+import { logger } from '../logger.js';
 
 const router = Router();
 
@@ -62,6 +63,7 @@ router.get('/', asyncHandler(async (_req, res) => {
 
 router.put('/', validateBody(updateSettingsBody), asyncHandler(async (req, res) => {
   const b = req.body;
+  logger.info({ globalUpdateFreeze: b.globalUpdateFreeze, theme: b.theme }, 'PUT /settings: received update');
   const updates: string[] = [];
   const values: any[] = [];
   let idx = 1;
@@ -92,6 +94,7 @@ router.put('/', validateBody(updateSettingsBody), asyncHandler(async (req, res) 
     `UPDATE settings SET ${updates.join(', ')} WHERE id = 1`,
     values
   );
+  logger.info({ fields: updates.length }, 'PUT /settings: update completed successfully');
 
   // Reschedule auto-updater if schedule changed
   if (b.autoUpdateSchedule !== undefined) {

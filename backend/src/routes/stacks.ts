@@ -20,6 +20,45 @@ const router = Router();
 // Docker supports 4 compose filenames in priority order
 const COMPOSE_FILENAMES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'];
 
+function getStackPathCandidates(stackPath: string): string[] {
+  const candidates = new Set<string>();
+  const normalizedPath = String(stackPath || '').replace(/\\/g, '/').replace(/\/+$/, '');
+  const mountedBase = config.stacksPath.replace(/\\/g, '/').replace(/\/+$/, '');
+
+  if (!normalizedPath) return [];
+
+  candidates.add(normalizedPath);
+
+  const stackSegments = normalizedPath.split('/').filter(Boolean);
+  const stackName = stackSegments[stackSegments.length - 1];
+  if (stackName) {
+    candidates.add(join(mountedBase, stackName).replace(/\\/g, '/'));
+  }
+
+  const marker = '/stacks/';
+  const markerIndex = normalizedPath.lastIndexOf(marker);
+  if (markerIndex !== -1) {
+    const suffix = normalizedPath.slice(markerIndex + marker.length);
+    if (suffix) {
+      candidates.add(join(mountedBase, suffix).replace(/\\/g, '/'));
+    }
+  }
+
+  return [...candidates];
+}
+
+async function resolveAccessibleStackPath(stack: any): Promise<string | null> {
+  for (const candidate of getStackPathCandidates(stack.stack_path)) {
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      // try next candidate
+    }
+  }
+  return null;
+}
+
 /** Returns the first compose filename found in the given directory, or 'docker-compose.yml' as fallback */
 async function findComposeFile(dir: string): Promise<string> {
   for (const filename of COMPOSE_FILENAMES) {
@@ -39,21 +78,21 @@ async function findComposeFile(dir: string): Promise<string> {
  *   accessible from within the container).
  */
 async function resolveStackCwd(stack: any): Promise<{ cwd: string; cleanup: (() => Promise<void>) | null }> {
-  try {
-    await access(stack.stack_path);
-    return { cwd: stack.stack_path, cleanup: null };
-  } catch {
-    // Path not accessible (external/adopted stack) — fall back to in-container temp dir
-    const tempDir = await mkdtemp(join(tmpdir(), 'hlc-'));
-    await writeFile(join(tempDir, 'docker-compose.yml'), stack.compose_content || '');
-    if (stack.env_content) {
-      await writeFile(join(tempDir, '.env'), stack.env_content);
-    }
-    return {
-      cwd: tempDir,
-      cleanup: async () => { try { await rm(tempDir, { recursive: true, force: true }); } catch {} },
-    };
+  const accessiblePath = await resolveAccessibleStackPath(stack);
+  if (accessiblePath) {
+    return { cwd: accessiblePath, cleanup: null };
   }
+
+  // Path not accessible (external/adopted stack) — fall back to in-container temp dir
+  const tempDir = await mkdtemp(join(tmpdir(), 'hlc-'));
+  await writeFile(join(tempDir, 'docker-compose.yml'), stack.compose_content || '');
+  if (stack.env_content) {
+    await writeFile(join(tempDir, '.env'), stack.env_content);
+  }
+  return {
+    cwd: tempDir,
+    cleanup: async () => { try { await rm(tempDir, { recursive: true, force: true }); } catch {} },
+  };
 }
 
 // ---- In-memory operation store for streaming output ----
@@ -276,10 +315,11 @@ router.get('/:id', asyncHandler(async (req, res) => {
   let diskComposeContent: string | null = null;
   let diskEnvContent: string | null = null;
   try {
-    await access(stack.stack_path);
-    const composeName = await findComposeFile(stack.stack_path);
-    diskComposeContent = await readFile(join(stack.stack_path, composeName), 'utf8').catch(() => null);
-    diskEnvContent = await readFile(join(stack.stack_path, '.env'), 'utf8').catch(() => null);
+    const accessiblePath = await resolveAccessibleStackPath(stack);
+    if (!accessiblePath) throw new Error('not accessible');
+    const composeName = await findComposeFile(accessiblePath);
+    diskComposeContent = await readFile(join(accessiblePath, composeName), 'utf8').catch(() => null);
+    diskEnvContent = await readFile(join(accessiblePath, '.env'), 'utf8').catch(() => null);
     if (diskComposeContent !== null && diskComposeContent.trim() !== (stack.compose_content || '').trim()) {
       hasExternalChanges = true;
     }
@@ -348,8 +388,11 @@ router.put('/:id', validateBody(updateStackBody), asyncHandler(async (req, res) 
     updates.push(`version = version + 1`);
 
     // Write to disk — preserve existing compose filename
-    const composeFile = await findComposeFile(existing.stack_path);
-    await writeFile(join(existing.stack_path, composeFile), b.composeContent);
+    const accessiblePath = await resolveAccessibleStackPath(existing);
+    if (accessiblePath) {
+      const composeFile = await findComposeFile(accessiblePath);
+      await writeFile(join(accessiblePath, composeFile), b.composeContent);
+    }
 
     // Save version
     const newVersion = existing.version + 1;
@@ -369,7 +412,10 @@ router.put('/:id', validateBody(updateStackBody), asyncHandler(async (req, res) 
 
   if (b.envContent !== undefined) {
     updates.push(`env_content = $${idx++}`); values.push(b.envContent);
-    await writeFile(join(existing.stack_path, '.env'), b.envContent);
+    const accessiblePath = await resolveAccessibleStackPath(existing);
+    if (accessiblePath) {
+      await writeFile(join(accessiblePath, '.env'), b.envContent);
+    }
 
     // Version env-only changes too
     if (b.composeContent === undefined) {
@@ -548,10 +594,15 @@ router.post('/:id/restore/:version', asyncHandler(async (req, res) => {
   const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
-  const composeFile = await findComposeFile(stack.stack_path);
-  await writeFile(join(stack.stack_path, composeFile), versionRow.compose_content);
+  const accessiblePath = await resolveAccessibleStackPath(stack);
+  if (!accessiblePath) {
+    res.status(400).json({ error: 'Stack directory is not accessible from the container.' }); return;
+  }
+
+  const composeFile = await findComposeFile(accessiblePath);
+  await writeFile(join(accessiblePath, composeFile), versionRow.compose_content);
   if (versionRow.env_content) {
-    await writeFile(join(stack.stack_path, '.env'), versionRow.env_content);
+    await writeFile(join(accessiblePath, '.env'), versionRow.env_content);
   }
 
   const newVersion = stack.version + 1;
@@ -576,7 +627,9 @@ router.post('/:id/restore/:version', asyncHandler(async (req, res) => {
 router.get('/:id/files', asyncHandler(async (req, res) => {
   const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [req.params.id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
-  const files = await listFilesRecursive(stack.stack_path, stack.stack_path);
+  const accessiblePath = await resolveAccessibleStackPath(stack);
+  if (!accessiblePath) { res.json([]); return; }
+  const files = await listFilesRecursive(accessiblePath, accessiblePath);
   res.json(files);
 }));
 
@@ -588,8 +641,11 @@ router.get('/:id/file', asyncHandler(async (req, res) => {
   const filePath = String(req.query.path || '');
   if (!filePath) { res.status(400).json({ error: 'path query param required' }); return; }
 
-  const safePath = resolve(join(stack.stack_path, filePath));
-  const base = resolve(stack.stack_path);
+  const accessiblePath = await resolveAccessibleStackPath(stack);
+  if (!accessiblePath) { res.status(400).json({ error: 'Stack directory is not accessible from the container.' }); return; }
+
+  const safePath = resolve(join(accessiblePath, filePath));
+  const base = resolve(accessiblePath);
   if (!safePath.startsWith(base + '/') && safePath !== base) {
     res.status(400).json({ error: 'Invalid path' }); return;
   }
@@ -610,8 +666,11 @@ router.put('/:id/file', asyncHandler(async (req, res) => {
   const filePath = String(req.query.path || '');
   if (!filePath) { res.status(400).json({ error: 'path query param required' }); return; }
 
-  const safePath = resolve(join(stack.stack_path, filePath));
-  const base = resolve(stack.stack_path);
+  const accessiblePath = await resolveAccessibleStackPath(stack);
+  if (!accessiblePath) { res.status(400).json({ error: 'Stack directory is not accessible from the container.' }); return; }
+
+  const safePath = resolve(join(accessiblePath, filePath));
+  const base = resolve(accessiblePath);
   if (!safePath.startsWith(base + '/') && safePath !== base) {
     res.status(400).json({ error: 'Invalid path' }); return;
   }
@@ -656,16 +715,15 @@ router.post('/:id/sync-from-disk', asyncHandler(async (req, res) => {
   const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
-  try {
-    await access(stack.stack_path);
-  } catch {
+  const accessiblePath = await resolveAccessibleStackPath(stack);
+  if (!accessiblePath) {
     res.status(400).json({ error: 'Stack directory is not accessible from the container. Only stacks in mounted paths (e.g. /data/stacks) can be synced.' });
     return;
   }
 
-  const composeName = await findComposeFile(stack.stack_path);
-  const diskCompose = await readFile(join(stack.stack_path, composeName), 'utf8');
-  const diskEnv = await readFile(join(stack.stack_path, '.env'), 'utf8').catch(() => '');
+  const composeName = await findComposeFile(accessiblePath);
+  const diskCompose = await readFile(join(accessiblePath, composeName), 'utf8');
+  const diskEnv = await readFile(join(accessiblePath, '.env'), 'utf8').catch(() => '');
 
   const newVersion = stack.version + 1;
   await pool.query(

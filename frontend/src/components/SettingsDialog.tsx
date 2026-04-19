@@ -20,7 +20,7 @@ interface SettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   settings: AppSettings
-  onSave: (settings: AppSettings) => void
+  onSave: (settings: AppSettings) => Promise<void>
 }
 
 export function SettingsDialog({ open, onOpenChange, settings, onSave }: SettingsDialogProps) {
@@ -43,9 +43,13 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
     onOpenChange(false)
   }
 
-  const handleSave = () => {
-    onSave(localSettings)
-    onOpenChange(false)
+  const handleSave = async () => {
+    try {
+      await onSave(localSettings)
+      onOpenChange(false)
+    } catch {
+      // Error toast is handled by the caller; keep dialog open so the user can retry.
+    }
   }
 
   const handleTestAi = async () => {

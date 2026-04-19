@@ -77,6 +77,7 @@ async function initSchema(client: pg.PoolClient): Promise<void> {
       git_integration_config JSONB DEFAULT '{"enabled":false,"repoUrl":"","accessToken":"","syncOn":"manual"}'::jsonb,
       auto_update_schedule JSONB DEFAULT '{"enabled":false,"cron":"0 7 * * 6","label":"Saturdays at 07:00"}'::jsonb,
       ai_config JSONB DEFAULT '{"enabled":false,"provider":"ollama","baseUrl":"http://host.docker.internal:11434","apiKey":"","model":"llama3.1","treatAsLocal":true,"allowEnvToLocal":false}'::jsonb,
+      copy_paste_helpers JSONB DEFAULT '[]'::jsonb,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )
@@ -237,6 +238,7 @@ async function runMigrations(client: pg.PoolClient): Promise<void> {
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS git_integration_config JSONB DEFAULT '{"enabled":false,"repoUrl":"","accessToken":"","syncOn":"manual"}'::jsonb`,
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS auto_update_schedule JSONB DEFAULT '{"enabled":false,"cron":"0 7 * * 6","label":"Saturdays at 07:00"}'::jsonb`,
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS ai_config JSONB DEFAULT '{"enabled":false,"provider":"ollama","baseUrl":"http://host.docker.internal:11434","apiKey":"","model":"llama3.1","treatAsLocal":true,"allowEnvToLocal":false}'::jsonb`,
+    `ALTER TABLE settings ADD COLUMN IF NOT EXISTS copy_paste_helpers JSONB DEFAULT '[]'::jsonb`,
     `ALTER TABLE stacks ADD COLUMN IF NOT EXISTS auto_update BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE stacks ADD COLUMN IF NOT EXISTS run_backup_before_update BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE backup_configs ADD COLUMN IF NOT EXISTS database_config JSONB DEFAULT '{}'::jsonb`,
