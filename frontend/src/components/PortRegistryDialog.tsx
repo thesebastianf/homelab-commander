@@ -296,9 +296,9 @@ export function PortRegistryDialog({
             )}
 
             {/* All ports */}
-            <div>
+            <div className="flex-1 min-h-0 flex flex-col">
               <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">All Ports in Use</p>
-              <ScrollArea className="h-[300px]">
+              <ScrollArea className="flex-1 min-h-0">
                 <div className="space-y-1.5 pr-4">
                   {filteredPorts.map(([port, users]) => (
                     <div key={port} className="flex items-center justify-between p-2 rounded border border-border bg-card hover:bg-card/80">
@@ -347,11 +347,11 @@ export function PortRegistryDialog({
                 )
               }
               return (
-                <div>
+                <div className="flex-1 min-h-0 flex flex-col">
                   <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">
                     Stacks with Host Networking ({hostStacks.length})
                   </p>
-                  <ScrollArea className="h-[400px]">
+                  <ScrollArea className="flex-1 min-h-0">
                     <div className="space-y-2 pr-4">
                       {hostStacks.map(stack => (
                         <Card key={stack.id} className="p-3 border-orange-500/20 bg-orange-500/5">
@@ -468,9 +468,9 @@ export function PortRegistryDialog({
             </Card>
 
             {/* Existing reservations */}
-            <div>
+            <div className="flex-1 min-h-0 flex flex-col">
               <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Existing Reservations</p>
-              <ScrollArea className="h-[320px]">
+              <ScrollArea className="flex-1 min-h-0">
                 <div className="space-y-2 pr-4">
                   {reservations.map(res => {
                     const rangeSize = res.portRangeEnd - res.portRangeStart + 1

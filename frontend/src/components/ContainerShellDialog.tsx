@@ -74,6 +74,7 @@ export function ContainerShellDialog({
     const ws = new WebSocket(wsUrl(`/ws/exec/${encodeURIComponent(containerId)}`))
     ws.binaryType = 'arraybuffer'
     wsRef.current = ws
+    let didOpen = false
 
     const sendResize = () => {
       if (ws.readyState !== WebSocket.OPEN || !termRef.current) return
@@ -81,6 +82,7 @@ export function ContainerShellDialog({
     }
 
     ws.onopen = () => {
+      didOpen = true
       setConnected(true)
       term.write('\u001b[32mConnected. Interactive shell ready.\u001b[0m\r\n')
       sendResize()
@@ -109,8 +111,12 @@ export function ContainerShellDialog({
       term.write('\r\n\u001b[31mConnection error\u001b[0m\r\n')
     }
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       setConnected(false)
+      if (!didOpen) {
+        const closeHint = event.reason || `WebSocket closed (code ${event.code || 'unknown'})`
+        setError(`Unable to start shell: ${closeHint}`)
+      }
       term.write('\r\n\u001b[33mShell session ended\u001b[0m\r\n')
     }
 

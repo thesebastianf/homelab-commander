@@ -97,20 +97,47 @@ export async function openContainerShell(id: string, cols = 120, rows = 30) {
     throw new Error('Container is not running');
   }
 
-  const exec = await container.exec({
-    AttachStdout: true,
-    AttachStderr: true,
-    AttachStdin: true,
-    Tty: true,
-    Cmd: ['sh', '-lc', 'if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi'],
-    Env: ['TERM=xterm-256color'],
-  });
+  const candidates: string[][] = [
+    ['/bin/bash', '-l'],
+    ['bash', '-l'],
+    ['/bin/sh', '-l'],
+    ['sh', '-l'],
+    ['/bin/ash', '-l'],
+    ['ash', '-l'],
+  ];
 
-  const stream = await exec.start({
-    hijack: true,
-    stdin: true,
-    Tty: true,
-  } as any);
+  let exec: any = null;
+  let stream: any = null;
+  let lastError: unknown = null;
+
+  for (const cmd of candidates) {
+    try {
+      const nextExec = await container.exec({
+        AttachStdout: true,
+        AttachStderr: true,
+        AttachStdin: true,
+        Tty: true,
+        Cmd: cmd,
+        Env: ['TERM=xterm-256color'],
+      });
+
+      const nextStream = await nextExec.start({
+        hijack: true,
+        stdin: true,
+        Tty: true,
+      } as any);
+
+      exec = nextExec;
+      stream = nextStream;
+      break;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  if (!exec || !stream) {
+    throw new Error(`No supported shell found in container (${String((lastError as any)?.message || 'unknown error')})`);
+  }
 
   try {
     await exec.resize({ h: rows, w: cols });

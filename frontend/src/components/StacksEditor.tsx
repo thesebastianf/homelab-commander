@@ -61,6 +61,7 @@ import { useSettings } from '@/hooks/useSettings'
 import { ScheduleEditor } from '@/components/ScheduleEditor'
 import { ComposeAiPanel } from '@/components/ComposeAiPanel'
 import { ContainerShellDialog } from '@/components/ContainerShellDialog'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 // -- FullBackupPanel - matches BackupManagementDialog options ----------------
 interface FullBackupPanelProps {
@@ -368,7 +369,7 @@ export function StacksEditor({
   // Operation terminal
   const [isOperating, setIsOperating] = useState(false)
   const [operationDone, setOperationDone] = useState(false)
-  const logsEndRef = useRef<HTMLDivElement>(null)
+  const logsViewportRef = useRef<HTMLDivElement>(null)
   // Create mode right panel
   const [createRightPanel, setCreateRightPanel] = useState<'conflicts' | 'reference' | 'helpers' | 'backup' | 'autoupdate' | 'ai'>('conflicts')
   const [refStackId, setRefStackId] = useState<string | null>(null)
@@ -376,6 +377,7 @@ export function StacksEditor({
     enabled: false, cronSchedule: '0 22 * * 3', retentionDays: 7,
     includeStackFolder: true, includeVolumes: true, includeDatabases: false, useAdvancedRetention: false,
   })
+  const isMobile = useIsMobile()
   const qc = useQueryClient()
   const { data: settings } = useSettings()
 
@@ -461,7 +463,8 @@ export function StacksEditor({
   )
 
   useEffect(() => {
-    if (logsEndRef.current) logsEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    if (!logsViewportRef.current) return
+    logsViewportRef.current.scrollTop = logsViewportRef.current.scrollHeight
   }, [logLines.length])
 
   // ── Sync stack content when selection changes ─────────────────────────────
@@ -740,12 +743,95 @@ export function StacksEditor({
   })
 
   // Render
+  if (isMobile) {
+    return (
+      <TooltipProvider>
+        <div className="h-[calc(100vh-170px)] min-h-0 flex flex-col gap-3">
+          <div className="relative shrink-0">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search stacks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 font-mono text-sm"
+            />
+          </div>
+
+          <Button onClick={handleCreateNew} disabled={isCreating} className="w-full gap-2 shrink-0" size="sm">
+            <Plus className="w-4 h-4" />
+            New Stack
+          </Button>
+
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-2">
+            {(filteredStacks.length === 0) && (
+              <Card className="p-4 text-center text-xs text-muted-foreground">No stacks found</Card>
+            )}
+
+            {filteredStacks.map((stack) => {
+              const running = stack.status === 'running' || stack.status === 'deploying'
+              return (
+                <Card key={stack.id} className="p-3 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-mono text-sm font-semibold truncate">{stack.name}</p>
+                      <p className="text-[11px] text-muted-foreground">{stack.services} {stack.services === 1 ? 'service' : 'services'}</p>
+                    </div>
+                    <Badge variant={getStatusBadgeVariant(stack.status)} className="capitalize">{stack.status}</Badge>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {running ? (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => onRestartStack(stack.id)} className="gap-1 text-xs">
+                          <RotateCw className="w-3.5 h-3.5" /> Restart
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => onStopStack(stack.id)} className="gap-1 text-xs">
+                          <Square className="w-3.5 h-3.5" /> Stop
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => onDeactivateStack(stack.id)} className="gap-1 text-xs">
+                          <XCircle className="w-3.5 h-3.5" /> Down
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => onRecreateStack(stack.id)} className="gap-1 text-xs">
+                          <History className="w-3.5 h-3.5" /> Recreate
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button size="sm" onClick={() => onDeployStack(stack.id)} className="gap-1 text-xs">
+                          <Play className="w-3.5 h-3.5" /> Start
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => onRecreateStack(stack.id)} className="gap-1 text-xs">
+                          <History className="w-3.5 h-3.5" /> Recreate
+                        </Button>
+                      </>
+                    )}
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => updateImagesMutation.mutate(stack.id)}
+                      disabled={isOperating || updateImagesMutation.isPending}
+                      className="gap-1 text-xs col-span-2"
+                    >
+                      {updateImagesMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                      Update Images
+                    </Button>
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
+        </div>
+      </TooltipProvider>
+    )
+  }
+
   return (
     <TooltipProvider>
-      <div className="flex h-[calc(100vh-200px)] gap-4">
+      <div className="flex h-[calc(100vh-200px)] min-h-0 overflow-hidden gap-4">
 
         {/* LEFT SIDEBAR - Stack List */}
-        <div className="w-80 xl:w-[22rem] flex flex-col gap-3 shrink-0">
+        <div className="w-80 xl:w-[22rem] flex flex-col gap-3 shrink-0 min-h-0">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -918,7 +1004,7 @@ export function StacksEditor({
         </div>
 
         {/* ═══ MAIN AREA ═══ */}
-        <div className="flex-1 flex flex-col gap-3 min-w-0">
+        <div className="flex-1 flex flex-col gap-3 min-w-0 min-h-0 overflow-hidden">
 
           {isCreating ? (
             /* --- CREATE MODE --- */
@@ -1271,6 +1357,23 @@ export function StacksEditor({
                           </button>
                           <span className="text-xs text-muted-foreground">-&gt;</span>
                           <span className="font-mono text-[11px] text-muted-foreground truncate" title={svc.image || 'No image set'}>{svc.image || 'no-image'}</span>
+                          {svc.ports.map((p, i) => (
+                            <Tooltip key={`${svc.name}-${p.host}-${i}`}>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="flex items-center gap-0.5 font-mono text-[10px] px-1.5 py-0.5 rounded border border-border/60 hover:border-primary hover:text-primary transition-colors"
+                                  onClick={() => window.open(`http://${window.location.hostname}:${p.host}`, '_blank', 'noopener,noreferrer')}
+                                >
+                                  :{p.host}
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs font-mono">
+                                {`http://${window.location.hostname}:${p.host}`}
+                              </TooltipContent>
+                            </Tooltip>
+                          ))}
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button
@@ -1484,57 +1587,9 @@ export function StacksEditor({
                     : <Textarea value={editorValue} onChange={e => handleEditorChange(e.target.value)} className="flex-1 font-mono text-xs resize-none min-h-0" spellCheck={false} placeholder={activeFile === 'env' ? 'KEY=value' : ''} />
                   }
 
-                  {/* Services panel - shown for compose.yml */}
-                  {activeFile === 'compose' && parsedServices.length > 0 && (
-                    <div className="shrink-0 mt-2 border rounded-md p-2 space-y-1 bg-muted/20">
-                      {parsedServices.map(svc => (
-                        <div key={svc.name} className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-xs font-semibold w-28 shrink-0 truncate">{svc.name}</span>
-                          {svc.image && (
-                            <span className="text-[10px] text-muted-foreground truncate max-w-[110px]" title={svc.image}>
-                              {svc.image.split('/').pop()?.split(':')[0]}
-                            </span>
-                          )}
-                          <div className="flex items-center gap-1 flex-wrap ml-auto">
-                            {svc.ports.length === 0 && (
-                              <span className="text-[10px] text-muted-foreground/40 italic">no ports</span>
-                            )}
-                            {svc.ports.map((p, i) => (
-                              <Tooltip key={i}>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    onClick={() => window.open(`http://${window.location.hostname}:${p.host}`, '_blank')}
-                                    className="flex items-center gap-0.5 font-mono text-[10px] px-1.5 py-0.5 rounded border border-border/60 hover:border-primary hover:text-primary transition-colors"
-                                  >
-                                    :{p.host}
-                                    <ExternalLink className="w-2.5 h-2.5 ml-0.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs font-mono">
-                                  {`http://${window.location.hostname}:${p.host}`}
-                                </TooltipContent>
-                              </Tooltip>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
                   {/* Footer: ports + git + save */}
                   <div className="flex items-center justify-between pt-2 mt-2 border-t shrink-0 gap-2 flex-wrap">
                     <div className="flex items-center gap-2 min-w-0">
-                      {ports.length > 0 && activeFile === 'compose' && (
-                        <Badge
-                          variant="outline"
-                          className={`font-mono text-xs gap-1 cursor-pointer ${portConflicts.length > 0 ? 'border-destructive text-destructive' : ''}`}
-                          onClick={() => { navigator.clipboard.writeText(ports.join(', ')); toast.success('Ports copied') }}
-                        >
-                          Ports: {ports.join(', ')}
-                          <Copy className="w-3 h-3" />
-                        </Badge>
-                      )}
-
                       {gitStatus?.configured && (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -1720,7 +1775,7 @@ export function StacksEditor({
                           <p className="text-muted-foreground text-xs font-mono">Waiting for log output...</p>
                         </div>
                       ) : (
-                        <ScrollArea className="flex-1">
+                        <div ref={logsViewportRef} className="flex-1 overflow-y-auto">
                           <div className="font-mono text-xs space-y-0.5 p-2">
                             {logLines.slice(-500).map((line, i) => (
                               <div key={i} className="flex gap-2 leading-relaxed min-w-0">
@@ -1728,9 +1783,8 @@ export function StacksEditor({
                                 <span className="text-foreground/75 break-all min-w-0">{line.text}</span>
                               </div>
                             ))}
-                            <div ref={logsEndRef} />
                           </div>
-                        </ScrollArea>
+                        </div>
                       )}
                     </div>
                   )}
