@@ -61,6 +61,7 @@ import { useSettings } from '@/hooks/useSettings'
 import { ScheduleEditor } from '@/components/ScheduleEditor'
 import { ComposeAiPanel } from '@/components/ComposeAiPanel'
 import { ContainerShellDialog } from '@/components/ContainerShellDialog'
+import { MobileStacksView } from '@/components/MobileStacksView'
 import { useIsMobile } from '@/hooks/use-mobile'
 
 // -- FullBackupPanel - matches BackupManagementDialog options ----------------
@@ -377,7 +378,9 @@ export function StacksEditor({
     enabled: false, cronSchedule: '0 22 * * 3', retentionDays: 7,
     includeStackFolder: true, includeVolumes: true, includeDatabases: false, useAdvancedRetention: false,
   })
+  const [mobileModeEnabled, setMobileModeEnabled] = useState(false)
   const isMobile = useIsMobile()
+  const effectiveMobileMode = isMobile || mobileModeEnabled
   const qc = useQueryClient()
   const { data: settings } = useSettings()
 
@@ -743,10 +746,30 @@ export function StacksEditor({
   })
 
   // Render
-  if (isMobile) {
+  if (effectiveMobileMode) {
     return (
-      <TooltipProvider>
-        <div className="h-[calc(100vh-170px)] min-h-0 flex flex-col gap-3">
+      <MobileStacksView
+        stacks={stacks}
+        selectedStackId={selectedStack?.id ?? null}
+        onSelectStack={setSelectedStack}
+        onDeployStack={onDeployStack}
+        onStopStack={onStopStack}
+        onRestartStack={onRestartStack}
+        onRecreateStack={onRecreateStack}
+        onDeactivateStack={onDeactivateStack}
+        onCreateNew={handleCreateNew}
+        onToggleMobileMode={() => setMobileModeEnabled(!mobileModeEnabled)}
+        isOperating={isOperating}
+      />
+    )
+  }
+
+  return (
+    <TooltipProvider>
+      <div className="flex h-[calc(100vh-200px)] min-h-0 overflow-hidden gap-4">
+
+        {/* LEFT SIDEBAR - Stack List */}
+        <div className="w-80 xl:w-[22rem] flex flex-col gap-2 shrink-0 min-h-0 overflow-hidden">
           <div className="relative shrink-0">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -762,92 +785,7 @@ export function StacksEditor({
             New Stack
           </Button>
 
-          <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-2">
-            {(filteredStacks.length === 0) && (
-              <Card className="p-4 text-center text-xs text-muted-foreground">No stacks found</Card>
-            )}
-
-            {filteredStacks.map((stack) => {
-              const running = stack.status === 'running' || stack.status === 'deploying'
-              return (
-                <Card key={stack.id} className="p-3 space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-mono text-sm font-semibold truncate">{stack.name}</p>
-                      <p className="text-[11px] text-muted-foreground">{stack.services} {stack.services === 1 ? 'service' : 'services'}</p>
-                    </div>
-                    <Badge variant={getStatusBadgeVariant(stack.status)} className="capitalize">{stack.status}</Badge>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    {running ? (
-                      <>
-                        <Button size="sm" variant="outline" onClick={() => onRestartStack(stack.id)} className="gap-1 text-xs">
-                          <RotateCw className="w-3.5 h-3.5" /> Restart
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => onStopStack(stack.id)} className="gap-1 text-xs">
-                          <Square className="w-3.5 h-3.5" /> Stop
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => onDeactivateStack(stack.id)} className="gap-1 text-xs">
-                          <XCircle className="w-3.5 h-3.5" /> Down
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => onRecreateStack(stack.id)} className="gap-1 text-xs">
-                          <History className="w-3.5 h-3.5" /> Recreate
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Button size="sm" onClick={() => onDeployStack(stack.id)} className="gap-1 text-xs">
-                          <Play className="w-3.5 h-3.5" /> Start
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => onRecreateStack(stack.id)} className="gap-1 text-xs">
-                          <History className="w-3.5 h-3.5" /> Recreate
-                        </Button>
-                      </>
-                    )}
-
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => updateImagesMutation.mutate(stack.id)}
-                      disabled={isOperating || updateImagesMutation.isPending}
-                      className="gap-1 text-xs col-span-2"
-                    >
-                      {updateImagesMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                      Update Images
-                    </Button>
-                  </div>
-                </Card>
-              )
-            })}
-          </div>
-        </div>
-      </TooltipProvider>
-    )
-  }
-
-  return (
-    <TooltipProvider>
-      <div className="flex h-[calc(100vh-200px)] min-h-0 overflow-hidden gap-4">
-
-        {/* LEFT SIDEBAR - Stack List */}
-        <div className="w-80 xl:w-[22rem] flex flex-col gap-3 shrink-0 min-h-0">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search stacks..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 font-mono text-sm"
-            />
-          </div>
-
-          <Button onClick={handleCreateNew} disabled={isCreating} className="w-full gap-2" size="sm">
-            <Plus className="w-4 h-4" />
-            New Stack
-          </Button>
-
-          <ScrollArea className="flex-1 rounded-lg border">
+          <ScrollArea className="flex-1 min-h-0 rounded-lg border">
             <div className="p-2 space-y-1.5">
               {filteredStacks.length === 0 && filteredExternalStacks.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground text-xs">

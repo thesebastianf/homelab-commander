@@ -145,28 +145,28 @@ export function ContainerShellDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl w-[96vw] h-[88vh] p-0 overflow-hidden">
-        <DialogHeader className="px-4 pt-4 pb-2 border-b">
-          <div className="flex items-center justify-between gap-3">
-            <div>
+      <DialogContent className="max-w-6xl w-[96vw] h-[88vh] p-0 overflow-hidden flex flex-col">
+        <div className="px-4 pt-4 pb-2 border-b shrink-0">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div className="flex-1 min-w-0">
               <DialogTitle className="font-mono text-sm">Interactive Shell - {shellLabel}</DialogTitle>
               <DialogDescription className="text-xs font-mono truncate">
                 {image || 'image unknown'}
               </DialogDescription>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant={connected ? 'default' : 'outline'} className="text-[10px] font-mono">
-                {connected ? 'connected' : 'disconnected'}
-              </Badge>
-              {error && (
-                <Badge variant="destructive" className="text-[10px] gap-1">
-                  <AlertTriangle className="w-3 h-3" />
-                  error
-                </Badge>
-              )}
-            </div>
           </div>
-        </DialogHeader>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant={connected ? 'default' : 'outline'} className="text-[10px] font-mono">
+              {connected ? 'connected' : 'disconnected'}
+            </Badge>
+            {error && (
+              <Badge variant="destructive" className="text-[10px] gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                error
+              </Badge>
+            )}
+          </div>
+        </div>
         <div className="h-full min-h-0 bg-black/90 p-3">
           <div ref={hostRef} className="h-full w-full rounded border border-border/40 overflow-hidden" />
         </div>
