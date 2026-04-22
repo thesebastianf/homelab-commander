@@ -7,6 +7,7 @@ import { auditLog } from '../lib/audit.js';
 import { sendNotification } from '../services/notifications.js';
 import { config } from '../config.js';
 import { mkdir, writeFile, readFile, readdir, access, mkdtemp, rm } from 'fs/promises';
+import { existsSync } from 'fs';
 import { join, resolve, relative, dirname } from 'path';
 import { tmpdir } from 'os';
 import { execFile } from 'child_process';
@@ -202,6 +203,16 @@ async function execComposeCommand(
     );
 
     try {
+      // CRITICAL: Verify compose file exists before attempting execution
+      const composeFileExists = COMPOSE_FILENAMES.some(filename => existsSync(join(options.cwd, filename)));
+      if (!composeFileExists) {
+        const missingPath = `${options.cwd}/${COMPOSE_FILENAMES.join(' or ')}`;
+        logger.warn(
+          { cwd: options.cwd, stackName: stack.name, stackId: id },
+          `Compose file not found at [${missingPath}] — proceeding with docker compose fallback`
+        );
+      }
+
       const { stdout, stderr } = await execFileAsync(attempt.runtime, attempt.args, {
         cwd: options.cwd,
         timeout: options.timeout,
@@ -239,6 +250,7 @@ async function execComposeCommand(
           composeRuntime: attempt.runtime,
           dockerCommand: attempt.runtime,
           dockerArgs: attempt.args,
+          errorMessage: err?.message || 'Unknown error',
           code: err?.code,
           signal: err?.signal,
           killed: err?.killed,
