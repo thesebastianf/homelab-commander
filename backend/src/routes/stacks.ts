@@ -142,24 +142,25 @@ function getComposeInvocations(stack: any, command: string[], cwd: string): Arra
   const project = composeProjectNameFromStack(stack);
   const hostStackPath = String(stack?.stack_path || '').trim();
   const mountSource = hostStackPath.startsWith('/') ? hostStackPath : cwd;
+  const sidecarInvocations = config.composeSidecarImages.map((image) => ({
+    runtime: 'docker-run-compose' as const,
+    args: [
+      'run', '--rm',
+      '-v', '/var/run/docker.sock:/var/run/docker.sock',
+      '-v', `${mountSource}:/workspace`,
+      '-w', '/workspace',
+      image,
+      '--project-name', project,
+      ...command,
+    ],
+  }));
 
   return [
     { runtime: 'docker', args: ['compose', '--project-name', project, ...command] },
     { runtime: 'docker', args: ['compose', '-p', project, ...command] },
     { runtime: 'docker-compose', args: ['--project-name', project, ...command] },
     { runtime: 'docker-compose', args: ['-p', project, ...command] },
-    {
-      runtime: 'docker-run-compose',
-      args: [
-        'run', '--rm',
-        '-v', '/var/run/docker.sock:/var/run/docker.sock',
-        '-v', `${mountSource}:/workspace`,
-        '-w', '/workspace',
-        'docker/compose:2.29.7',
-        '--project-name', project,
-        ...command,
-      ],
-    },
+    ...sidecarInvocations,
   ];
 }
 
@@ -170,6 +171,10 @@ function shouldTryComposeFallback(err: any): boolean {
     || combined.includes('unknown shorthand flag')
     || combined.includes('docker compose exited with code 125')
     || combined.includes('command not found')
+    || combined.includes('unable to find image')
+    || combined.includes('manifest unknown')
+    || combined.includes('pull access denied')
+    || combined.includes('toomanyrequests')
     || combined.includes('no such file or directory')
     || err?.code === 'ENOENT';
 }

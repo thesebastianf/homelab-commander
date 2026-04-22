@@ -5,6 +5,7 @@ import { validateBody } from '../middleware/validate.js';
 import { updateSettingsBody } from '../validation/schemas.js';
 import { rescheduleAutoUpdater } from '../services/autoUpdateScheduler.js';
 import { logger } from '../logger.js';
+import { config } from '../config.js';
 
 const router = Router();
 
@@ -56,6 +57,11 @@ router.get('/', asyncHandler(async (_req, res) => {
       model: aiConfig.model || 'llama3.1',
       treatAsLocal: aiConfig.treatAsLocal ?? true,
       allowEnvToLocal: aiConfig.allowEnvToLocal ?? false,
+    },
+    dockerCompose: {
+      runtimeMode: config.composeRuntimeMode,
+      sidecarImages: config.composeSidecarImages,
+      preferredSidecarImage: config.composeSidecarImages[0] || 'docker/compose:latest',
     },
     copyPasteHelpers: settings.copy_paste_helpers ?? [],
   });

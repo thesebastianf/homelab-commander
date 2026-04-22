@@ -185,6 +185,11 @@ export interface AppSettings {
     treatAsLocal: boolean
     allowEnvToLocal: boolean
   }
+  dockerCompose?: {
+    runtimeMode: string
+    sidecarImages: string[]
+    preferredSidecarImage: string
+  }
   copyPasteHelpers?: Array<{ id: string; label: string; value: string }>
 }
 

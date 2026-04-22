@@ -8,4 +8,11 @@ export const config = {
   authUser: process.env.AUTH_USER || '',
   authPass: process.env.AUTH_PASS || '',
   corsOrigin: process.env.CORS_ORIGIN || '',
+  composeRuntimeMode: process.env.COMPOSE_RUNTIME_MODE || 'auto',
+  composeSidecarImages: (process.env.COMPOSE_SIDECAR_IMAGES
+    || process.env.DOCKER_COMPOSE_SIDECAR_IMAGE
+    || 'docker/compose:2.29.2,docker/compose:latest,docker/compose:v2.29.2')
+    .split(',')
+    .map((image) => image.trim())
+    .filter(Boolean),
 };

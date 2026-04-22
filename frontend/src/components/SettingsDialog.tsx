@@ -132,6 +132,34 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                 </div>
               </Card>
 
+              <Card className="p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <Label className="text-base">Docker Compose Runtime</Label>
+                    <p className="text-sm text-muted-foreground mt-0.5">Shows how stack actions execute compose commands on this instance.</p>
+                  </div>
+                  <Badge variant="outline" className="font-mono">
+                    {localSettings.dockerCompose?.runtimeMode || 'auto'}
+                  </Badge>
+                </div>
+                <div className="grid gap-2 text-sm">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-muted-foreground">Preferred Sidecar Image</span>
+                    <span className="font-mono text-xs break-all text-right">
+                      {localSettings.dockerCompose?.preferredSidecarImage || 'docker/compose:latest'}
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-muted-foreground">Fallback Image List</span>
+                    <div className="rounded-md border border-border/60 bg-muted/30 p-2 font-mono text-xs space-y-1 max-h-24 overflow-auto">
+                      {(localSettings.dockerCompose?.sidecarImages || ['docker/compose:latest']).map((image) => (
+                        <div key={image}>{image}</div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
               <h3 className="font-mono font-semibold text-sm flex items-center gap-2">
                 <CloudDownload className="w-[18px] h-[18px]" />
                 Update Management
