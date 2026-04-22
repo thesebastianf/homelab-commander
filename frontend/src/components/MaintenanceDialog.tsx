@@ -5,7 +5,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Wrench, ImageIcon, HardDrive, Box, AlertTriangle, Loader2, CheckCircle } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Wrench, ImageIcon, HardDrive, Box, AlertTriangle, Loader2, CheckCircle, Network, Wifi, WifiOff, ShieldAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import * as api from '@/lib/api'
 
@@ -25,6 +26,8 @@ function formatBytes(bytes: number): string {
 export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps) {
   const [pruning, setPruning] = useState<string | null>(null)
   const [pendingPrune, setPendingPrune] = useState<{ type: string; label: string; description: string } | null>(null)
+  const [socketChecking, setSocketChecking] = useState(false)
+  const [socketResult, setSocketResult] = useState<'ok' | 'error' | null>(null)
   const focusRef = useRef<HTMLDivElement | null>(null)
   const qc = useQueryClient()
 
@@ -46,7 +49,45 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
     enabled: open,
   })
 
+  const { data: networks = [] } = useQuery({
+    queryKey: ['networks'],
+    queryFn: api.fetchNetworks,
+    enabled: open,
+  })
+
+  const { data: appSettings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: api.fetchSettings,
+    enabled: open,
+  })
+
   const stoppedContainers = (containers as any[]).filter((c: any) => c.status !== 'running')
+  const networkCount = (networks as any[]).length
+  const registryConfigPresent = (appSettings as any)?.dockerCompose?.registryConfigPresent ?? true
+
+  const NETWORK_WARN_THRESHOLD = 25
+  const ZOMBIE_WARN_THRESHOLD = 5
+  const DISK_WARN_THRESHOLD = 90
+
+  const networkPoolWarning = networkCount > NETWORK_WARN_THRESHOLD
+  const zombieWarning = stoppedContainers.length > ZOMBIE_WARN_THRESHOLD
+  const diskWarning = diskPct > DISK_WARN_THRESHOLD
+  const hasAnyWarning = networkPoolWarning || zombieWarning || diskWarning || !registryConfigPresent
+
+  const checkSocket = async () => {
+    setSocketChecking(true)
+    setSocketResult(null)
+    try {
+      await api.fetchSystemInfo()
+      setSocketResult('ok')
+      toast.success('Docker Socket erreichbar — Verbindung OK')
+    } catch {
+      setSocketResult('error')
+      toast.error('Docker Socket nicht erreichbar!')
+    } finally {
+      setSocketChecking(false)
+    }
+  }
 
   const totalReclaimable =
     (dfData?.images?.reclaimable ?? 0) +
@@ -58,6 +99,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
       if (type === 'images') return api.pruneImages()
       if (type === 'volumes') return api.pruneVolumes()
       if (type === 'containers') return api.pruneContainers()
+      if (type === 'networks') return api.pruneNetworks()
       return api.pruneSystem()
     },
     onMutate: (type) => setPruning(type),
@@ -65,6 +107,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
       qc.invalidateQueries({ queryKey: ['containers'] })
       qc.invalidateQueries({ queryKey: ['images'] })
       qc.invalidateQueries({ queryKey: ['volumes'] })
+      qc.invalidateQueries({ queryKey: ['networks'] })
       qc.invalidateQueries({ queryKey: ['systemDf'] })
       qc.invalidateQueries({ queryKey: ['systemInfo'] })
     },
@@ -89,7 +132,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
   const diskTotal = systemInfo?.diskTotal ?? '-'
   const memPct = systemInfo?.memoryUsedPercent ?? 0
   const memTotal = systemInfo?.memoryTotal ?? '-'
-  const isHealthy = diskPct < 85 && memPct < 90
+  const isHealthy = diskPct < DISK_WARN_THRESHOLD && memPct < 90 && !hasAnyWarning
 
   return (
     <>
@@ -275,7 +318,108 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
                 <code className="text-[10px] font-mono text-muted-foreground/70">docker system prune -a --volumes -f</code>
               </div>
             </div>
+
+            {/* Prune Networks */}
+            <div className={`rounded-xl border bg-card p-4 flex flex-col gap-3 ${networkPoolWarning ? 'border-orange-500/40 border-l-4 border-l-orange-500' : 'border-orange-500/20 border-l-4 border-l-orange-500'}`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Network className="w-4 h-4 text-orange-500" />
+                  <h4 className="font-mono font-semibold text-sm">Prune Networks</h4>
+                </div>
+                {networkPoolWarning && (
+                  <Badge className="text-[10px] bg-orange-500/15 text-orange-400 border-orange-500/30">Pool fast voll!</Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">Remove unused networks. Prevents "address pool exhausted" errors during deploys.</p>
+              <div className="flex gap-6">
+                <div>
+                  <p className="text-xs text-muted-foreground">Active Networks</p>
+                  <p className={`text-xl font-mono font-bold ${networkPoolWarning ? 'text-orange-400' : 'text-orange-500'}`}>{networkCount}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Warnschwelle</p>
+                  <p className="text-xl font-mono font-bold text-muted-foreground">{NETWORK_WARN_THRESHOLD}</p>
+                </div>
+              </div>
+              {networkPoolWarning && (
+                <div className="rounded bg-orange-500/10 border border-orange-500/20 p-2 text-xs text-orange-400">
+                  Netzwerk-Pool fast voll. Nicht genutzte Stacks löschen oder Netzwerke bereinigen.
+                </div>
+              )}
+              <div className="flex flex-col gap-1">
+                <Button size="sm" className="mt-auto bg-orange-600 hover:bg-orange-700 text-white w-fit"
+                  disabled={pruning !== null} onClick={() => handlePrune('networks', 'Network prune', 'All unused Docker networks (not connected to any container) will be removed. Running containers are not affected.')}>
+                  {pruning === 'networks' ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Pruning...</> : 'Prune Networks'}
+                </Button>
+                <code className="text-[10px] font-mono text-muted-foreground/70">docker network prune -f</code>
+              </div>
+            </div>
+
+            {/* Docker Connectivity */}
+            <div className="rounded-xl border border-muted/40 border-l-4 border-l-muted bg-card p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <Wifi className="w-4 h-4 text-muted-foreground" />
+                <h4 className="font-mono font-semibold text-sm">Docker Connectivity</h4>
+              </div>
+              <p className="text-xs text-muted-foreground">Test the connection to the Docker daemon via /var/run/docker.sock.</p>
+              <div className="flex items-center gap-3">
+                {socketResult === 'ok' && (
+                  <div className="flex items-center gap-1.5 text-xs text-success"><CheckCircle className="w-3.5 h-3.5" />Socket OK</div>
+                )}
+                {socketResult === 'error' && (
+                  <div className="flex items-center gap-1.5 text-xs text-destructive"><WifiOff className="w-3.5 h-3.5" />Socket unreachable!</div>
+                )}
+              </div>
+              <div className="flex flex-col gap-1">
+                <Button size="sm" variant="outline" className="mt-auto w-fit"
+                  disabled={socketChecking} onClick={checkSocket}>
+                  {socketChecking ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Checking...</> : 'Check Socket'}
+                </Button>
+                <code className="text-[10px] font-mono text-muted-foreground/70">docker info</code>
+              </div>
+            </div>
           </div>
+
+          {/* Docker Warnings Section */}
+          {hasAnyWarning && (
+            <div className="space-y-2">
+              <h3 className="font-mono font-semibold text-sm flex items-center gap-2 text-warning">
+                <AlertTriangle className="w-4 h-4" /> Docker Warnungen
+              </h3>
+              {diskWarning && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    <strong>Disk &gt;{DISK_WARN_THRESHOLD}%:</strong> Docker Partition fast voll ({diskPct.toFixed(1)}%). Images/Volumes aufräumen.
+                  </AlertDescription>
+                </Alert>
+              )}
+              {networkPoolWarning && (
+                <Alert className="py-2 border-orange-500/40 bg-orange-500/5">
+                  <Network className="h-4 w-4 text-orange-400" />
+                  <AlertDescription className="text-xs text-orange-300">
+                    <strong>Netzwerk-Pool fast voll:</strong> {networkCount} Netzwerke (Schwelle: {NETWORK_WARN_THRESHOLD}). Nicht genutzte Stacks löschen oder Prune Networks ausführen.
+                  </AlertDescription>
+                </Alert>
+              )}
+              {zombieWarning && (
+                <Alert className="py-2 border-warning/40 bg-warning/5">
+                  <Box className="h-4 w-4 text-warning" />
+                  <AlertDescription className="text-xs text-warning/90">
+                    <strong>Zombie-Container:</strong> {stoppedContainers.length} gestoppte Container (Schwelle: {ZOMBIE_WARN_THRESHOLD}). Container Prune ausführen empfohlen.
+                  </AlertDescription>
+                </Alert>
+              )}
+              {!registryConfigPresent && (
+                <Alert className="py-2 border-muted/40 bg-muted/5">
+                  <ShieldAlert className="h-4 w-4 text-muted-foreground" />
+                  <AlertDescription className="text-xs text-muted-foreground">
+                    <strong>Kein GHCR-Zugriff:</strong> /root/.docker/config.json fehlt. Private Images (GHCR) können nicht gepullt werden. Prüfe das Volume-Mapping in docker-compose.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

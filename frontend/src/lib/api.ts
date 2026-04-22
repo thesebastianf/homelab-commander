@@ -174,6 +174,10 @@ export async function pruneContainers(): Promise<any> {
   return request('/system/prune/containers', { method: 'POST' });
 }
 
+export async function pruneNetworks(): Promise<any> {
+  return request('/system/prune/networks', { method: 'POST' });
+}
+
 export async function fetchSystemDf(): Promise<any> {
   return request('/system/df');
 }

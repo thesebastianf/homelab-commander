@@ -114,6 +114,64 @@ function formatExecError(err: any): string {
   return parts.join('\n').trim() || 'Unknown docker compose error';
 }
 
+// ---- Structured error analysis for docker compose stderr ----
+type ComposeErrorCode = 'NETWORK_POOL_FULL' | 'NETWORK_NOT_FOUND' | 'PERMISSION_DENIED' | 'GENERIC';
+
+interface ComposeErrorAnalysis {
+  errorCode: ComposeErrorCode;
+  friendlyMessage: string;
+  isNetworkError: boolean;
+  isNetworkPoolError: boolean;
+  isPermissionError: boolean;
+}
+
+function parseComposeError(err: any): ComposeErrorAnalysis {
+  const combined = `${String(err?.message || '')}\n${String(err?.stderr || '')}\n${String(err?.stdout || '')}`.toLowerCase();
+
+  if (combined.includes('all predefined address pools have been fully subnetted')) {
+    return {
+      errorCode: 'NETWORK_POOL_FULL',
+      friendlyMessage: 'Docker Netzwerk-Pool voll. Führe "Prune Networks" in System Maintenance aus, um nicht genutzte Netzwerke zu entfernen.',
+      isNetworkError: true,
+      isNetworkPoolError: true,
+      isPermissionError: false,
+    };
+  }
+
+  if (/network .+ not found/.test(combined) || combined.includes('network not found')) {
+    return {
+      errorCode: 'NETWORK_NOT_FOUND',
+      friendlyMessage: 'Zombie-Netzwerk gefunden. Stack wird automatisch neu aufgebaut (down + up -d).',
+      isNetworkError: true,
+      isNetworkPoolError: false,
+      isPermissionError: false,
+    };
+  }
+
+  if (combined.includes('permission denied')) {
+    return {
+      errorCode: 'PERMISSION_DENIED',
+      friendlyMessage: 'Zugriff verweigert. Prüfe den Docker Socket (/var/run/docker.sock) und ob der Container socket-Zugriff hat.',
+      isNetworkError: false,
+      isNetworkPoolError: false,
+      isPermissionError: true,
+    };
+  }
+
+  return {
+    errorCode: 'GENERIC',
+    friendlyMessage: formatExecError(err),
+    isNetworkError: false,
+    isNetworkPoolError: false,
+    isPermissionError: false,
+  };
+}
+
+/** Strip obsolete top-level `version:` field from compose content (Docker Compose v2 ignores it). */
+function stripComposeVersion(content: string): string {
+  return content.replace(/^\s*version\s*:\s*['"]?[\d.]+['"]?\s*\r?\n/m, '');
+}
+
 async function execComposeWithLogging(
   stack: any,
   id: string,
@@ -300,6 +358,7 @@ async function finishActionOnFailure(
   await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [reconciledStatus, id]);
 
   const errorText = formatExecError(err);
+  const parsed = parseComposeError(err);
   if (reconciledStatus === desiredStatus) {
     logger.warn(
       {
@@ -315,7 +374,7 @@ async function finishActionOnFailure(
     return reconciledStatus;
   }
 
-  res.status(500).json({ error: errorText, status: reconciledStatus });
+  res.status(500).json({ error: errorText, errorCode: parsed.errorCode, friendlyMessage: parsed.friendlyMessage, status: reconciledStatus });
   return reconciledStatus;
 }
 
@@ -527,7 +586,8 @@ router.get('/:id', asyncHandler(async (req, res) => {
 
 // Create stack
 router.post('/', validateBody(createStackBody), asyncHandler(async (req, res) => {
-  const { name, description, composeContent, envContent } = req.body;
+  const { name, description, composeContent: rawCompose, envContent } = req.body;
+  const composeContent = stripComposeVersion(rawCompose);
   const stackPath = join(config.stacksPath, name);
 
   // Create stack directory and write files
@@ -574,15 +634,16 @@ router.put('/:id', validateBody(updateStackBody), asyncHandler(async (req, res) 
   if (b.gitRepoConfig !== undefined) { updates.push(`git_repo_config = $${idx++}`); values.push(JSON.stringify(b.gitRepoConfig)); }
 
   if (b.composeContent !== undefined) {
-    updates.push(`compose_content = $${idx++}`); values.push(b.composeContent);
-    updates.push(`services = $${idx++}`); values.push(countServices(b.composeContent));
+    const cleanedCompose = stripComposeVersion(b.composeContent);
+    updates.push(`compose_content = $${idx++}`); values.push(cleanedCompose);
+    updates.push(`services = $${idx++}`); values.push(countServices(cleanedCompose));
     updates.push(`version = version + 1`);
 
     // Write to disk — preserve existing compose filename
     const accessiblePath = await resolveAccessibleStackPath(existing);
     if (accessiblePath) {
       const composeFile = await findComposeFile(accessiblePath);
-      await writeFile(join(accessiblePath, composeFile), b.composeContent);
+      await writeFile(join(accessiblePath, composeFile), cleanedCompose);
     }
 
     // Save version
@@ -590,7 +651,7 @@ router.put('/:id', validateBody(updateStackBody), asyncHandler(async (req, res) 
     await pool.query(
       `INSERT INTO stack_versions (stack_id, version, compose_content, env_content, description)
        VALUES ($1, $2, $3, $4, $5)`,
-      [req.params.id, newVersion, b.composeContent, b.envContent ?? existing.env_content, 'Updated compose']
+      [req.params.id, newVersion, cleanedCompose, b.envContent ?? existing.env_content, 'Updated compose']
     );
     // Keep max 10 versions
     await pool.query(
@@ -649,7 +710,10 @@ router.delete('/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// Deploy stack (docker compose up)
+// Deploy stack — clean deploy strategy:
+//   1. Try `up -d` (fast path — reuses existing networks/containers).
+//   2. If a network error is detected (zombie network), automatically run `down` then `up -d`.
+//   3. If the network pool is full, fail with a specific errorCode so the UI can guide the user.
 router.post('/:id/deploy', asyncHandler(async (req, res) => {
   const id = String(req.params.id);
   const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
@@ -659,7 +723,24 @@ router.post('/:id/deploy', asyncHandler(async (req, res) => {
 
   const { cwd, cleanup } = await resolveStackCwd(stack);
   try {
-    await execComposeWithLogging(stack, id, 'deploy', ['up', '-d'], { cwd, timeout: 120000 });
+    try {
+      await execComposeWithLogging(stack, id, 'deploy', ['up', '-d'], { cwd, timeout: 120000 });
+    } catch (firstErr: any) {
+      const parsed = parseComposeError(firstErr);
+      if (parsed.isNetworkError && !parsed.isNetworkPoolError) {
+        // Network zombie — auto clean deploy: take everything down, then bring back up
+        logger.warn(
+          { stackId: id, stackName: stack.name, errorCode: parsed.errorCode, cwd },
+          'Network error on deploy — auto clean deploy (down + up -d)'
+        );
+        try {
+          await execComposeWithLogging(stack, id, 'deploy:down-cleanup', ['down'], { cwd, timeout: 60000 });
+        } catch { /* ignore down errors — networks may already be gone */ }
+        await execComposeWithLogging(stack, id, 'deploy:up-clean', ['up', '-d'], { cwd, timeout: 120000 });
+      } else {
+        throw firstErr;
+      }
+    }
     await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
     await sendNotification('stackDeployed', { name: stack.name });
     await auditLog('deploy', 'stack', id);
