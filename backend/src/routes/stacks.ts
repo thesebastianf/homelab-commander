@@ -10,8 +10,9 @@ import { mkdir, writeFile, readFile, readdir, access, mkdtemp, rm } from 'fs/pro
 import { existsSync } from 'fs';
 import { join, resolve, relative, dirname } from 'path';
 import { tmpdir } from 'os';
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
+import { randomUUID } from 'crypto';
 import { getStackUpdateStatus } from '../services/updates.js';
 import { listComposeProjects } from '../services/docker.js';
 import { logger } from '../logger.js';
@@ -186,7 +187,10 @@ async function execComposeWithLogging(
 interface OperationState {
   lines: string[];
   done: boolean;
+  error?: string;
   startedAt: Date;
+  action: string;
+  stackName: string;
 }
 const operationStore = new Map<string, OperationState>();
 
@@ -199,16 +203,15 @@ interface ComposeInvocationResult {
 
 function getComposeInvocations(stack: any, command: string[], _cwd: string): Array<{ runtime: 'docker' | 'docker-compose'; args: string[] }> {
   const project = composeProjectNameFromStack(stack);
-  // config.composePath = 'docker' by default (CLI bundled in image via Dockerfile)
-  const bin = config.composePath;
-
-  // Native runtime: docker CLI is installed inside the container image.
-  // Primary: `<bin> compose` plugin syntax; fallback: `docker-compose` legacy binary.
+  // Native runtime: docker CLI with compose plugin (installed in Dockerfile)
+  // CRITICAL: --project-name MUST come immediately after 'compose', not before it.
+  // Correct:   docker compose --project-name mystack up -d
+  // Wrong:     docker --project-name mystack compose up -d
   return [
-    { runtime: bin as 'docker', args: ['compose', '--project-name', project, ...command] },
-    { runtime: bin as 'docker', args: ['compose', '-p', project, ...command] },
+    { runtime: 'docker', args: ['compose', '--project-name', project, ...command] },
+    { runtime: 'docker', args: ['compose', '-p', project, ...command] },
+    // Fallback: docker-compose symlink (created in Dockerfile)
     { runtime: 'docker-compose', args: ['--project-name', project, ...command] },
-    { runtime: 'docker-compose', args: ['-p', project, ...command] },
   ];
 }
 
@@ -400,6 +403,106 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState): P
     op.done = true;
     await cleanup?.();
     setTimeout(() => operationStore.delete(id), 5 * 60 * 1000);
+  }
+}
+
+/** Execute a compose command with real-time streaming output to OperationState */
+async function runStreamingStackOperation(
+  stackId: string,
+  stack: any,
+  op: OperationState,
+  composeCommand: string[],
+  desiredStatus: 'running' | 'stopped',
+  auditAction: string
+): Promise<void> {
+  const { cwd, cleanup } = await resolveStackCwd(stack);
+  try {
+    const attempts = getComposeInvocations(stack, composeCommand, cwd);
+    let lastError: any = null;
+
+    for (let attemptIdx = 0; attemptIdx < attempts.length; attemptIdx++) {
+      const attempt = attempts[attemptIdx];
+      lastError = null;
+
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const proc = spawn(attempt.runtime, attempt.args, { cwd, timeout: 120000 });
+
+          proc.stdout.on('data', (data: Buffer) => {
+            data.toString('utf8').split('\n').filter(Boolean).forEach(line => {
+              const trimmed = line.trim();
+              if (trimmed) {
+                // Color-code output: errors in red, warnings in yellow
+                if (trimmed.toLowerCase().includes('error') || trimmed.toLowerCase().includes('failed')) {
+                  op.lines.push(`🔴 ${trimmed}`);
+                } else if (trimmed.toLowerCase().includes('warn') || trimmed.toLowerCase().includes('deprecated') || trimmed.toLowerCase().includes('obsolete')) {
+                  op.lines.push(`🟡 ${trimmed}`);
+                } else {
+                  op.lines.push(`ℹ️ ${trimmed}`);
+                }
+              }
+            });
+          });
+
+          proc.stderr.on('data', (data: Buffer) => {
+            data.toString('utf8').split('\n').filter(Boolean).forEach(line => {
+              const trimmed = line.trim();
+              if (trimmed) {
+                op.lines.push(`🔴 ${trimmed}`);
+              }
+            });
+          });
+
+          proc.on('close', (code: number) => {
+            if (code === 0) {
+              resolve();
+            } else {
+              reject(new Error(`${attempt.runtime} exited with code ${code}`));
+            }
+          });
+
+          proc.on('error', (err: NodeJS.ErrnoException) => {
+            reject(new Error(err.code === 'ENOENT' ? `${attempt.runtime} not found` : err.message));
+          });
+        });
+
+        // Success on this attempt
+        logger.info({ stackId, stackName: stack.name, action: op.action, attemptIndex: attemptIdx }, 'Stack operation succeeded');
+        await pool.query("UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2", [desiredStatus, stackId]);
+        op.lines.push(`✅ Operation complete: ${op.action}`);
+        await auditLog(auditAction, 'stack', stackId);
+        return;
+      } catch (err: any) {
+        lastError = err;
+        logger.warn({ stackId, stackName: stack.name, action: op.action, attemptIndex: attemptIdx, error: err.message }, 'Stack operation attempt failed');
+
+        const isLast = attemptIdx === attempts.length - 1;
+        if (isLast || !shouldTryComposeFallback(err)) {
+          throw err;
+        }
+        // Try next attempt
+        op.lines.push(`⚠️ Attempt ${attemptIdx + 1} failed, trying fallback...`);
+      }
+    }
+
+    throw lastError || new Error('Stack operation failed');
+  } catch (err: any) {
+    logger.error({ stackId, stackName: stack.name, action: op.action, error: formatExecError(err) }, 'Stack operation failed completely');
+    const parsed = parseComposeError(err);
+    op.lines.push(`❌ Error: ${parsed.friendlyMessage}`);
+    op.error = parsed.friendlyMessage;
+
+    // Reconcile actual status
+    const reconciledStatus = await reconcileStackStatusFromRuntime(stackId, stack);
+    await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [reconciledStatus, stackId]);
+
+    if (reconciledStatus === desiredStatus) {
+      op.lines.push(`⚠️ Operation failed but desired state (${desiredStatus}) was reached`);
+    }
+  } finally {
+    op.done = true;
+    await cleanup?.();
+    setTimeout(() => operationStore.delete(stackId), 5 * 60 * 1000);
   }
 }
 
@@ -719,40 +822,17 @@ router.post('/:id/deploy', asyncHandler(async (req, res) => {
   const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
+  // Reject if already running an operation for this stack
+  const existing = operationStore.get(id);
+  if (existing && !existing.done) { res.status(409).json({ error: 'Operation already running' }); return; }
+
+  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'deploy', stackName: stack.name };
+  operationStore.set(id, op);
   await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [id]);
 
-  const { cwd, cleanup } = await resolveStackCwd(stack);
-  try {
-    try {
-      await execComposeWithLogging(stack, id, 'deploy', ['up', '-d'], { cwd, timeout: 120000 });
-    } catch (firstErr: any) {
-      const parsed = parseComposeError(firstErr);
-      if (parsed.isNetworkError && !parsed.isNetworkPoolError) {
-        // Network zombie — auto clean deploy: take everything down, then bring back up
-        logger.warn(
-          { stackId: id, stackName: stack.name, errorCode: parsed.errorCode, cwd },
-          'Network error on deploy — auto clean deploy (down + up -d)'
-        );
-        try {
-          await execComposeWithLogging(stack, id, 'deploy:down-cleanup', ['down'], { cwd, timeout: 60000 });
-        } catch { /* ignore down errors — networks may already be gone */ }
-        await execComposeWithLogging(stack, id, 'deploy:up-clean', ['up', '-d'], { cwd, timeout: 120000 });
-      } else {
-        throw firstErr;
-      }
-    }
-    await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
-    await sendNotification('stackDeployed', { name: stack.name });
-    await auditLog('deploy', 'stack', id);
-    res.json({ ok: true });
-  } catch (err: any) {
-    const reconciledStatus = await finishActionOnFailure(res, id, stack, 'running', err);
-    if (reconciledStatus !== 'running') {
-      await sendNotification('stackFailed', { name: stack.name, error: err.message });
-    }
-  } finally {
-    await cleanup?.();
-  }
+  // Fire-and-forget: start operation in background
+  runStreamingStackOperation(id, stack, op, ['up', '-d'], 'running', 'deploy').catch(() => { /* handled inside */ });
+  res.json({ ok: true });
 }));
 
 // Stop stack
@@ -761,17 +841,16 @@ router.post('/:id/stop', asyncHandler(async (req, res) => {
   const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
-  const { cwd, cleanup } = await resolveStackCwd(stack);
-  try {
-    await execComposeWithLogging(stack, id, 'stop', ['stop'], { cwd, timeout: 120000 });
-    await pool.query("UPDATE stacks SET status = 'stopped', updated_at = NOW() WHERE id = $1", [id]);
-    await auditLog('stop', 'stack', id);
-    res.json({ ok: true });
-  } catch (err: any) {
-    await finishActionOnFailure(res, id, stack, 'stopped', err);
-  } finally {
-    await cleanup?.();
-  }
+  // Reject if already running an operation for this stack
+  const existing = operationStore.get(id);
+  if (existing && !existing.done) { res.status(409).json({ error: 'Operation already running' }); return; }
+
+  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'stop', stackName: stack.name };
+  operationStore.set(id, op);
+
+  // Fire-and-forget: start operation in background
+  runStreamingStackOperation(id, stack, op, ['stop'], 'stopped', 'stop').catch(() => { /* handled inside */ });
+  res.json({ ok: true });
 }));
 
 // Deactivate stack (docker compose down)
@@ -780,17 +859,16 @@ router.post('/:id/deactivate', asyncHandler(async (req, res) => {
   const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
-  const { cwd, cleanup } = await resolveStackCwd(stack);
-  try {
-    await execComposeWithLogging(stack, id, 'deactivate', ['down'], { cwd, timeout: 120000 });
-    await pool.query("UPDATE stacks SET status = 'stopped', updated_at = NOW() WHERE id = $1", [id]);
-    await auditLog('deactivate', 'stack', id);
-    res.json({ ok: true });
-  } catch (err: any) {
-    await finishActionOnFailure(res, id, stack, 'stopped', err);
-  } finally {
-    await cleanup?.();
-  }
+  // Reject if already running an operation for this stack
+  const existing = operationStore.get(id);
+  if (existing && !existing.done) { res.status(409).json({ error: 'Operation already running' }); return; }
+
+  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'deactivate', stackName: stack.name };
+  operationStore.set(id, op);
+
+  // Fire-and-forget: start operation in background
+  runStreamingStackOperation(id, stack, op, ['down'], 'stopped', 'deactivate').catch(() => { /* handled inside */ });
+  res.json({ ok: true });
 }));
 
 // Restart stack
@@ -799,17 +877,16 @@ router.post('/:id/restart', asyncHandler(async (req, res) => {
   const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
-  const { cwd, cleanup } = await resolveStackCwd(stack);
-  try {
-    await execComposeWithLogging(stack, id, 'restart', ['restart'], { cwd, timeout: 120000 });
-    await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
-    await auditLog('restart', 'stack', id);
-    res.json({ ok: true });
-  } catch (err: any) {
-    await finishActionOnFailure(res, id, stack, 'running', err);
-  } finally {
-    await cleanup?.();
-  }
+  // Reject if already running an operation for this stack
+  const existing = operationStore.get(id);
+  if (existing && !existing.done) { res.status(409).json({ error: 'Operation already running' }); return; }
+
+  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'restart', stackName: stack.name };
+  operationStore.set(id, op);
+
+  // Fire-and-forget: start operation in background
+  runStreamingStackOperation(id, stack, op, ['restart'], 'running', 'restart').catch(() => { /* handled inside */ });
+  res.json({ ok: true });
 }));
 
 // Recreate stack containers (force new containers from current compose)
@@ -818,19 +895,17 @@ router.post('/:id/recreate', asyncHandler(async (req, res) => {
   const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [id]);
   if (!stack) { res.status(404).json({ error: 'Stack not found' }); return; }
 
+  // Reject if already running an operation for this stack
+  const existing = operationStore.get(id);
+  if (existing && !existing.done) { res.status(409).json({ error: 'Operation already running' }); return; }
+
+  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'recreate', stackName: stack.name };
+  operationStore.set(id, op);
   await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [id]);
 
-  const { cwd, cleanup } = await resolveStackCwd(stack);
-  try {
-    await execComposeWithLogging(stack, id, 'recreate', ['up', '-d', '--force-recreate'], { cwd, timeout: 120000 });
-    await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
-    await auditLog('recreate', 'stack', id);
-    res.json({ ok: true });
-  } catch (err: any) {
-    await finishActionOnFailure(res, id, stack, 'running', err);
-  } finally {
-    await cleanup?.();
-  }
+  // Fire-and-forget: start operation in background
+  runStreamingStackOperation(id, stack, op, ['up', '-d', '--force-recreate'], 'running', 'recreate').catch(() => { /* handled inside */ });
+  res.json({ ok: true });
 }));
 
 // Get stack versions
@@ -1143,7 +1218,7 @@ router.post('/:id/update', asyncHandler(async (req, res) => {
   const existing = operationStore.get(id);
   if (existing && !existing.done) { res.status(409).json({ error: 'Operation already running' }); return; }
 
-  const op: OperationState = { lines: [], done: false, startedAt: new Date() };
+  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'update', stackName: stack.name };
   operationStore.set(id, op);
   await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [id]);
 
