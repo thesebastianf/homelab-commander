@@ -532,6 +532,19 @@ export function StacksEditor({
     }
   }, [selectedStack?.id])
 
+  // Keep selected stack status/details in sync with fresh list data to avoid stale action buttons.
+  useEffect(() => {
+    if (isCreating || !selectedStack) return
+    const latest = stacks.find((s) => s.id === selectedStack.id)
+    if (!latest) {
+      setSelectedStack(null)
+      return
+    }
+    if (latest !== selectedStack) {
+      setSelectedStack(latest)
+    }
+  }, [stacks, selectedStack, isCreating])
+
   // ── Mutations ─────────────────────────────────────────────────────────────
   const createStackMutation = useMutation({
     mutationFn: ({ name, composeContent, envContent }: { name: string; composeContent: string; envContent?: string }) =>
