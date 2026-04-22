@@ -132,35 +132,21 @@ interface OperationState {
 const operationStore = new Map<string, OperationState>();
 
 interface ComposeInvocationResult {
-  runtime: 'docker' | 'docker-compose' | 'docker-run-compose';
+  runtime: 'docker' | 'docker-compose';
   args: string[];
   stdout: string;
   stderr: string;
 }
 
-function getComposeInvocations(stack: any, command: string[], cwd: string): Array<{ runtime: 'docker' | 'docker-compose' | 'docker-run-compose'; args: string[] }> {
+function getComposeInvocations(stack: any, command: string[], _cwd: string): Array<{ runtime: 'docker' | 'docker-compose'; args: string[] }> {
   const project = composeProjectNameFromStack(stack);
-  const hostStackPath = String(stack?.stack_path || '').trim();
-  const mountSource = hostStackPath.startsWith('/') ? hostStackPath : cwd;
-  const sidecarInvocations = config.composeSidecarImages.map((image) => ({
-    runtime: 'docker-run-compose' as const,
-    args: [
-      'run', '--rm',
-      '-v', '/var/run/docker.sock:/var/run/docker.sock',
-      '-v', `${mountSource}:/workspace`,
-      '-w', '/workspace',
-      image,
-      '--project-name', project,
-      ...command,
-    ],
-  }));
 
+  // Native-only runtime: try docker compose plugin first, then docker-compose binary
   return [
     { runtime: 'docker', args: ['compose', '--project-name', project, ...command] },
     { runtime: 'docker', args: ['compose', '-p', project, ...command] },
     { runtime: 'docker-compose', args: ['--project-name', project, ...command] },
     { runtime: 'docker-compose', args: ['-p', project, ...command] },
-    ...sidecarInvocations,
   ];
 }
 
@@ -171,10 +157,6 @@ function shouldTryComposeFallback(err: any): boolean {
     || combined.includes('unknown shorthand flag')
     || combined.includes('docker compose exited with code 125')
     || combined.includes('command not found')
-    || combined.includes('unable to find image')
-    || combined.includes('manifest unknown')
-    || combined.includes('pull access denied')
-    || combined.includes('toomanyrequests')
     || combined.includes('no such file or directory')
     || err?.code === 'ENOENT';
 }
@@ -213,12 +195,11 @@ async function execComposeCommand(
         dockerCommand: attempt.runtime,
         dockerArgs: attempt.args,
       },
-      'Stack compose action started'
+      `Executing native compose action for stack [${stack.name}]`
     );
 
     try {
-      const commandBinary = attempt.runtime === 'docker-run-compose' ? 'docker' : attempt.runtime;
-      const { stdout, stderr } = await execFileAsync(commandBinary, attempt.args, {
+      const { stdout, stderr } = await execFileAsync(attempt.runtime, attempt.args, {
         cwd: options.cwd,
         timeout: options.timeout,
       });
@@ -244,7 +225,6 @@ async function execComposeCommand(
         stderr: String(stderr || ''),
       };
     } catch (err: any) {
-      const commandBinary = attempt.runtime === 'docker-run-compose' ? 'docker' : attempt.runtime;
       logger.error(
         {
           action,
@@ -254,7 +234,7 @@ async function execComposeCommand(
           cwd: options.cwd,
           durationMs: Date.now() - startedAt,
           composeRuntime: attempt.runtime,
-          dockerCommand: commandBinary,
+          dockerCommand: attempt.runtime,
           dockerArgs: attempt.args,
           code: err?.code,
           signal: err?.signal,

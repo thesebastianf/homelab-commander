@@ -187,8 +187,7 @@ export interface AppSettings {
   }
   dockerCompose?: {
     runtimeMode: string
-    sidecarImages: string[]
-    preferredSidecarImage: string
+    isNative: boolean
   }
   copyPasteHelpers?: Array<{ id: string; label: string; value: string }>
 }

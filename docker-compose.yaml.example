@@ -15,19 +15,15 @@ services:
       - APP_PORT=3210
       - NODE_ENV=${NODE_ENV:-production}
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      - COMPOSE_RUNTIME_MODE=${COMPOSE_RUNTIME_MODE:-auto}
-      - COMPOSE_SIDECAR_IMAGES=${COMPOSE_SIDECAR_IMAGES:-docker/compose:2.29.2,docker/compose:latest,docker/compose:v2.29.2}
+      - COMPOSE_RUNTIME_MODE=${COMPOSE_RUNTIME_MODE:-native}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-hlc}:${POSTGRES_PASSWORD:-hlc_secret_change_me}@db:5432/${POSTGRES_DB:-hlc}
       - AUTH_USER=${AUTH_USER:-}
       - AUTH_PASS=${AUTH_PASS:-}
       - CORS_ORIGIN=${CORS_ORIGIN:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # Optional native runtime mounts (enable if you want to use host docker/compose binaries)
-      # - /usr/bin/docker:/usr/bin/docker:ro
-      # - /usr/libexec/docker/cli-plugins/docker-compose:/usr/libexec/docker/cli-plugins/docker-compose:ro
-      - stacks_data:/data/stacks
-      - backups_data:/data/backups
+      - /usr/bin/docker:/usr/bin/docker:ro
+      - /usr/libexec/docker/cli-plugins/docker-compose:/usr/libexec/docker/cli-plugins/docker-compose:ro
     depends_on:
       db:
         condition: service_healthy

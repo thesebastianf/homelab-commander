@@ -60,8 +60,7 @@ router.get('/', asyncHandler(async (_req, res) => {
     },
     dockerCompose: {
       runtimeMode: config.composeRuntimeMode,
-      sidecarImages: config.composeSidecarImages,
-      preferredSidecarImage: config.composeSidecarImages[0] || 'docker/compose:latest',
+      isNative: config.composeRuntimeMode === 'native',
     },
     copyPasteHelpers: settings.copy_paste_helpers ?? [],
   });

@@ -136,26 +136,24 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div>
                     <Label className="text-base">Docker Compose Runtime</Label>
-                    <p className="text-sm text-muted-foreground mt-0.5">Shows how stack actions execute compose commands on this instance.</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">Executes compose commands directly on host docker installation.</p>
                   </div>
-                  <Badge variant="outline" className="font-mono">
-                    {localSettings.dockerCompose?.runtimeMode || 'auto'}
+                  <Badge variant="default" className="font-mono">
+                    Native Host
                   </Badge>
                 </div>
                 <div className="grid gap-2 text-sm">
                   <div className="flex items-center justify-between gap-4">
-                    <span className="text-muted-foreground">Preferred Sidecar Image</span>
-                    <span className="font-mono text-xs break-all text-right">
-                      {localSettings.dockerCompose?.preferredSidecarImage || 'docker/compose:latest'}
+                    <span className="text-muted-foreground">Runtime Mode</span>
+                    <span className="font-mono">
+                      {localSettings.dockerCompose?.runtimeMode || 'native'}
                     </span>
                   </div>
-                  <div className="space-y-1">
-                    <span className="text-muted-foreground">Fallback Image List</span>
-                    <div className="rounded-md border border-border/60 bg-muted/30 p-2 font-mono text-xs space-y-1 max-h-24 overflow-auto">
-                      {(localSettings.dockerCompose?.sidecarImages || ['docker/compose:latest']).map((image) => (
-                        <div key={image}>{image}</div>
-                      ))}
-                    </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-muted-foreground">Type</span>
+                    <span className="font-mono text-xs">
+                      {localSettings.dockerCompose?.isNative ? '✓ Native (Host Docker)' : 'Legacy'}
+                    </span>
                   </div>
                 </div>
               </Card>
