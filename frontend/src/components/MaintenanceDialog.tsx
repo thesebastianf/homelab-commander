@@ -65,6 +65,11 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
   const networkCount = (networks as any[]).length
   const registryConfigPresent = (appSettings as any)?.dockerCompose?.registryConfigPresent ?? true
 
+  const diskPct = systemInfo?.diskUsedPercent ?? 0
+  const diskTotal = systemInfo?.diskTotal ?? '-'
+  const memPct = systemInfo?.memoryUsedPercent ?? 0
+  const memTotal = systemInfo?.memoryTotal ?? '-'
+
   const NETWORK_WARN_THRESHOLD = 25
   const ZOMBIE_WARN_THRESHOLD = 5
   const DISK_WARN_THRESHOLD = 90
@@ -128,10 +133,6 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
     })
   }
 
-  const diskPct = systemInfo?.diskUsedPercent ?? 0
-  const diskTotal = systemInfo?.diskTotal ?? '-'
-  const memPct = systemInfo?.memoryUsedPercent ?? 0
-  const memTotal = systemInfo?.memoryTotal ?? '-'
   const isHealthy = diskPct < DISK_WARN_THRESHOLD && memPct < 90 && !hasAnyWarning
 
   return (
