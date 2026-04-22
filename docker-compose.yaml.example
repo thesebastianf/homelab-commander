@@ -30,7 +30,7 @@ services:
       - /opt/homelab/stacks:/opt/homelab/stacks
       - /opt/homelab/backups:/opt/homelab/backups
       # GHCR / private registry auth — allows pulling private images during stack actions
-      - /root/.docker:/root/.docker:ro
+      - /root/.docker/config.json:/root/.docker/config.json:ro
     depends_on:
       db:
         condition: service_healthy
