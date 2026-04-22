@@ -29,15 +29,17 @@ function formatRelativeTime(isoDate: string): string {
 
 export function ImageCard({ image, onPull, onRemove }: ImageCardProps) {
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const isDangling = image.repository === '<none>' || image.tag === '<none>'
 
   return (
     <>
     <Card className="p-4 hover:shadow-lg transition-all duration-200">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
-          <h3 className="font-mono font-semibold text-sm truncate">{image.repository}</h3>
+          <h3 className="font-mono font-semibold text-sm truncate">{isDangling ? 'untagged-image' : image.repository}</h3>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
-            <Badge variant="outline" className="font-mono text-xs">{image.tag}</Badge>
+            <Badge variant="outline" className="font-mono text-xs">{isDangling ? 'dangling' : image.tag}</Badge>
+            {isDangling && <span className="text-xs text-muted-foreground">(&lt;none&gt; means old/untagged layer)</span>}
             <span className="text-xs text-muted-foreground">{image.size}</span>
             <span className="text-xs text-muted-foreground">•</span>
             <span className="text-xs text-muted-foreground">{formatRelativeTime(image.created)}</span>

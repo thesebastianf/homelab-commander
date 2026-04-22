@@ -16,6 +16,10 @@ export function getStackUpdateStatus(stackName: string): boolean {
   return stackUpdateResults.get(stackName.toLowerCase()) || false;
 }
 
+export function setStackUpdateStatus(stackName: string, hasUpdate: boolean): void {
+  stackUpdateResults.set(stackName.toLowerCase(), hasUpdate);
+}
+
 export async function checkForUpdates(): Promise<void> {
   try {
     const { listContainers } = await import('./docker.js');

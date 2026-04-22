@@ -23,10 +23,17 @@ export async function runBackup(stackId: string): Promise<void> {
   const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [stackId]);
   if (!stack) throw new Error(`Stack ${stackId} not found`);
 
-  const { rows: [backupConfig] } = await pool.query(
+  const { rows: [backupConfigRow] } = await pool.query(
     'SELECT * FROM backup_configs WHERE stack_id = $1', [stackId]
   );
-  if (!backupConfig) throw new Error(`No backup config for stack ${stackId}`);
+  const backupConfig = backupConfigRow || {
+    include_stack_folder: true,
+    include_volumes: true,
+    include_databases: false,
+    database_type: 'none',
+    database_config: {},
+    retention_days: 7,
+  };
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 17);
   const dirTimestamp = timestamp.replace(/-/g, '').replace('_', '-');

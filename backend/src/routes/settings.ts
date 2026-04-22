@@ -53,6 +53,7 @@ router.get('/', asyncHandler(async (_req, res) => {
   const gitConfig = settings.git_integration_config || {};
   const scheduleConfig = settings.auto_update_schedule || {};
   const aiConfig = settings.ai_config || {};
+  const homepageWidgetConfig = settings.homepage_widget_config || {};
   res.json({
     theme: settings.ui_theme || 'dark',
     dockerHost: settings.docker_host,
@@ -106,6 +107,28 @@ router.get('/', asyncHandler(async (_req, res) => {
     },
     copyPasteHelpers: settings.copy_paste_helpers ?? [],
     warningThresholds: settings.warning_thresholds ?? { networkWarn: 25, zombieWarn: 5, diskWarn: 90, cpuWarn: 85, memoryWarn: 85 },
+    stackFileExcludes: settings.stack_file_excludes ?? [
+      '*.jpg', '*.jpeg', '*.png', '*.gif', '*.webp', '*.bmp', '*.ico', '*.svg', '*.avif', '*.tiff', '*.svc',
+      '*.mp4', '*.mkv', '*.mov', '*.avi', '*.mp3', '*.wav', '*.flac', '*.zip', '*.tar', '*.gz', '*.7z',
+      '*.pdf', '*.woff', '*.woff2', '*.ttf', '*.otf',
+    ],
+    homepageWidget: {
+      enabled: homepageWidgetConfig.enabled ?? false,
+      baseUrl: homepageWidgetConfig.baseUrl || '',
+      apiKey: homepageWidgetConfig.apiKey || '',
+      serviceName: homepageWidgetConfig.serviceName || 'Homelab Commander',
+      show: {
+        containers: homepageWidgetConfig.show?.containers ?? true,
+        stacks: homepageWidgetConfig.show?.stacks ?? true,
+        images: homepageWidgetConfig.show?.images ?? true,
+        volumes: homepageWidgetConfig.show?.volumes ?? true,
+        networks: homepageWidgetConfig.show?.networks ?? true,
+        cpu: homepageWidgetConfig.show?.cpu ?? true,
+        memory: homepageWidgetConfig.show?.memory ?? true,
+        disk: homepageWidgetConfig.show?.disk ?? true,
+        updates: homepageWidgetConfig.show?.updates ?? true,
+      },
+    },
   });
 }));
 
@@ -132,6 +155,8 @@ router.put('/', validateBody(updateSettingsBody), asyncHandler(async (req, res) 
   if (b.ai !== undefined) { updates.push(`ai_config = $${idx++}`); values.push(JSON.stringify(b.ai)); }
   if (b.copyPasteHelpers !== undefined) { updates.push(`copy_paste_helpers = $${idx++}`); values.push(JSON.stringify(b.copyPasteHelpers)); }
   if (b.warningThresholds !== undefined) { updates.push(`warning_thresholds = $${idx++}`); values.push(JSON.stringify(b.warningThresholds)); }
+  if (b.stackFileExcludes !== undefined) { updates.push(`stack_file_excludes = $${idx++}`); values.push(JSON.stringify(b.stackFileExcludes)); }
+  if (b.homepageWidget !== undefined) { updates.push(`homepage_widget_config = $${idx++}`); values.push(JSON.stringify(b.homepageWidget)); }
 
   if (updates.length === 0) {
     res.json({ ok: true });

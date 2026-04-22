@@ -241,6 +241,12 @@ function StackJobHistoryItems({ stack }: { stack: Stack }) {
     queryFn: () => api.fetchBackupJobs(stack.id),
   })
   if (jobs.length === 0) return null
+  const formatSize = (bytes: number) => {
+    if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
+    if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${bytes} B`
+  }
   return (
     <>
       {jobs.map((job: BackupJob) => (
@@ -260,7 +266,7 @@ function StackJobHistoryItems({ stack }: { stack: Stack }) {
           </div>
           <div className="flex items-center gap-3">
             <Badge variant={job.status === 'completed' ? 'default' : job.status === 'failed' ? 'destructive' : 'outline'} className="text-[10px]">{job.status}</Badge>
-            {job.sizeBytes > 0 && <span className="text-xs text-muted-foreground font-mono">{(job.sizeBytes / 1024 / 1024).toFixed(1)} MB</span>}
+            {job.sizeBytes > 0 && <span className="text-xs text-muted-foreground font-mono">{formatSize(job.sizeBytes)}</span>}
           </div>
         </div>
       ))}

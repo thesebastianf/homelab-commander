@@ -78,6 +78,9 @@ async function initSchema(client: pg.PoolClient): Promise<void> {
       auto_update_schedule JSONB DEFAULT '{"enabled":false,"cron":"0 7 * * 6","label":"Saturdays at 07:00"}'::jsonb,
       ai_config JSONB DEFAULT '{"enabled":false,"provider":"ollama","baseUrl":"http://host.docker.internal:11434","apiKey":"","model":"llama3.1","treatAsLocal":true,"allowEnvToLocal":false}'::jsonb,
       copy_paste_helpers JSONB DEFAULT '[]'::jsonb,
+      warning_thresholds JSONB DEFAULT '{"networkWarn":25,"zombieWarn":5,"diskWarn":90,"cpuWarn":85,"memoryWarn":85}'::jsonb,
+      stack_file_excludes JSONB DEFAULT '["*.jpg","*.jpeg","*.png","*.gif","*.webp","*.bmp","*.ico","*.svg","*.avif","*.tiff","*.svc","*.mp4","*.mkv","*.mov","*.avi","*.mp3","*.wav","*.flac","*.zip","*.tar","*.gz","*.7z","*.pdf","*.woff","*.woff2","*.ttf","*.otf"]'::jsonb,
+      homepage_widget_config JSONB DEFAULT '{"enabled":false,"baseUrl":"","apiKey":"","serviceName":"Homelab Commander","show":{"containers":true,"stacks":true,"images":true,"volumes":true,"networks":true,"cpu":true,"memory":true,"disk":true,"updates":true}}'::jsonb,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )
@@ -239,6 +242,9 @@ async function runMigrations(client: pg.PoolClient): Promise<void> {
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS auto_update_schedule JSONB DEFAULT '{"enabled":false,"cron":"0 7 * * 6","label":"Saturdays at 07:00"}'::jsonb`,
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS ai_config JSONB DEFAULT '{"enabled":false,"provider":"ollama","baseUrl":"http://host.docker.internal:11434","apiKey":"","model":"llama3.1","treatAsLocal":true,"allowEnvToLocal":false}'::jsonb`,
     `ALTER TABLE settings ADD COLUMN IF NOT EXISTS copy_paste_helpers JSONB DEFAULT '[]'::jsonb`,
+    `ALTER TABLE settings ADD COLUMN IF NOT EXISTS warning_thresholds JSONB DEFAULT '{"networkWarn":25,"zombieWarn":5,"diskWarn":90,"cpuWarn":85,"memoryWarn":85}'::jsonb`,
+    `ALTER TABLE settings ADD COLUMN IF NOT EXISTS stack_file_excludes JSONB DEFAULT '["*.jpg","*.jpeg","*.png","*.gif","*.webp","*.bmp","*.ico","*.svg","*.avif","*.tiff","*.svc","*.mp4","*.mkv","*.mov","*.avi","*.mp3","*.wav","*.flac","*.zip","*.tar","*.gz","*.7z","*.pdf","*.woff","*.woff2","*.ttf","*.otf"]'::jsonb`,
+    `ALTER TABLE settings ADD COLUMN IF NOT EXISTS homepage_widget_config JSONB DEFAULT '{"enabled":false,"baseUrl":"","apiKey":"","serviceName":"Homelab Commander","show":{"containers":true,"stacks":true,"images":true,"volumes":true,"networks":true,"cpu":true,"memory":true,"disk":true,"updates":true}}'::jsonb`,
     `ALTER TABLE stacks ADD COLUMN IF NOT EXISTS auto_update BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE stacks ADD COLUMN IF NOT EXISTS run_backup_before_update BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE backup_configs ADD COLUMN IF NOT EXISTS database_config JSONB DEFAULT '{}'::jsonb`,

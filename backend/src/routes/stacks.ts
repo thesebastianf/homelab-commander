@@ -13,7 +13,7 @@ import { tmpdir } from 'os';
 import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import { randomUUID } from 'crypto';
-import { getStackUpdateStatus } from '../services/updates.js';
+import { getStackUpdateStatus, setStackUpdateStatus } from '../services/updates.js';
 import { listComposeProjects } from '../services/docker.js';
 import { logger } from '../logger.js';
 
@@ -341,7 +341,10 @@ async function reconcileStackStatusFromRuntime(id: string, stack: any): Promise<
       { timeout: 10000 }
     );
     const states = String(stdout || '').split('\n').map(s => s.trim()).filter(Boolean);
-    if (states.length === 0) return 'failed';
+    if (states.length === 0) {
+      // If no compose containers exist anymore, treat as stopped unless DB already says running.
+      return stack.status === 'running' ? 'failed' : 'stopped';
+    }
     if (states.some((s) => s === 'running')) return 'running';
     return 'stopped';
   } catch (err: any) {
@@ -389,6 +392,7 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState): P
     const outputLines = `${result.stdout}\n${result.stderr}`.split('\n').map((l) => l.trim()).filter(Boolean);
     outputLines.slice(-50).forEach((line) => op.lines.push(line));
     await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
+    setStackUpdateStatus(stack.name, false);
     op.lines.push('✓ Update complete — containers restarted with latest images');
     await auditLog('update', 'stack', id);
   } catch (err: any) {
@@ -535,7 +539,14 @@ const STACK_SELECT = `
 // List all stacks
 router.get('/', asyncHandler(async (_req, res) => {
   const { rows } = await pool.query(STACK_SELECT + 'ORDER BY s.name');
-  res.json(rows.map(mapStack));
+  const runtimeProjects = await listComposeProjects();
+  const runtimeStatusByName = new Map(runtimeProjects.map((p) => [p.name.toLowerCase(), p.status]));
+  const stacks = rows.map((row: any) => {
+    const mapped = mapStack(row);
+    const runtimeStatus = runtimeStatusByName.get(String(mapped.name || '').toLowerCase());
+    return runtimeStatus ? { ...mapped, status: runtimeStatus } : mapped;
+  });
+  res.json(stacks);
 }));
 
 router.get('/external', asyncHandler(async (_req, res) => {
@@ -685,6 +696,24 @@ router.get('/:id', asyncHandler(async (req, res) => {
     diskComposeContent,
     diskEnvContent,
   });
+}));
+
+router.get('/:id/update-history', asyncHandler(async (req, res) => {
+  const id = String(req.params.id);
+  const { rows } = await pool.query(
+    `SELECT id, action, details, created_at
+     FROM audit_log
+     WHERE resource_type = 'stack' AND resource_id = $1 AND action IN ('update', 'deploy', 'restart', 'recreate')
+     ORDER BY created_at DESC
+     LIMIT 20`,
+    [id],
+  );
+  res.json(rows.map((row: any) => ({
+    id: row.id,
+    action: row.action,
+    details: row.details || {},
+    createdAt: row.created_at,
+  })));
 }));
 
 // Create stack

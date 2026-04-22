@@ -24,6 +24,7 @@ import { BackupManagementDialog } from '@/components/BackupManagementDialog'
 import { SmartStartupDialog } from '@/components/SmartStartupDialog'
 import { PortRegistryDialog } from '@/components/PortRegistryDialog'
 import { DatabaseExplorer } from '@/components/DatabaseExplorer'
+import { ContainerShellDialog } from '@/components/ContainerShellDialog'
 import { ClockWidget } from '@/components/ClockWidget'
 import { Loader2, RefreshCw, Maximize2, Minimize2 } from 'lucide-react'
 import {
@@ -173,6 +174,7 @@ function App() {
   const [logsContainerId, setLogsContainerId] = useState<string | null>(null)
   const [logsData, setLogsData] = useState<string>('')
   const [logsLoading, setLogsLoading] = useState(false)
+  const [shellContainerId, setShellContainerId] = useState<string | null>(null)
 
   // Extract data from queries
   const containers = containersQuery.data ?? []
@@ -247,21 +249,21 @@ function App() {
 
   const handleStartContainer = (id: string) => {
     startContainer.mutate(id, {
-      onSuccess: () => toast.success('Container started'),
+      onSuccess: () => { toast.success('Container started'); stacksQuery.refetch() },
       onError: () => toast.error('Failed to start container')
     })
   }
 
   const handleStopContainer = (id: string) => {
     stopContainer.mutate(id, {
-      onSuccess: () => toast.success('Container stopped'),
+      onSuccess: () => { toast.success('Container stopped'); stacksQuery.refetch() },
       onError: () => toast.error('Failed to stop container')
     })
   }
 
   const handleRestartContainer = (id: string) => {
     restartContainer.mutate(id, {
-      onSuccess: () => toast.success('Container restarted'),
+      onSuccess: () => { toast.success('Container restarted'); stacksQuery.refetch() },
       onError: () => toast.error('Failed to restart container')
     })
   }
@@ -273,7 +275,7 @@ function App() {
       return
     }
     removeContainer.mutate({ id }, {
-      onSuccess: () => toast.success('Container removed'),
+      onSuccess: () => { toast.success('Container removed'); stacksQuery.refetch() },
       onError: () => toast.error('Failed to remove container')
     })
   }
@@ -301,6 +303,7 @@ function App() {
       toast.error('Container must be running to access terminal')
       return
     }
+    setShellContainerId(id)
     toast.info(`Opening terminal for ${container?.name}`)
   }
 
@@ -830,7 +833,7 @@ function App() {
 
       {/* Container Logs Dialog */}
       <Dialog open={logsContainerId !== null} onOpenChange={open => { if (!open) { setLogsContainerId(null); setLogsData('') } }}>
-        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+        <DialogContent className="w-[94vw] max-w-6xl h-[86vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="font-mono text-sm">
               Logs — {containers.find(c => c.id === logsContainerId)?.name}
@@ -864,7 +867,7 @@ function App() {
 
       {/* Volume Inspect Dialog */}
       <Dialog open={inspectVolumeName !== null} onOpenChange={open => { if (!open) { setInspectVolumeName(null); setInspectVolumeData(null) } }}>
-        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+        <DialogContent className="w-[94vw] max-w-5xl h-[86vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="font-mono text-sm">Volume Inspect — {inspectVolumeName}</DialogTitle>
             <DialogDescription className="text-xs">docker volume inspect {inspectVolumeName}</DialogDescription>
@@ -883,7 +886,7 @@ function App() {
 
       {/* Network Inspect Dialog */}
       <Dialog open={inspectNetworkId !== null} onOpenChange={open => { if (!open) { setInspectNetworkId(null); setInspectNetworkData(null) } }}>
-        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+        <DialogContent className="w-[94vw] max-w-5xl h-[86vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="font-mono text-sm">
               Network Inspect — {networks.find(n => n.id === inspectNetworkId)?.name}
@@ -903,6 +906,14 @@ function App() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ContainerShellDialog
+        open={shellContainerId !== null}
+        onOpenChange={(open) => { if (!open) setShellContainerId(null) }}
+        containerId={shellContainerId || undefined}
+        containerName={containers.find(c => c.id === shellContainerId)?.name}
+        image={containers.find(c => c.id === shellContainerId)?.image}
+      />
 
       {/* Footer */}
       <footer className="mt-8 pb-4 text-center">

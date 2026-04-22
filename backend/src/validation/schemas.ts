@@ -83,6 +83,24 @@ export const updateSettingsBody = z.object({
     cpuWarn: z.number().int().min(1).max(100),
     memoryWarn: z.number().int().min(1).max(100),
   }).optional(),
+  stackFileExcludes: z.array(z.string().min(1).max(120)).max(200).optional(),
+  homepageWidget: z.object({
+    enabled: z.boolean(),
+    baseUrl: z.string().max(500).optional(),
+    apiKey: z.string().max(2000).optional(),
+    serviceName: z.string().max(120).optional(),
+    show: z.object({
+      containers: z.boolean().optional(),
+      stacks: z.boolean().optional(),
+      images: z.boolean().optional(),
+      volumes: z.boolean().optional(),
+      networks: z.boolean().optional(),
+      cpu: z.boolean().optional(),
+      memory: z.boolean().optional(),
+      disk: z.boolean().optional(),
+      updates: z.boolean().optional(),
+    }).optional(),
+  }).optional(),
 });
 
 export const backupConfigBody = z.object({

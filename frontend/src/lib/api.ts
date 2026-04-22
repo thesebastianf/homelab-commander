@@ -262,6 +262,10 @@ export async function updateStackImages(id: string): Promise<void> {
   await request(`/stacks/${id}/update`, { method: 'POST' });
 }
 
+export async function fetchStackUpdateHistory(id: string): Promise<Array<{ id: string; action: string; createdAt: string; details?: Record<string, unknown> }>> {
+  return request(`/stacks/${id}/update-history`);
+}
+
 // ---- Stack Files ----
 
 export async function fetchStackFiles(id: string): Promise<any[]> {

@@ -84,6 +84,13 @@ export interface StackVersion {
   createdAt: string
 }
 
+export interface StackUpdateHistoryEntry {
+  id: string
+  action: string
+  createdAt: string
+  details?: Record<string, unknown>
+}
+
 export interface Volume {
   id: string
   name: string
@@ -201,6 +208,24 @@ export interface AppSettings {
     diskWarn: number
     cpuWarn: number
     memoryWarn: number
+  }
+  stackFileExcludes?: string[]
+  homepageWidget?: {
+    enabled: boolean
+    baseUrl: string
+    apiKey: string
+    serviceName: string
+    show: {
+      containers: boolean
+      stacks: boolean
+      images: boolean
+      volumes: boolean
+      networks: boolean
+      cpu: boolean
+      memory: boolean
+      disk: boolean
+      updates: boolean
+    }
   }
 }
 

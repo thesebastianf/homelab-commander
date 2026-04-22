@@ -27,15 +27,24 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings)
   const [aiTesting, setAiTesting] = useState(false)
   const [aiTestResult, setAiTestResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [excludeDraft, setExcludeDraft] = useState('')
 
   useEffect(() => {
     if (open) {
       setLocalSettings(settings)
       setAiTestResult(null)
+      setExcludeDraft('')
       // Restore actual saved theme when dialog reopens (in case previous session was cancelled)
       document.documentElement.setAttribute('data-theme', settings.theme || 'dark')
     }
   }, [open]) // intentionally not [settings] — avoids reset from background refetches
+
+  const makeHelperId = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID()
+    }
+    return `helper-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  }
 
   const handleCancel = () => {
     // Revert preview to the saved theme
@@ -517,6 +526,91 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                 </div>
               )}
             </Card>
+
+            <Card className="p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Link className="w-4 h-4" />
+                  <h3 className="font-mono font-semibold text-base">gethomepage.dev Service Widget</h3>
+                  <Badge variant={localSettings.homepageWidget?.enabled ? 'default' : 'secondary'}>
+                    {localSettings.homepageWidget?.enabled ? 'Enabled' : 'Disabled'}
+                  </Badge>
+                </div>
+                <Switch
+                  checked={localSettings.homepageWidget?.enabled || false}
+                  onCheckedChange={checked => setLocalSettings(prev => ({
+                    ...prev,
+                    homepageWidget: {
+                      enabled: checked,
+                      baseUrl: prev.homepageWidget?.baseUrl || '',
+                      apiKey: prev.homepageWidget?.apiKey || '',
+                      serviceName: prev.homepageWidget?.serviceName || 'Homelab Commander',
+                      show: {
+                        containers: prev.homepageWidget?.show?.containers ?? true,
+                        stacks: prev.homepageWidget?.show?.stacks ?? true,
+                        images: prev.homepageWidget?.show?.images ?? true,
+                        volumes: prev.homepageWidget?.show?.volumes ?? true,
+                        networks: prev.homepageWidget?.show?.networks ?? true,
+                        cpu: prev.homepageWidget?.show?.cpu ?? true,
+                        memory: prev.homepageWidget?.show?.memory ?? true,
+                        disk: prev.homepageWidget?.show?.disk ?? true,
+                        updates: prev.homepageWidget?.show?.updates ?? true,
+                      },
+                    },
+                  }))}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground">Configure a service widget endpoint for gethomepage.dev so Homelab Commander can be shown as a custom service card.</p>
+              {localSettings.homepageWidget?.enabled && (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label>Homepage Base URL</Label>
+                    <Input
+                      value={localSettings.homepageWidget?.baseUrl || ''}
+                      onChange={e => setLocalSettings(prev => ({
+                        ...prev,
+                        homepageWidget: {
+                          ...(prev.homepageWidget || { enabled: true, apiKey: '', serviceName: 'Homelab Commander', show: { containers: true, stacks: true, images: true, volumes: true, networks: true, cpu: true, memory: true, disk: true, updates: true } }),
+                          baseUrl: e.target.value,
+                        },
+                      }))}
+                      placeholder="http://homepage:3000"
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>API Key</Label>
+                    <Input
+                      type="password"
+                      value={localSettings.homepageWidget?.apiKey || ''}
+                      onChange={e => setLocalSettings(prev => ({
+                        ...prev,
+                        homepageWidget: {
+                          ...(prev.homepageWidget || { enabled: true, baseUrl: '', serviceName: 'Homelab Commander', show: { containers: true, stacks: true, images: true, volumes: true, networks: true, cpu: true, memory: true, disk: true, updates: true } }),
+                          apiKey: e.target.value,
+                        },
+                      }))}
+                      placeholder="homepage-api-key"
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Service Name</Label>
+                    <Input
+                      value={localSettings.homepageWidget?.serviceName || 'Homelab Commander'}
+                      onChange={e => setLocalSettings(prev => ({
+                        ...prev,
+                        homepageWidget: {
+                          ...(prev.homepageWidget || { enabled: true, baseUrl: '', apiKey: '', show: { containers: true, stacks: true, images: true, volumes: true, networks: true, cpu: true, memory: true, disk: true, updates: true } }),
+                          serviceName: e.target.value,
+                        },
+                      }))}
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                </div>
+              )}
+            </Card>
           </TabsContent>
 
           <TabsContent value="ai" className="space-y-6 mt-6">
@@ -771,7 +865,8 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
               size="sm"
               className="gap-2"
               onClick={() => {
-                const helpers = [...(localSettings.copyPasteHelpers || []), { id: crypto.randomUUID(), label: '', value: '' }]
+                const nextIndex = (localSettings.copyPasteHelpers || []).length + 1
+                const helpers = [...(localSettings.copyPasteHelpers || []), { id: makeHelperId(), label: `helper-${nextIndex}`, value: '' }]
                 setLocalSettings(prev => ({ ...prev, copyPasteHelpers: helpers }))
               }}
             >
@@ -872,6 +967,53 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                       className="w-24 font-mono text-sm"
                     />
                     <span className="text-xs text-muted-foreground">stopped</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 col-span-2">
+                  <Label className="text-sm font-medium">Stack File Exclude Patterns</Label>
+                  <p className="text-[11px] text-muted-foreground">Excluded patterns are hidden from Stack Editor Files list. Use glob-like entries such as *.png or *.zip.</p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={excludeDraft}
+                      onChange={e => setExcludeDraft(e.target.value)}
+                      placeholder="*.png"
+                      className="h-8 font-mono text-xs"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8"
+                      onClick={() => {
+                        const v = excludeDraft.trim()
+                        if (!v) return
+                        const current = localSettings.stackFileExcludes || []
+                        if (current.includes(v)) { setExcludeDraft(''); return }
+                        setLocalSettings(prev => ({ ...prev, stackFileExcludes: [...(prev.stackFileExcludes || []), v] }))
+                        setExcludeDraft('')
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(localSettings.stackFileExcludes || [
+                      '*.jpg', '*.jpeg', '*.png', '*.gif', '*.webp', '*.bmp', '*.ico', '*.svg', '*.avif', '*.tiff',
+                      '*.mp4', '*.mkv', '*.mov', '*.avi', '*.mp3', '*.wav', '*.flac', '*.zip', '*.tar', '*.gz', '*.7z', '*.pdf',
+                      '*.svc',
+                    ]).map((pattern) => (
+                      <Badge key={pattern} variant="outline" className="font-mono text-[10px] gap-1">
+                        {pattern}
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => setLocalSettings(prev => ({ ...prev, stackFileExcludes: (prev.stackFileExcludes || []).filter(p => p !== pattern) }))}
+                        >
+                          <XCircle className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))}
                   </div>
                 </div>
               </div>

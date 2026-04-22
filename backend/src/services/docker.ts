@@ -30,7 +30,22 @@ setInterval(sampleCpu, 15_000);
 
 export async function listContainers() {
   const containers = await docker.listContainers({ all: true });
-  return containers.map(mapContainer);
+  const mapped = containers.map(mapContainer);
+
+  await Promise.all(mapped.map(async (container) => {
+    if (container.status !== 'running') return;
+    try {
+      const stats = await docker.getContainer(container.id).stats({ stream: false });
+      const computed = computeStats(stats);
+      container.cpu = computed.cpu;
+      container.memory = Math.round((computed.memoryUsage || 0) / 1024 / 1024);
+      container.network = { rx: computed.networkRx || 0, tx: computed.networkTx || 0 };
+    } catch {
+      // Keep zeros when stats are not available for this polling cycle.
+    }
+  }));
+
+  return mapped;
 }
 
 export async function getContainer(id: string) {
@@ -98,12 +113,12 @@ export async function openContainerShell(id: string, cols = 120, rows = 30) {
   }
 
   const candidates: string[][] = [
-    ['/bin/bash', '-l'],
-    ['bash', '-l'],
     ['/bin/sh', '-l'],
     ['sh', '-l'],
     ['/bin/ash', '-l'],
     ['ash', '-l'],
+    ['/bin/bash', '-l'],
+    ['bash', '-l'],
   ];
 
   let exec: any = null;
@@ -226,14 +241,22 @@ export async function inspectVolume(name: string) {
 
 export async function listNetworks() {
   const networks = await docker.listNetworks();
-  return networks.map(net => ({
-    id: net.Id.slice(0, 12),
-    name: net.Name,
+  const details = await Promise.all(networks.map(async (net) => {
+    try {
+      return await docker.getNetwork(net.Id).inspect();
+    } catch {
+      return net as any;
+    }
+  }));
+
+  return details.map((net: any) => ({
+    id: String(net.Id || '').slice(0, 12),
+    name: net.Name || '',
     driver: net.Driver || '',
     scope: net.Scope || '',
-    containers: Object.values(net.Containers || {}).map((c: any) => c.Name || ''),
-    subnet: (net as any).IPAM?.Config?.[0]?.Subnet || '',
-    gateway: (net as any).IPAM?.Config?.[0]?.Gateway || '',
+    containers: Object.values(net.Containers || {}).map((c: any) => c.Name || '').filter(Boolean),
+    subnet: net?.IPAM?.Config?.[0]?.Subnet || '',
+    gateway: net?.IPAM?.Config?.[0]?.Gateway || '',
   }));
 }
 
