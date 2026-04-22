@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { AlertTriangle } from 'lucide-react'
@@ -32,7 +32,8 @@ export function ContainerShellDialog({
   serviceName,
   image,
 }: ContainerShellDialogProps) {
-  const hostRef = useRef<HTMLDivElement | null>(null)
+  const [hostEl, setHostEl] = useState<HTMLDivElement | null>(null)
+  const hostRef = useCallback((node: HTMLDivElement | null) => { setHostEl(node) }, [])
   const wsRef = useRef<WebSocket | null>(null)
   const termRef = useRef<XTerm | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -45,7 +46,7 @@ export function ContainerShellDialog({
   }, [containerName, serviceName])
 
   useEffect(() => {
-    if (!open || !containerId || !hostRef.current) return
+    if (!open || !containerId || !hostEl) return
 
     setConnected(false)
     setError(null)
@@ -63,7 +64,7 @@ export function ContainerShellDialog({
     })
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
-    term.open(hostRef.current)
+    term.open(hostEl)
     fitAddon.fit()
     term.focus()
     term.write('\u001b[32mConnecting to shell...\u001b[0m\r\n')
@@ -141,7 +142,7 @@ export function ContainerShellDialog({
       termRef.current = null
       fitRef.current = null
     }
-  }, [open, containerId])
+  }, [open, containerId, hostEl])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

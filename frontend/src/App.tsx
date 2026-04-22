@@ -25,7 +25,7 @@ import { SmartStartupDialog } from '@/components/SmartStartupDialog'
 import { PortRegistryDialog } from '@/components/PortRegistryDialog'
 import { DatabaseExplorer } from '@/components/DatabaseExplorer'
 import { ClockWidget } from '@/components/ClockWidget'
-import { Loader2, RefreshCw, Maximize2, Minimize2, AlertTriangle } from 'lucide-react'
+import { Loader2, RefreshCw, Maximize2, Minimize2 } from 'lucide-react'
 import {
   Box,
   Home,
@@ -502,128 +502,125 @@ function App() {
           {/* ═══ DASHBOARD ═══ */}
           <TabsContent value="dashboard" className="space-y-4">
 
-            {/* Warning banners */}
+            {/* Row 1: Resource Usage — 6 compact cards with inline warnings */}
             {(() => {
               const NETWORK_WARN = currentSettings.warningThresholds?.networkWarn ?? 25
               const DISK_WARN = currentSettings.warningThresholds?.diskWarn ?? 90
               const ZOMBIE_WARN = currentSettings.warningThresholds?.zombieWarn ?? 5
-              const networkPoolWarning = networks.length > NETWORK_WARN
-              const diskWarning = (systemInfo?.diskUsedPercent ?? 0) > DISK_WARN
+              const CPU_WARN = currentSettings.warningThresholds?.cpuWarn ?? 85
+              const MEM_WARN = currentSettings.warningThresholds?.memoryWarn ?? 85
               const stoppedCount = containers.filter(c => c.status !== 'running').length
-              const zombieWarning = stoppedCount > ZOMBIE_WARN
-              if (!networkPoolWarning && !diskWarning && !zombieWarning) return null
               return (
-                <div className="space-y-2">
-                  {diskWarning && (
-                    <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                      <span><strong>Disk {(systemInfo?.diskUsedPercent ?? 0).toFixed(1)}% full</strong> — Clean up unused images and volumes in System Maintenance (threshold: {DISK_WARN}%).</span>
+                <>
+                  <div>
+                    <p className="text-xs font-mono text-muted-foreground font-semibold tracking-widest mb-2 uppercase">Resource Usage</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+                      <MetricCard
+                        label="CPU"
+                        value={`${systemStats.cpuUsage.toFixed(1)}%`}
+                        icon={<Cpu className="w-5 h-5" />}
+                        compact
+                        warning={systemStats.cpuUsage > CPU_WARN}
+                        warningText={`>{CPU_WARN}%`}
+                        actionLabel="Cleanup"
+                        onAction={() => setMaintenanceOpen(true)}
+                      />
+                      <MetricCard
+                        label="Memory"
+                        value={`${systemStats.memoryUsage.toFixed(1)}%`}
+                        icon={<MemoryStick className="w-5 h-5" />}
+                        compact
+                        warning={systemStats.memoryUsage > MEM_WARN}
+                        warningText={`>${MEM_WARN}%`}
+                        actionLabel="Cleanup"
+                        onAction={() => setMaintenanceOpen(true)}
+                      />
+                      <MetricCard
+                        label="Disk"
+                        value={`${systemStats.diskUsage.toFixed(1)}%`}
+                        icon={<Database className="w-5 h-5" />}
+                        compact
+                        warning={systemStats.diskUsage > DISK_WARN}
+                        warningText={`>${DISK_WARN}%`}
+                        actionLabel="Prune"
+                        onAction={() => setMaintenanceOpen(true)}
+                      />
+                      <MetricCard
+                        label="Memory Total"
+                        value={systemStats.memoryTotal}
+                        icon={<MemoryStick className="w-5 h-5" />}
+                        compact
+                      />
+                      <MetricCard
+                        label="Disk Total"
+                        value={systemStats.diskTotal}
+                        icon={<HardDrive className="w-5 h-5" />}
+                        compact
+                      />
+                      <MetricCard
+                        label="Networks"
+                        value={systemStats.networks}
+                        icon={<Network className="w-5 h-5" />}
+                        compact
+                        warning={networks.length > NETWORK_WARN}
+                        warningText={`>${NETWORK_WARN} pool`}
+                        actionLabel="Prune"
+                        onAction={() => setMaintenanceOpen(true)}
+                      />
                     </div>
-                  )}
-                  {networkPoolWarning && (
-                    <div className="flex items-center gap-2 rounded-lg border border-orange-500/40 bg-orange-500/5 px-3 py-2 text-xs text-orange-300">
-                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                      <span><strong>Network pool nearly full</strong> — {networks.length} networks detected (threshold: {NETWORK_WARN}). Run Prune Networks in System Maintenance.</span>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-mono text-muted-foreground font-semibold tracking-widest mb-2 uppercase">System Overview</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+                      <MetricCard
+                        label="Containers"
+                        value={systemStats.containers.total}
+                        icon={<Container className="w-5 h-5" />}
+                        compact
+                        pulse={systemStats.containers.running > 0}
+                      />
+                      <MetricCard
+                        label="Running"
+                        value={systemStats.containers.running}
+                        icon={<Play className="w-5 h-5" />}
+                        compact
+                        className="border-l-4 border-l-success"
+                      />
+                      <MetricCard
+                        label="Stopped"
+                        value={systemStats.containers.stopped}
+                        icon={<StopCircle className="w-5 h-5" />}
+                        compact
+                        warning={stoppedCount > ZOMBIE_WARN}
+                        warningText={`>${ZOMBIE_WARN} stopped`}
+                        actionLabel="Prune"
+                        onAction={() => setMaintenanceOpen(true)}
+                        className={!stoppedCount ? "" : stoppedCount > ZOMBIE_WARN ? "" : "border-l-4 border-l-destructive"}
+                      />
+                      <MetricCard
+                        label="Images"
+                        value={systemStats.images}
+                        icon={<ImageIcon className="w-5 h-5" />}
+                        compact
+                      />
+                      <MetricCard
+                        label="Volumes"
+                        value={systemStats.volumes}
+                        icon={<HardDrive className="w-5 h-5" />}
+                        compact
+                      />
+                      <MetricCard
+                        label="Stacks"
+                        value={systemStats.stacks}
+                        icon={<Layers className="w-5 h-5" />}
+                        compact
+                      />
                     </div>
-                  )}
-                  {zombieWarning && (
-                    <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning/90">
-                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                      <span><strong>{stoppedCount} stopped containers</strong> — Consider running Container Prune in System Maintenance (threshold: {ZOMBIE_WARN}).</span>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                </>
               )
             })()}
-
-            {/* Row 1: Resource Usage — 6 compact cards */}
-            <div>
-              <p className="text-xs font-mono text-muted-foreground font-semibold tracking-widest mb-2 uppercase">Resource Usage</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-                <MetricCard
-                  label="CPU"
-                  value={`${systemStats.cpuUsage.toFixed(1)}%`}
-                  icon={<Cpu className="w-5 h-5" />}
-                  compact
-                />
-                <MetricCard
-                  label="Memory"
-                  value={`${systemStats.memoryUsage.toFixed(1)}%`}
-                  icon={<MemoryStick className="w-5 h-5" />}
-                  compact
-                />
-                <MetricCard
-                  label="Disk"
-                  value={`${systemStats.diskUsage.toFixed(1)}%`}
-                  icon={<Database className="w-5 h-5" />}
-                  compact
-                />
-                <MetricCard
-                  label="Memory Total"
-                  value={systemStats.memoryTotal}
-                  icon={<MemoryStick className="w-5 h-5" />}
-                  compact
-                />
-                <MetricCard
-                  label="Disk Total"
-                  value={systemStats.diskTotal}
-                  icon={<HardDrive className="w-5 h-5" />}
-                  compact
-                />
-                <MetricCard
-                  label="Networks"
-                  value={systemStats.networks}
-                  icon={<Network className="w-5 h-5" />}
-                  compact
-                />
-              </div>
-            </div>
-
-            {/* Row 2: System Overview — 6 compact cards */}
-            <div>
-              <p className="text-xs font-mono text-muted-foreground font-semibold tracking-widest mb-2 uppercase">System Overview</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-                <MetricCard
-                  label="Containers"
-                  value={systemStats.containers.total}
-                  icon={<Container className="w-5 h-5" />}
-                  compact
-                  pulse={systemStats.containers.running > 0}
-                />
-                <MetricCard
-                  label="Running"
-                  value={systemStats.containers.running}
-                  icon={<Play className="w-5 h-5" />}
-                  compact
-                  className="border-l-4 border-l-success"
-                />
-                <MetricCard
-                  label="Stopped"
-                  value={systemStats.containers.stopped}
-                  icon={<StopCircle className="w-5 h-5" />}
-                  compact
-                  className={systemStats.containers.stopped > 0 ? "border-l-4 border-l-destructive" : ""}
-                />
-                <MetricCard
-                  label="Images"
-                  value={systemStats.images}
-                  icon={<ImageIcon className="w-5 h-5" />}
-                  compact
-                />
-                <MetricCard
-                  label="Volumes"
-                  value={systemStats.volumes}
-                  icon={<HardDrive className="w-5 h-5" />}
-                  compact
-                />
-                <MetricCard
-                  label="Stacks"
-                  value={systemStats.stacks}
-                  icon={<Layers className="w-5 h-5" />}
-                  compact
-                />
-              </div>
-            </div>
 
             {/* Full-width Aggregated Logs */}
             <AggregatedLogs logs={aggregatedLogs} />

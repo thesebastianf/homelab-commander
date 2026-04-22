@@ -80,6 +80,8 @@ export const updateSettingsBody = z.object({
     networkWarn: z.number().int().min(1).max(500),
     zombieWarn: z.number().int().min(1).max(500),
     diskWarn: z.number().int().min(1).max(100),
+    cpuWarn: z.number().int().min(1).max(100),
+    memoryWarn: z.number().int().min(1).max(100),
   }).optional(),
 });
 

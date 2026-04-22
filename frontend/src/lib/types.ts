@@ -199,6 +199,8 @@ export interface AppSettings {
     networkWarn: number
     zombieWarn: number
     diskWarn: number
+    cpuWarn: number
+    memoryWarn: number
   }
 }
 

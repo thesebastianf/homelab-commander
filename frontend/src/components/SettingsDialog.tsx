@@ -82,21 +82,24 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
         </DialogHeader>
 
         <Tabs defaultValue="general" className="mt-4">
-          <TabsList className="grid w-full grid-cols-5 h-9">
-            <TabsTrigger value="general" className="text-xs px-2">
+          <TabsList className="grid w-full grid-cols-6 h-9">
+            <TabsTrigger value="general" className="text-xs px-1">
               General
             </TabsTrigger>
-            <TabsTrigger value="notifications" className="text-xs px-2">
-              Notifications
+            <TabsTrigger value="notifications" className="text-xs px-1">
+              Alerts
             </TabsTrigger>
-            <TabsTrigger value="integrations" className="text-xs px-2">
+            <TabsTrigger value="integrations" className="text-xs px-1">
               Integrations
             </TabsTrigger>
-            <TabsTrigger value="ai" className="text-xs px-2">
+            <TabsTrigger value="ai" className="text-xs px-1">
               AI
             </TabsTrigger>
-            <TabsTrigger value="helpers" className="text-xs px-2">
+            <TabsTrigger value="helpers" className="text-xs px-1">
               Helpers
+            </TabsTrigger>
+            <TabsTrigger value="monitoring" className="text-xs px-1">
+              Monitoring
             </TabsTrigger>
           </TabsList>
 
@@ -263,68 +266,6 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                     </div>
                   )}
                 </Card>
-
-              <h3 className="font-mono font-semibold text-sm flex items-center gap-2">
-                <AlertTriangle className="w-[18px] h-[18px]" />
-                Warning Thresholds
-              </h3>
-
-              <Card className="p-4 space-y-4">
-                <p className="text-sm text-muted-foreground">Trigger dashboard and maintenance warnings when these limits are exceeded.</p>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">Network Pool Warning</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        min={1}
-                        max={500}
-                        value={localSettings.warningThresholds?.networkWarn ?? 25}
-                        onChange={e => setLocalSettings(prev => ({
-                          ...prev,
-                          warningThresholds: { ...(prev.warningThresholds ?? { networkWarn: 25, zombieWarn: 5, diskWarn: 90 }), networkWarn: parseInt(e.target.value) || 25 },
-                        }))}
-                        className="w-24 font-mono text-sm"
-                      />
-                      <span className="text-xs text-muted-foreground">networks</span>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">Zombie Container Warning</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        min={1}
-                        max={500}
-                        value={localSettings.warningThresholds?.zombieWarn ?? 5}
-                        onChange={e => setLocalSettings(prev => ({
-                          ...prev,
-                          warningThresholds: { ...(prev.warningThresholds ?? { networkWarn: 25, zombieWarn: 5, diskWarn: 90 }), zombieWarn: parseInt(e.target.value) || 5 },
-                        }))}
-                        className="w-24 font-mono text-sm"
-                      />
-                      <span className="text-xs text-muted-foreground">stopped</span>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">Disk Usage Warning</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        min={1}
-                        max={100}
-                        value={localSettings.warningThresholds?.diskWarn ?? 90}
-                        onChange={e => setLocalSettings(prev => ({
-                          ...prev,
-                          warningThresholds: { ...(prev.warningThresholds ?? { networkWarn: 25, zombieWarn: 5, diskWarn: 90 }), diskWarn: parseInt(e.target.value) || 90 },
-                        }))}
-                        className="w-24 font-mono text-sm"
-                      />
-                      <span className="text-xs text-muted-foreground">%</span>
-                    </div>
-                  </div>
-                </div>
-              </Card>
 
             </div>
           </TabsContent>
@@ -836,6 +777,105 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
             >
               <Plus className="w-4 h-4" /> Add Helper
             </Button>
+          </TabsContent>
+
+          <TabsContent value="monitoring" className="space-y-4 mt-6">
+            <div className="space-y-2">
+              <h3 className="font-mono font-semibold text-sm flex items-center gap-2">
+                <AlertTriangle className="w-[18px] h-[18px]" />
+                Warning Thresholds
+              </h3>
+              <p className="text-xs text-muted-foreground">Dashboard metric tiles will show an inline warning and action button when these limits are exceeded.</p>
+            </div>
+
+            <Card className="p-4">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">CPU Usage Warning</Label>
+                  <p className="text-[11px] text-muted-foreground">Show warning when CPU exceeds this %</p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number" min={1} max={100}
+                      value={localSettings.warningThresholds?.cpuWarn ?? 85}
+                      onChange={e => setLocalSettings(prev => ({
+                        ...prev,
+                        warningThresholds: { ...(prev.warningThresholds ?? { networkWarn: 25, zombieWarn: 5, diskWarn: 90, cpuWarn: 85, memoryWarn: 85 }), cpuWarn: parseInt(e.target.value) || 85 },
+                      }))}
+                      className="w-24 font-mono text-sm"
+                    />
+                    <span className="text-xs text-muted-foreground">%</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Memory Usage Warning</Label>
+                  <p className="text-[11px] text-muted-foreground">Show warning when memory exceeds this %</p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number" min={1} max={100}
+                      value={localSettings.warningThresholds?.memoryWarn ?? 85}
+                      onChange={e => setLocalSettings(prev => ({
+                        ...prev,
+                        warningThresholds: { ...(prev.warningThresholds ?? { networkWarn: 25, zombieWarn: 5, diskWarn: 90, cpuWarn: 85, memoryWarn: 85 }), memoryWarn: parseInt(e.target.value) || 85 },
+                      }))}
+                      className="w-24 font-mono text-sm"
+                    />
+                    <span className="text-xs text-muted-foreground">%</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Disk Usage Warning</Label>
+                  <p className="text-[11px] text-muted-foreground">Show warning when disk usage exceeds this %</p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number" min={1} max={100}
+                      value={localSettings.warningThresholds?.diskWarn ?? 90}
+                      onChange={e => setLocalSettings(prev => ({
+                        ...prev,
+                        warningThresholds: { ...(prev.warningThresholds ?? { networkWarn: 25, zombieWarn: 5, diskWarn: 90, cpuWarn: 85, memoryWarn: 85 }), diskWarn: parseInt(e.target.value) || 90 },
+                      }))}
+                      className="w-24 font-mono text-sm"
+                    />
+                    <span className="text-xs text-muted-foreground">%</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Network Pool Warning</Label>
+                  <p className="text-[11px] text-muted-foreground">Show warning when network count exceeds</p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number" min={1} max={500}
+                      value={localSettings.warningThresholds?.networkWarn ?? 25}
+                      onChange={e => setLocalSettings(prev => ({
+                        ...prev,
+                        warningThresholds: { ...(prev.warningThresholds ?? { networkWarn: 25, zombieWarn: 5, diskWarn: 90, cpuWarn: 85, memoryWarn: 85 }), networkWarn: parseInt(e.target.value) || 25 },
+                      }))}
+                      className="w-24 font-mono text-sm"
+                    />
+                    <span className="text-xs text-muted-foreground">networks</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Stopped Container Warning</Label>
+                  <p className="text-[11px] text-muted-foreground">Show warning when stopped containers exceed</p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number" min={1} max={500}
+                      value={localSettings.warningThresholds?.zombieWarn ?? 5}
+                      onChange={e => setLocalSettings(prev => ({
+                        ...prev,
+                        warningThresholds: { ...(prev.warningThresholds ?? { networkWarn: 25, zombieWarn: 5, diskWarn: 90, cpuWarn: 85, memoryWarn: 85 }), zombieWarn: parseInt(e.target.value) || 5 },
+                      }))}
+                      className="w-24 font-mono text-sm"
+                    />
+                    <span className="text-xs text-muted-foreground">stopped</span>
+                  </div>
+                </div>
+              </div>
+            </Card>
           </TabsContent>
         </Tabs>
 

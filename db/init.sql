@@ -71,7 +71,7 @@ INSERT INTO settings (id) VALUES (1) ON CONFLICT DO NOTHING;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS copy_paste_helpers JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS ui_theme TEXT DEFAULT 'dark';
 UPDATE settings SET ui_theme = 'dark' WHERE ui_theme IS NULL;
-ALTER TABLE settings ADD COLUMN IF NOT EXISTS warning_thresholds JSONB DEFAULT '{"networkWarn":25,"zombieWarn":5,"diskWarn":90}'::jsonb;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS warning_thresholds JSONB DEFAULT '{"networkWarn":25,"zombieWarn":5,"diskWarn":90,"cpuWarn":85,"memoryWarn":85}'::jsonb;
 
 -- Stacks
 CREATE TABLE IF NOT EXISTS stacks (

@@ -105,7 +105,7 @@ router.get('/', asyncHandler(async (_req, res) => {
       registryConfigPresent: await getRegistryConfigPresent(),
     },
     copyPasteHelpers: settings.copy_paste_helpers ?? [],
-    warningThresholds: settings.warning_thresholds ?? { networkWarn: 25, zombieWarn: 5, diskWarn: 90 },
+    warningThresholds: settings.warning_thresholds ?? { networkWarn: 25, zombieWarn: 5, diskWarn: 90, cpuWarn: 85, memoryWarn: 85 },
   });
 }));
 

@@ -1477,7 +1477,7 @@ export function StacksEditor({
 
               {/* Operation Terminal */}
               {(isOperating || (operationDone && opLines.length > 0)) && (
-                <div className="rounded-lg border border-border/60 bg-black/80 shrink-0 flex flex-col max-h-44 min-h-0">
+                <div className="rounded-lg border border-border/60 bg-black/80 shrink-0 flex flex-col h-44 min-h-0 overflow-hidden">
                   <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/30 shrink-0">
                     <div className="flex items-center gap-2">
                       <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
@@ -1494,8 +1494,8 @@ export function StacksEditor({
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <ScrollArea className="flex-1 p-2">
-                    <div className="font-mono text-xs space-y-0.5">
+                  <div className="overflow-y-auto flex-1 min-h-0 p-2">
+                    <div className="font-mono text-xs space-y-0.5 whitespace-pre-wrap break-all">
                       {opLines.map((line, i) => (
                         <div key={i} className={
                           line.startsWith('✅') || line.includes('Started') || line.includes('Running') || line.includes('[+] Running') ? 'text-green-400' :
@@ -1509,7 +1509,7 @@ export function StacksEditor({
                         </div>
                       ))}
                     </div>
-                  </ScrollArea>
+                  </div>
                 </div>
               )}
 

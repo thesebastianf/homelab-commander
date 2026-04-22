@@ -5,8 +5,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Wrench, ImageIcon, HardDrive, Box, AlertTriangle, Loader2, CheckCircle, Network, Wifi, WifiOff, ShieldAlert } from 'lucide-react'
+import { Wrench, ImageIcon, HardDrive, Box, AlertTriangle, Loader2, CheckCircle, Network, Wifi, WifiOff } from 'lucide-react'
 import { toast } from 'sonner'
 import * as api from '@/lib/api'
 
@@ -139,7 +138,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-5xl max-h-[90vh] overflow-y-auto"
+        className="max-w-6xl"
         onOpenAutoFocus={(e) => {
           e.preventDefault()
           focusRef.current?.focus()
@@ -156,42 +155,31 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 mt-2">
-          {/* System Health Card */}
-          <div className={`rounded-xl border p-5 ${isHealthy ? 'border-success/30 bg-success/[0.03]' : 'border-destructive/30 bg-destructive/[0.03]'}`}>
-            <div className="flex items-center gap-3 mb-4">
-              <h3 className="font-mono font-semibold text-base">System Health</h3>
-              <Badge className={`text-[10px] ${isHealthy ? 'bg-success/15 text-success border-success/30' : 'bg-destructive/15 text-destructive border-destructive/30'}`}>
-                {isHealthy ? 'Healthy' : 'Warning'}
-              </Badge>
-            </div>
-
-            <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+        <div className="space-y-3 mt-2">
+          {/* Compact System Health Row */}
+          <div className={`rounded-lg border p-3 ${isHealthy ? 'border-success/30 bg-success/[0.03]' : 'border-warning/30 bg-warning/[0.03]'}`}>
+            <div className="grid grid-cols-4 gap-4 items-start">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-muted-foreground">Disk Usage</span>
-                  <span className="text-xs font-mono">{diskPct.toFixed(1)}%</span>
+                  <span className="text-[11px] text-muted-foreground">Disk {diskPct.toFixed(1)}%</span>
+                  {diskWarning && <AlertTriangle className="w-3 h-3 text-warning" />}
                 </div>
-                <Progress value={diskPct} className="h-2" />
-                <p className="text-xs text-muted-foreground mt-1">{diskTotal} total</p>
+                <Progress value={diskPct} className="h-1.5" />
+                <p className="text-[10px] text-muted-foreground mt-0.5">{diskTotal} total</p>
               </div>
-
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-muted-foreground">Memory Usage</span>
-                  <span className="text-xs font-mono">{memPct.toFixed(1)}%</span>
+                  <span className="text-[11px] text-muted-foreground">Memory {memPct.toFixed(1)}%</span>
                 </div>
-                <Progress value={memPct} className="h-2" />
-                <p className="text-xs text-muted-foreground mt-1">{memTotal} total</p>
+                <Progress value={memPct} className="h-1.5" />
+                <p className="text-[10px] text-muted-foreground mt-0.5">{memTotal} total</p>
               </div>
-
               <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Estimated Reclaimable</p>
-                <p className="text-2xl font-mono font-bold text-warning">~{formatBytes(totalReclaimable)}</p>
-                <p className="text-xs text-muted-foreground">unused images, volumes &amp; stopped containers</p>
+                <p className="text-[11px] text-muted-foreground">Reclaimable</p>
+                <p className="text-xl font-mono font-bold text-warning">~{formatBytes(totalReclaimable)}</p>
+                <p className="text-[10px] text-muted-foreground">images + volumes + containers</p>
               </div>
-
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
                 <span className="text-muted-foreground">Docker</span>
                 <span className="font-mono">{systemInfo?.dockerVersion ?? '-'}</span>
                 <span className="text-muted-foreground">Containers</span>
@@ -204,223 +192,192 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          {/* Row 1: Images | Volumes | Stopped Containers */}
+          <div className="grid grid-cols-3 gap-3">
             {/* Purge Unused Images */}
-            <div className="rounded-xl border border-blue-500/20 border-l-4 border-l-blue-500 bg-card p-4 flex flex-col gap-3">
+            <div className="rounded-lg border border-l-4 border-blue-500/20 border-l-blue-500 bg-card p-3 flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-blue-500" />
-                <h4 className="font-mono font-semibold text-sm">Purge Unused Images</h4>
+                <ImageIcon className="w-4 h-4 text-blue-500 shrink-0" />
+                <h4 className="font-mono font-semibold text-xs">Purge Unused Images</h4>
               </div>
-              <p className="text-xs text-muted-foreground">Remove images not associated with any container.</p>
+              <p className="text-[11px] text-muted-foreground">Remove images not associated with any container.</p>
               {dfData?.images && (
-                <div className="flex gap-6">
+                <div className="flex gap-4">
                   <div>
-                    <p className="text-xs text-muted-foreground">Count</p>
-                    <p className="text-xl font-mono font-bold text-blue-500">{dfData.images.count ?? 0}</p>
+                    <p className="text-[10px] text-muted-foreground">Count</p>
+                    <p className="text-lg font-mono font-bold text-blue-500">{dfData.images.count ?? 0}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Reclaimable</p>
-                    <p className="text-xl font-mono font-bold text-warning">~{formatBytes(dfData.images.reclaimable)}</p>
+                    <p className="text-[10px] text-muted-foreground">Reclaimable</p>
+                    <p className="text-lg font-mono font-bold text-warning">~{formatBytes(dfData.images.reclaimable)}</p>
                   </div>
                 </div>
               )}
-              <div className="flex flex-col gap-1">
-                <Button size="sm" className="mt-auto bg-blue-600 hover:bg-blue-700 text-white w-fit"
+              <div className="mt-auto flex flex-col gap-1">
+                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-7 w-fit"
                   disabled={pruning !== null} onClick={() => handlePrune('images', 'Image prune', 'All unused images (not associated with any container) will be permanently deleted. This frees up disk space but images must be re-pulled to use again.')}>
-                  {pruning === 'images' ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Pruning...</> : 'Purge Images'}
+                  {pruning === 'images' ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Pruning...</> : 'Purge Images'}
                 </Button>
-                <code className="text-[10px] font-mono text-muted-foreground/70">docker image prune -a -f</code>
+                <code className="text-[10px] font-mono text-muted-foreground/60">docker image prune -a -f</code>
               </div>
             </div>
 
             {/* Prune Unused Volumes */}
-            <div className="rounded-xl border border-primary/20 border-l-4 border-l-primary bg-card p-4 flex flex-col gap-3">
+            <div className="rounded-lg border border-l-4 border-primary/20 border-l-primary bg-card p-3 flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <HardDrive className="w-4 h-4 text-primary" />
-                <h4 className="font-mono font-semibold text-sm">Prune Unused Volumes</h4>
+                <HardDrive className="w-4 h-4 text-primary shrink-0" />
+                <h4 className="font-mono font-semibold text-xs">Prune Unused Volumes</h4>
               </div>
-              <p className="text-xs text-muted-foreground">Remove volumes not referenced by any container.</p>
+              <p className="text-[11px] text-muted-foreground">Remove volumes not referenced by any container.</p>
               {dfData?.volumes && (
-                <div className="flex gap-6">
+                <div className="flex gap-4">
                   <div>
-                    <p className="text-xs text-muted-foreground">Count</p>
-                    <p className="text-xl font-mono font-bold text-primary">{dfData.volumes.count ?? 0}</p>
+                    <p className="text-[10px] text-muted-foreground">Count</p>
+                    <p className="text-lg font-mono font-bold text-primary">{dfData.volumes.count ?? 0}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Reclaimable</p>
-                    <p className="text-xl font-mono font-bold text-warning">~{formatBytes(dfData.volumes.reclaimable)}</p>
+                    <p className="text-[10px] text-muted-foreground">Reclaimable</p>
+                    <p className="text-lg font-mono font-bold text-warning">~{formatBytes(dfData.volumes.reclaimable)}</p>
                   </div>
                 </div>
               )}
-              <div className="flex flex-col gap-1">
-                <Button size="sm" className="mt-auto bg-primary hover:bg-primary/90 text-white w-fit"
+              <div className="mt-auto flex flex-col gap-1">
+                <Button size="sm" className="bg-primary hover:bg-primary/90 text-white text-xs h-7 w-fit"
                   disabled={pruning !== null} onClick={() => handlePrune('volumes', 'Volume prune', 'All volumes not referenced by any container will be permanently deleted including their data. This cannot be undone.')}>
-                  {pruning === 'volumes' ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Pruning...</> : 'Prune Volumes'}
+                  {pruning === 'volumes' ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Pruning...</> : 'Prune Volumes'}
                 </Button>
-                <code className="text-[10px] font-mono text-muted-foreground/70">docker volume prune -f</code>
+                <code className="text-[10px] font-mono text-muted-foreground/60">docker volume prune -f</code>
               </div>
             </div>
 
             {/* Remove Stopped Containers */}
-            <div className="rounded-xl border border-warning/20 border-l-4 border-l-warning bg-card p-4 flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <Box className="w-4 h-4 text-warning" />
-                <h4 className="font-mono font-semibold text-sm">Remove Stopped Containers</h4>
+            <div className={`rounded-lg border border-l-4 bg-card p-3 flex flex-col gap-2 ${zombieWarning ? 'border-warning/40 border-l-warning' : 'border-warning/20 border-l-warning'}`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Box className="w-4 h-4 text-warning shrink-0" />
+                  <h4 className="font-mono font-semibold text-xs">Remove Stopped</h4>
+                </div>
+                {zombieWarning && <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" />}
               </div>
-              <p className="text-xs text-muted-foreground">Clean up containers in stopped/exited state.</p>
+              <p className="text-[11px] text-muted-foreground">Clean up stopped / exited containers.</p>
               <div>
-                <p className="text-xs text-muted-foreground">Containers to Remove</p>
-                <p className="text-xl font-mono font-bold text-warning">{stoppedContainers.length} containers</p>
+                <p className="text-[10px] text-muted-foreground">To remove</p>
+                <p className={`text-lg font-mono font-bold ${zombieWarning ? 'text-warning' : 'text-muted-foreground'}`}>{stoppedContainers.length} containers</p>
               </div>
               {stoppedContainers.length > 0 ? (
-                <div className="space-y-1 max-h-20 overflow-y-auto">
-                  {stoppedContainers.slice(0, 4).map((c: any) => (
-                    <div key={c.id} className="flex items-center gap-2 text-xs">
+                <div className="space-y-0.5 max-h-12 overflow-y-auto">
+                  {stoppedContainers.slice(0, 3).map((c: any) => (
+                    <div key={c.id} className="flex items-center gap-1.5 text-[10px]">
                       <span className="w-1.5 h-1.5 rounded-full bg-destructive shrink-0" />
                       <span className="font-mono truncate text-muted-foreground">{c.name}</span>
                     </div>
                   ))}
-                  {stoppedContainers.length > 4 && <p className="text-xs text-muted-foreground">+ {stoppedContainers.length - 4} more</p>}
+                  {stoppedContainers.length > 3 && <p className="text-[10px] text-muted-foreground">+{stoppedContainers.length - 3} more</p>}
                 </div>
               ) : (
-                <div className="flex items-center gap-1.5 text-xs text-success">
-                  <CheckCircle className="w-3.5 h-3.5" />No stopped containers
+                <div className="flex items-center gap-1.5 text-[10px] text-success">
+                  <CheckCircle className="w-3 h-3" />No stopped containers
                 </div>
               )}
-              <div className="flex flex-col gap-1">
-                <Button size="sm" className="mt-auto bg-warning/90 hover:bg-warning text-black w-fit"
+              <div className="mt-auto flex flex-col gap-1">
+                <Button size="sm" className="bg-warning/90 hover:bg-warning text-black text-xs h-7 w-fit"
                   disabled={pruning !== null || stoppedContainers.length === 0}
                   onClick={() => handlePrune('containers', 'Container prune', `${stoppedContainers.length} stopped container(s) will be permanently removed. Their writable layers will be lost. Volumes are not affected.`)}>
-                  {pruning === 'containers' ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Removing...</> : 'Remove Stopped'}
+                  {pruning === 'containers' ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Removing...</> : 'Remove Stopped'}
                 </Button>
-                <code className="text-[10px] font-mono text-muted-foreground/70">docker container prune -f</code>
+                <code className="text-[10px] font-mono text-muted-foreground/60">docker container prune -f</code>
               </div>
             </div>
+          </div>
 
-            {/* Full System Prune — Danger Zone */}
-            <div className="rounded-xl border border-destructive/40 border-l-4 border-l-destructive bg-destructive/[0.03] p-4 flex flex-col gap-3">
+          {/* Row 2: Full Prune | Networks | Docker Connectivity */}
+          <div className="grid grid-cols-3 gap-3">
+            {/* Full System Prune */}
+            <div className="rounded-lg border border-l-4 border-destructive/30 border-l-destructive bg-destructive/[0.03] p-3 flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-destructive" />
-                <h4 className="font-mono font-semibold text-sm text-destructive">Full System Prune</h4>
+                <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+                <h4 className="font-mono font-semibold text-xs text-destructive">Full System Prune</h4>
               </div>
-              <p className="text-xs text-muted-foreground">Remove ALL unused images, volumes, containers, and networks.</p>
+              <p className="text-[11px] text-muted-foreground">Remove ALL unused images, volumes, containers, and networks.</p>
               <div>
-                <p className="text-xs text-muted-foreground">Total to Reclaim</p>
-                <p className="text-2xl font-mono font-bold text-destructive">~{formatBytes(totalReclaimable)}</p>
+                <p className="text-[10px] text-muted-foreground">Total to reclaim</p>
+                <p className="text-lg font-mono font-bold text-destructive">~{formatBytes(totalReclaimable)}</p>
               </div>
-              <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2 text-xs text-destructive/80">
-                This action is irreversible. Running containers will not be affected.
+              <div className="rounded bg-destructive/10 border border-destructive/20 p-1.5 text-[10px] text-destructive/80">
+                Irreversible. Running containers not affected.
               </div>
-              <div className="flex flex-col gap-1">
-                <Button size="sm" variant="destructive" className="mt-auto w-fit"
+              <div className="mt-auto flex flex-col gap-1">
+                <Button size="sm" variant="destructive" className="text-xs h-7 w-fit"
                   disabled={pruning !== null} onClick={() => handlePrune('all', 'Full system prune', 'ALL unused images, volumes, stopped containers, and networks will be permanently deleted. Running containers are not affected but this action cannot be undone.')}>
-                  {pruning === 'all' ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Pruning...</> : 'Full System Prune'}
+                  {pruning === 'all' ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Pruning...</> : 'Full System Prune'}
                 </Button>
-                <code className="text-[10px] font-mono text-muted-foreground/70">docker system prune -a --volumes -f</code>
+                <code className="text-[10px] font-mono text-muted-foreground/60">docker system prune -a --volumes -f</code>
               </div>
             </div>
 
             {/* Prune Networks */}
-            <div className={`rounded-xl border bg-card p-4 flex flex-col gap-3 ${networkPoolWarning ? 'border-orange-500/40 border-l-4 border-l-orange-500' : 'border-orange-500/20 border-l-4 border-l-orange-500'}`}>
+            <div className={`rounded-lg border border-l-4 bg-card p-3 flex flex-col gap-2 ${networkPoolWarning ? 'border-orange-500/40 border-l-orange-500' : 'border-orange-500/20 border-l-orange-500'}`}>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <Network className="w-4 h-4 text-orange-500" />
-                  <h4 className="font-mono font-semibold text-sm">Prune Networks</h4>
+                  <Network className="w-4 h-4 text-orange-500 shrink-0" />
+                  <h4 className="font-mono font-semibold text-xs">Prune Networks</h4>
                 </div>
                 {networkPoolWarning && (
-                  <Badge className="text-[10px] bg-orange-500/15 text-orange-400 border-orange-500/30">Pool Nearly Full!</Badge>
+                  <Badge className="text-[10px] bg-orange-500/15 text-orange-400 border-orange-500/30 py-0">Full!</Badge>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">Remove unused networks. Prevents "address pool exhausted" errors during deploys.</p>
-              <div className="flex gap-6">
+              <p className="text-[11px] text-muted-foreground">Remove unused networks. Prevents "address pool exhausted" errors.</p>
+              <div className="flex gap-4">
                 <div>
-                  <p className="text-xs text-muted-foreground">Active Networks</p>
-                  <p className={`text-xl font-mono font-bold ${networkPoolWarning ? 'text-orange-400' : 'text-orange-500'}`}>{networkCount}</p>
+                  <p className="text-[10px] text-muted-foreground">Active</p>
+                  <p className={`text-lg font-mono font-bold ${networkPoolWarning ? 'text-orange-400' : 'text-orange-500'}`}>{networkCount}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Threshold</p>
-                  <p className="text-xl font-mono font-bold text-muted-foreground">{NETWORK_WARN_THRESHOLD}</p>
+                  <p className="text-[10px] text-muted-foreground">Threshold</p>
+                  <p className="text-lg font-mono font-bold text-muted-foreground">{NETWORK_WARN_THRESHOLD}</p>
                 </div>
               </div>
               {networkPoolWarning && (
-                <div className="rounded bg-orange-500/10 border border-orange-500/20 p-2 text-xs text-orange-400">
-                  Network pool nearly full. Remove unused stacks or run Prune Networks.
+                <div className="rounded bg-orange-500/10 border border-orange-500/20 p-1.5 text-[10px] text-orange-400">
+                  Pool nearly full — remove unused stacks or prune now.
                 </div>
               )}
-              <div className="flex flex-col gap-1">
-                <Button size="sm" className="mt-auto bg-orange-600 hover:bg-orange-700 text-white w-fit"
+              <div className="mt-auto flex flex-col gap-1">
+                <Button size="sm" className="bg-orange-600 hover:bg-orange-700 text-white text-xs h-7 w-fit"
                   disabled={pruning !== null} onClick={() => handlePrune('networks', 'Network prune', 'All unused Docker networks (not connected to any container) will be removed. Running containers are not affected.')}>
-                  {pruning === 'networks' ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Pruning...</> : 'Prune Networks'}
+                  {pruning === 'networks' ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Pruning...</> : 'Prune Networks'}
                 </Button>
-                <code className="text-[10px] font-mono text-muted-foreground/70">docker network prune -f</code>
+                <code className="text-[10px] font-mono text-muted-foreground/60">docker network prune -f</code>
               </div>
             </div>
 
             {/* Docker Connectivity */}
-            <div className="rounded-xl border border-muted/40 border-l-4 border-l-muted bg-card p-4 flex flex-col gap-3">
+            <div className="rounded-lg border border-l-4 border-muted/30 border-l-muted bg-card p-3 flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <Wifi className="w-4 h-4 text-muted-foreground" />
-                <h4 className="font-mono font-semibold text-sm">Docker Connectivity</h4>
+                <Wifi className="w-4 h-4 text-muted-foreground shrink-0" />
+                <h4 className="font-mono font-semibold text-xs">Docker Connectivity</h4>
               </div>
-              <p className="text-xs text-muted-foreground">Test the connection to the Docker daemon via /var/run/docker.sock.</p>
-              <div className="flex items-center gap-3">
+              <p className="text-[11px] text-muted-foreground">Test the connection to the Docker daemon via /var/run/docker.sock.</p>
+              <div className="flex items-center gap-2 min-h-[1.5rem]">
                 {socketResult === 'ok' && (
                   <div className="flex items-center gap-1.5 text-xs text-success"><CheckCircle className="w-3.5 h-3.5" />Socket OK</div>
                 )}
                 {socketResult === 'error' && (
                   <div className="flex items-center gap-1.5 text-xs text-destructive"><WifiOff className="w-3.5 h-3.5" />Socket unreachable!</div>
                 )}
+                {socketResult === null && !socketChecking && (
+                  <span className="text-[11px] text-muted-foreground">Not tested yet</span>
+                )}
               </div>
-              <div className="flex flex-col gap-1">
-                <Button size="sm" variant="outline" className="mt-auto w-fit"
+              <div className="mt-auto flex flex-col gap-1">
+                <Button size="sm" variant="outline" className="text-xs h-7 w-fit"
                   disabled={socketChecking} onClick={checkSocket}>
-                  {socketChecking ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Checking...</> : 'Check Socket'}
+                  {socketChecking ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Checking...</> : 'Check Socket'}
                 </Button>
-                <code className="text-[10px] font-mono text-muted-foreground/70">docker info</code>
+                <code className="text-[10px] font-mono text-muted-foreground/60">docker info</code>
               </div>
             </div>
           </div>
-
-          {/* Docker Warnings Section */}
-          {hasAnyWarning && (
-            <div className="space-y-2">
-              <h3 className="font-mono font-semibold text-sm flex items-center gap-2 text-warning">
-                <AlertTriangle className="w-4 h-4" /> Docker Warnings
-              </h3>
-              {diskWarning && (
-                <Alert variant="destructive" className="py-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription className="text-xs">
-                    <strong>Disk &gt;{DISK_WARN_THRESHOLD}%:</strong> Docker partition nearly full ({diskPct.toFixed(1)}%). Clean up images and volumes.
-                  </AlertDescription>
-                </Alert>
-              )}
-              {networkPoolWarning && (
-                <Alert className="py-2 border-orange-500/40 bg-orange-500/5">
-                  <Network className="h-4 w-4 text-orange-400" />
-                  <AlertDescription className="text-xs text-orange-300">
-                    <strong>Network pool nearly full:</strong> {networkCount} networks (threshold: {NETWORK_WARN_THRESHOLD}). Remove unused stacks or run Prune Networks.
-                  </AlertDescription>
-                </Alert>
-              )}
-              {zombieWarning && (
-                <Alert className="py-2 border-warning/40 bg-warning/5">
-                  <Box className="h-4 w-4 text-warning" />
-                  <AlertDescription className="text-xs text-warning/90">
-                    <strong>Zombie containers:</strong> {stoppedContainers.length} stopped containers (threshold: {ZOMBIE_WARN_THRESHOLD}). Consider running Container Prune.
-                  </AlertDescription>
-                </Alert>
-              )}
-              {!registryConfigPresent && (
-                <Alert className="py-2 border-muted/40 bg-muted/5">
-                  <ShieldAlert className="h-4 w-4 text-muted-foreground" />
-                  <AlertDescription className="text-xs text-muted-foreground">
-                    <strong>No GHCR access:</strong> /root/.docker/config.json is missing. Private images (GHCR) cannot be pulled. Check the volume mapping in docker-compose.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-          )}
         </div>
       </DialogContent>
     </Dialog>
