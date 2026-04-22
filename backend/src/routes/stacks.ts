@@ -190,55 +190,162 @@ interface OperationState {
 }
 const operationStore = new Map<string, OperationState>();
 
+interface ComposeInvocationResult {
+  runtime: 'docker' | 'docker-compose';
+  args: string[];
+  stdout: string;
+  stderr: string;
+}
+
+function getComposeInvocations(stack: any, command: string[]): Array<{ runtime: 'docker' | 'docker-compose'; args: string[] }> {
+  const project = composeProjectNameFromStack(stack);
+  return [
+    { runtime: 'docker', args: ['compose', '-p', project, ...command] },
+    { runtime: 'docker-compose', args: ['-p', project, ...command] },
+  ];
+}
+
+function shouldTryComposeFallback(err: any): boolean {
+  const combined = `${String(err?.message || '')}\n${String(err?.stderr || '')}\n${String(err?.stdout || '')}`.toLowerCase();
+  return combined.includes("not a docker command")
+    || combined.includes('unknown flag')
+    || combined.includes('unknown shorthand flag')
+    || combined.includes('docker compose exited with code 125')
+    || combined.includes('command not found')
+    || combined.includes('no such file or directory')
+    || err?.code === 'ENOENT';
+}
+
+function buildComposeFallbackError(errors: any[]): Error {
+  const summary = errors.map((entry, idx) => {
+    const runtime = entry.runtime || 'unknown';
+    const message = formatExecError(entry.error);
+    return `[attempt ${idx + 1} via ${runtime}] ${message}`;
+  }).join('\n\n');
+  return new Error(summary || 'All compose runtimes failed');
+}
+
+async function execComposeCommand(
+  stack: any,
+  id: string,
+  action: string,
+  command: string[],
+  options: { cwd: string; timeout?: number }
+): Promise<ComposeInvocationResult> {
+  const attempts = getComposeInvocations(stack, command);
+  const errors: Array<{ runtime: string; error: any }> = [];
+
+  for (let idx = 0; idx < attempts.length; idx++) {
+    const attempt = attempts[idx];
+    const startedAt = Date.now();
+
+    logger.info(
+      {
+        action,
+        stackId: id,
+        stackName: stack.name,
+        stackPath: stack.stack_path,
+        cwd: options.cwd,
+        composeRuntime: attempt.runtime,
+        dockerCommand: attempt.runtime,
+        dockerArgs: attempt.args,
+      },
+      'Stack compose action started'
+    );
+
+    try {
+      const { stdout, stderr } = await execFileAsync(attempt.runtime, attempt.args, {
+        cwd: options.cwd,
+        timeout: options.timeout,
+      });
+
+      logger.info(
+        {
+          action,
+          stackId: id,
+          stackName: stack.name,
+          cwd: options.cwd,
+          composeRuntime: attempt.runtime,
+          durationMs: Date.now() - startedAt,
+          stdoutPreview: String(stdout || '').split('\n').filter(Boolean).slice(-20),
+          stderrPreview: String(stderr || '').split('\n').filter(Boolean).slice(-20),
+        },
+        'Stack compose action succeeded'
+      );
+
+      return {
+        runtime: attempt.runtime,
+        args: attempt.args,
+        stdout: String(stdout || ''),
+        stderr: String(stderr || ''),
+      };
+    } catch (err: any) {
+      logger.error(
+        {
+          action,
+          stackId: id,
+          stackName: stack.name,
+          stackPath: stack.stack_path,
+          cwd: options.cwd,
+          durationMs: Date.now() - startedAt,
+          composeRuntime: attempt.runtime,
+          dockerCommand: attempt.runtime,
+          dockerArgs: attempt.args,
+          code: err?.code,
+          signal: err?.signal,
+          killed: err?.killed,
+          stdout: String(err?.stdout || ''),
+          stderr: String(err?.stderr || ''),
+        },
+        'Stack compose action failed'
+      );
+
+      errors.push({ runtime: attempt.runtime, error: err });
+      const isLast = idx === attempts.length - 1;
+      if (isLast || !shouldTryComposeFallback(err)) {
+        throw buildComposeFallbackError(errors);
+      }
+    }
+  }
+
+  throw new Error('Compose command failed unexpectedly');
+}
+
+async function reconcileStackStatusFromRuntime(id: string, stack: any): Promise<'running' | 'stopped' | 'failed'> {
+  const project = composeProjectNameFromStack(stack);
+  try {
+    const { stdout } = await execFileAsync(
+      'docker',
+      ['ps', '-a', '--filter', `label=com.docker.compose.project=${project}`, '--format', '{{.State}}'],
+      { timeout: 10000 }
+    );
+    const states = String(stdout || '').split('\n').map(s => s.trim()).filter(Boolean);
+    if (states.length === 0) return 'failed';
+    if (states.some((s) => s === 'running')) return 'running';
+    return 'stopped';
+  } catch (err: any) {
+    logger.warn({ stackId: id, stackName: stack.name, project, error: formatExecError(err) }, 'Failed to reconcile stack status from runtime');
+    return 'failed';
+  }
+}
+
 async function runUpdateOperation(id: string, stack: any, op: OperationState): Promise<void> {
   const { cwd, cleanup } = await resolveStackCwd(stack);
   try {
-    const args = getComposeArgs(stack, ['up', '-d', '--pull', 'always']);
-    logger.info({ action: 'update', stackId: id, stackName: stack.name, stackPath: stack.stack_path, cwd, dockerArgs: args }, 'Stack update operation started');
-    await new Promise<void>((resolve, reject) => {
-      const proc = spawn(
-        'docker',
-        args,
-        { cwd }
-      );
-      const onData = (data: Buffer) => {
-        const lines = data.toString('utf8').split('\n').filter(l => l.trim());
-        lines.forEach(l => op.lines.push(l));
-        if (lines.length) {
-          logger.debug({ action: 'update', stackId: id, stackName: stack.name, lines }, 'Stack update docker output');
-        }
-      };
-      proc.stdout.on('data', onData);
-      proc.stderr.on('data', onData);
-      proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`docker compose exited with code ${code}`))));
-      proc.on('error', (err: NodeJS.ErrnoException) => {
-        if (err.code === 'ENOENT') {
-          reject(new Error('docker CLI not found in container PATH. Ensure the container image includes docker-cli.'));
-        } else {
-          reject(err);
-        }
-      });
-    });
+    op.lines.push('Starting stack update...');
+    const result = await execComposeCommand(stack, id, 'update', ['up', '-d', '--pull', 'always'], { cwd, timeout: 120000 });
+    const outputLines = `${result.stdout}\n${result.stderr}`.split('\n').map((l) => l.trim()).filter(Boolean);
+    outputLines.slice(-50).forEach((line) => op.lines.push(line));
     await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
     op.lines.push('✓ Update complete — containers restarted with latest images');
     await auditLog('update', 'stack', id);
   } catch (err: any) {
     logger.error({ action: 'update', stackId: id, stackName: stack.name, stackPath: stack.stack_path, cwd, error: formatExecError(err) }, 'Stack update operation failed');
     op.lines.push(`✗ Error: ${formatExecError(err)}`);
-    // Only mark as failed if containers are not still running
-    try {
-      const { stdout } = await execFileAsync(
-        'docker', getComposeArgs(stack, ['ps', '-q', '--status', 'running']),
-        { timeout: 8000, cwd }
-      );
-      if (stdout.trim()) {
-        await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
-        op.lines.push('⚠ Update failed but existing containers are still running.');
-      } else {
-        await pool.query("UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1", [id]);
-      }
-    } catch {
-      await pool.query("UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1", [id]);
+    const reconciledStatus = await reconcileStackStatusFromRuntime(id, stack);
+    await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [reconciledStatus, id]);
+    if (reconciledStatus === 'running') {
+      op.lines.push('⚠ Update failed but existing containers are still running.');
     }
   } finally {
     op.done = true;
@@ -568,7 +675,8 @@ router.post('/:id/deploy', asyncHandler(async (req, res) => {
     await auditLog('deploy', 'stack', id);
     res.json({ ok: true });
   } catch (err: any) {
-    await pool.query("UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1", [id]);
+    const reconciledStatus = await reconcileStackStatusFromRuntime(id, stack);
+    await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [reconciledStatus, id]);
     await sendNotification('stackFailed', { name: stack.name, error: err.message });
     res.status(500).json({ error: formatExecError(err) });
   } finally {
@@ -589,6 +697,8 @@ router.post('/:id/stop', asyncHandler(async (req, res) => {
     await auditLog('stop', 'stack', id);
     res.json({ ok: true });
   } catch (err: any) {
+    const reconciledStatus = await reconcileStackStatusFromRuntime(id, stack);
+    await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [reconciledStatus, id]);
     res.status(500).json({ error: formatExecError(err) });
   } finally {
     await cleanup?.();
@@ -608,6 +718,8 @@ router.post('/:id/deactivate', asyncHandler(async (req, res) => {
     await auditLog('deactivate', 'stack', id);
     res.json({ ok: true });
   } catch (err: any) {
+    const reconciledStatus = await reconcileStackStatusFromRuntime(id, stack);
+    await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [reconciledStatus, id]);
     res.status(500).json({ error: formatExecError(err) });
   } finally {
     await cleanup?.();
@@ -627,6 +739,8 @@ router.post('/:id/restart', asyncHandler(async (req, res) => {
     await auditLog('restart', 'stack', id);
     res.json({ ok: true });
   } catch (err: any) {
+    const reconciledStatus = await reconcileStackStatusFromRuntime(id, stack);
+    await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [reconciledStatus, id]);
     res.status(500).json({ error: formatExecError(err) });
   } finally {
     await cleanup?.();
@@ -648,7 +762,8 @@ router.post('/:id/recreate', asyncHandler(async (req, res) => {
     await auditLog('recreate', 'stack', id);
     res.json({ ok: true });
   } catch (err: any) {
-    await pool.query("UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1", [id]);
+    const reconciledStatus = await reconcileStackStatusFromRuntime(id, stack);
+    await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [reconciledStatus, id]);
     res.status(500).json({ error: formatExecError(err) });
   } finally {
     await cleanup?.();
@@ -926,7 +1041,7 @@ router.get('/:id/containers', asyncHandler(async (req, res) => {
   try {
     const { stdout } = await execFileAsync(
       'docker',
-      ['ps', '-a', '--filter', `label=com.docker.compose.project=${stack.name.toLowerCase()}`, '--format', '{{.ID}}\t{{.Names}}\t{{.State}}\t{{.Image}}\t{{.Label "com.docker.compose.service"}}'],
+      ['ps', '-a', '--filter', `label=com.docker.compose.project=${composeProjectNameFromStack(stack)}`, '--format', '{{.ID}}\t{{.Names}}\t{{.State}}\t{{.Image}}\t{{.Label "com.docker.compose.service"}}'],
       { timeout: 10000 }
     );
     const containers = stdout.trim().split('\n').filter(Boolean).map(line => {
