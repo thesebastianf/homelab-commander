@@ -22,8 +22,10 @@ services:
       - CORS_ORIGIN=${CORS_ORIGIN:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /usr/bin/docker:/usr/bin/docker:ro
-      - /usr/libexec/docker/cli-plugins/docker-compose:/usr/libexec/docker/cli-plugins/docker-compose:ro
+      # Data directories — adjust paths to your host system:
+      - /opt/homelab/stacks:/data/stacks
+      - /opt/homelab/backups:/data/backups
+      - /opt/homelab/volumes:/data/volumes
     depends_on:
       db:
         condition: service_healthy
@@ -58,5 +60,3 @@ services:
 
 volumes:
   pg_data:
-  stacks_data:
-  backups_data:

@@ -135,25 +135,31 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
               <Card className="p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div>
-                    <Label className="text-base">Docker Compose Runtime</Label>
-                    <p className="text-sm text-muted-foreground mt-0.5">Executes compose commands directly on host docker installation.</p>
+                    <Label className="text-base">Docker Runtime</Label>
+                    <p className="text-sm text-muted-foreground mt-0.5">Internal CLI via host socket (Dockge-style — no host binary mounts needed).</p>
                   </div>
-                  <Badge variant="default" className="font-mono">
-                    Native Host
+                  <Badge variant={localSettings.dockerCompose?.socketReachable === false ? 'destructive' : 'default'} className="font-mono">
+                    {localSettings.dockerCompose?.socketReachable === false ? 'Socket Unreachable' : 'Native Host'}
                   </Badge>
                 </div>
+                {localSettings.dockerCompose?.socketReachable === false && (
+                  <Alert variant="destructive" className="py-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>Host-Verbindung fehlt! /var/run/docker.sock ist nicht erreichbar.</AlertDescription>
+                  </Alert>
+                )}
                 <div className="grid gap-2 text-sm">
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-muted-foreground">Runtime Mode</span>
-                    <span className="font-mono">
-                      {localSettings.dockerCompose?.runtimeMode || 'native'}
-                    </span>
+                    <span className="font-mono">{localSettings.dockerCompose?.runtimeMode || 'native'}</span>
                   </div>
                   <div className="flex items-center justify-between gap-4">
-                    <span className="text-muted-foreground">Type</span>
-                    <span className="font-mono text-xs">
-                      {localSettings.dockerCompose?.isNative ? '✓ Native (Host Docker)' : 'Legacy'}
-                    </span>
+                    <span className="text-muted-foreground">Docker CLI Version</span>
+                    <span className="font-mono text-xs">{localSettings.dockerCompose?.cliVersion || 'loading...'}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-muted-foreground">CLI Path</span>
+                    <span className="font-mono text-xs">{localSettings.dockerCompose?.composePath || 'docker'}</span>
                   </div>
                 </div>
               </Card>

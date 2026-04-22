@@ -140,11 +140,14 @@ interface ComposeInvocationResult {
 
 function getComposeInvocations(stack: any, command: string[], _cwd: string): Array<{ runtime: 'docker' | 'docker-compose'; args: string[] }> {
   const project = composeProjectNameFromStack(stack);
+  // config.composePath = 'docker' by default (CLI bundled in image via Dockerfile)
+  const bin = config.composePath;
 
-  // Native-only runtime: try docker compose plugin first, then docker-compose binary
+  // Native runtime: docker CLI is installed inside the container image.
+  // Primary: `<bin> compose` plugin syntax; fallback: `docker-compose` legacy binary.
   return [
-    { runtime: 'docker', args: ['compose', '--project-name', project, ...command] },
-    { runtime: 'docker', args: ['compose', '-p', project, ...command] },
+    { runtime: bin as 'docker', args: ['compose', '--project-name', project, ...command] },
+    { runtime: bin as 'docker', args: ['compose', '-p', project, ...command] },
     { runtime: 'docker-compose', args: ['--project-name', project, ...command] },
     { runtime: 'docker-compose', args: ['-p', project, ...command] },
   ];

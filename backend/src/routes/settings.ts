@@ -1,4 +1,7 @@
 import { Router } from 'express';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import { access, constants } from 'fs';
 import { pool } from '../database.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { validateBody } from '../middleware/validate.js';
@@ -6,6 +9,31 @@ import { updateSettingsBody } from '../validation/schemas.js';
 import { rescheduleAutoUpdater } from '../services/autoUpdateScheduler.js';
 import { logger } from '../logger.js';
 import { config } from '../config.js';
+
+const execFileAsync = promisify(execFile);
+const accessAsync = promisify(access);
+
+// Lazily resolved once at first settings request — avoids running on every poll
+let _dockerCliVersion: string | null = null;
+async function getDockerCliVersion(): Promise<string> {
+  if (_dockerCliVersion !== null) return _dockerCliVersion;
+  try {
+    const { stdout } = await execFileAsync(config.composePath, ['--version']);
+    _dockerCliVersion = stdout.trim();
+  } catch {
+    _dockerCliVersion = 'unavailable';
+  }
+  return _dockerCliVersion;
+}
+
+async function getSocketReachable(): Promise<boolean> {
+  try {
+    await accessAsync('/var/run/docker.sock', constants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const router = Router();
 
@@ -60,7 +88,10 @@ router.get('/', asyncHandler(async (_req, res) => {
     },
     dockerCompose: {
       runtimeMode: config.composeRuntimeMode,
+      composePath: config.composePath,
       isNative: config.composeRuntimeMode === 'native',
+      cliVersion: await getDockerCliVersion(),
+      socketReachable: await getSocketReachable(),
     },
     copyPasteHelpers: settings.copy_paste_helpers ?? [],
   });

@@ -9,4 +9,5 @@ export const config = {
   authPass: process.env.AUTH_PASS || '',
   corsOrigin: process.env.CORS_ORIGIN || '',
   composeRuntimeMode: process.env.COMPOSE_RUNTIME_MODE || 'native',
+  composePath: process.env.COMPOSE_PATH || 'docker',
 };
