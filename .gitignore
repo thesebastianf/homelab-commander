@@ -42,3 +42,4 @@ Thumbs.db
 .vscode/
 docker-compose.yaml.homelab
 .env.homelab
+gitignored/
