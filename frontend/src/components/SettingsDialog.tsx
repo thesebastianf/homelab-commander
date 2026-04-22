@@ -150,16 +150,18 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                 )}
                 <div className="grid gap-2 text-sm">
                   <div className="flex items-center justify-between gap-4">
-                    <span className="text-muted-foreground">Runtime Mode</span>
-                    <span className="font-mono">{localSettings.dockerCompose?.runtimeMode || 'native'}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
                     <span className="text-muted-foreground">Docker CLI Version</span>
                     <span className="font-mono text-xs">{localSettings.dockerCompose?.cliVersion || 'loading...'}</span>
                   </div>
                   <div className="flex items-center justify-between gap-4">
-                    <span className="text-muted-foreground">CLI Path</span>
-                    <span className="font-mono text-xs">{localSettings.dockerCompose?.composePath || 'docker'}</span>
+                    <span className="text-muted-foreground">Stacks Path</span>
+                    <span className="font-mono text-xs">{localSettings.dockerCompose?.stacksPath || '/data/stacks'}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-muted-foreground">Registry Config (GHCR)</span>
+                    <Badge variant={localSettings.dockerCompose?.registryConfigPresent ? 'default' : 'outline'} className="text-xs">
+                      {localSettings.dockerCompose?.registryConfigPresent ? '✓ Detected' : '✗ Not mounted'}
+                    </Badge>
                   </div>
                 </div>
               </Card>

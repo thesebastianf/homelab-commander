@@ -35,6 +35,15 @@ async function getSocketReachable(): Promise<boolean> {
   }
 }
 
+async function getRegistryConfigPresent(): Promise<boolean> {
+  try {
+    await accessAsync('/root/.docker/config.json', constants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const router = Router();
 
 router.get('/', asyncHandler(async (_req, res) => {
@@ -89,9 +98,11 @@ router.get('/', asyncHandler(async (_req, res) => {
     dockerCompose: {
       runtimeMode: config.composeRuntimeMode,
       composePath: config.composePath,
+      stacksPath: config.stacksPath,
       isNative: config.composeRuntimeMode === 'native',
       cliVersion: await getDockerCliVersion(),
       socketReachable: await getSocketReachable(),
+      registryConfigPresent: await getRegistryConfigPresent(),
     },
     copyPasteHelpers: settings.copy_paste_helpers ?? [],
   });

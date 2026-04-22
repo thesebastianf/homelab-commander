@@ -188,9 +188,11 @@ export interface AppSettings {
   dockerCompose?: {
     runtimeMode: string
     composePath: string
+    stacksPath: string
     isNative: boolean
     cliVersion: string
     socketReachable: boolean
+    registryConfigPresent: boolean
   }
   copyPasteHelpers?: Array<{ id: string; label: string; value: string }>
 }

@@ -16,16 +16,21 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - COMPOSE_RUNTIME_MODE=${COMPOSE_RUNTIME_MODE:-native}
+      - STACKS_PATH=${STACKS_PATH:-/opt/homelab/stacks}
+      - BACKUPS_PATH=${BACKUPS_PATH:-/opt/homelab/backups}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-hlc}:${POSTGRES_PASSWORD:-hlc_secret_change_me}@db:5432/${POSTGRES_DB:-hlc}
       - AUTH_USER=${AUTH_USER:-}
       - AUTH_PASS=${AUTH_PASS:-}
       - CORS_ORIGIN=${CORS_ORIGIN:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # Data directories — adjust paths to your host system:
-      - /opt/homelab/stacks:/data/stacks
-      - /opt/homelab/backups:/data/backups
-      - /opt/homelab/volumes:/data/volumes
+      # CRITICAL: left path MUST equal right path.
+      # The Docker daemon resolves these paths on the HOST — they must exist there.
+      # Replace both sides with your actual absolute host paths.
+      - /opt/homelab/stacks:/opt/homelab/stacks
+      - /opt/homelab/backups:/opt/homelab/backups
+      # GHCR / private registry auth — allows pulling private images during stack actions
+      - /root/.docker/config.json:/root/.docker/config.json:ro
     depends_on:
       db:
         condition: service_healthy
@@ -60,3 +65,4 @@ services:
 
 volumes:
   pg_data:
+  # NOTE: No named volumes for app data. Use bind mounts with same:same paths above.
