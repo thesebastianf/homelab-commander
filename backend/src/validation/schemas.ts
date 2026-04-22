@@ -76,6 +76,11 @@ export const updateSettingsBody = z.object({
     label: z.string().min(1).max(200),
     value: z.string().max(2000),
   })).optional(),
+  warningThresholds: z.object({
+    networkWarn: z.number().int().min(1).max(500),
+    zombieWarn: z.number().int().min(1).max(500),
+    diskWarn: z.number().int().min(1).max(100),
+  }).optional(),
 });
 
 export const backupConfigBody = z.object({

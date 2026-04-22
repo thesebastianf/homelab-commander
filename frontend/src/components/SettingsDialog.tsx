@@ -145,7 +145,7 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                 {localSettings.dockerCompose?.socketReachable === false && (
                   <Alert variant="destructive" className="py-2">
                     <AlertTriangle className="h-4 w-4" />
-                    <AlertDescription>Host-Verbindung fehlt! /var/run/docker.sock ist nicht erreichbar.</AlertDescription>
+                    <AlertDescription>Docker socket missing! /var/run/docker.sock is not reachable.</AlertDescription>
                   </Alert>
                 )}
                 <div className="grid gap-2 text-sm">
@@ -263,6 +263,68 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                     </div>
                   )}
                 </Card>
+
+              <h3 className="font-mono font-semibold text-sm flex items-center gap-2">
+                <AlertTriangle className="w-[18px] h-[18px]" />
+                Warning Thresholds
+              </h3>
+
+              <Card className="p-4 space-y-4">
+                <p className="text-sm text-muted-foreground">Trigger dashboard and maintenance warnings when these limits are exceeded.</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Network Pool Warning</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={500}
+                        value={localSettings.warningThresholds?.networkWarn ?? 25}
+                        onChange={e => setLocalSettings(prev => ({
+                          ...prev,
+                          warningThresholds: { ...(prev.warningThresholds ?? { networkWarn: 25, zombieWarn: 5, diskWarn: 90 }), networkWarn: parseInt(e.target.value) || 25 },
+                        }))}
+                        className="w-24 font-mono text-sm"
+                      />
+                      <span className="text-xs text-muted-foreground">networks</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Zombie Container Warning</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={500}
+                        value={localSettings.warningThresholds?.zombieWarn ?? 5}
+                        onChange={e => setLocalSettings(prev => ({
+                          ...prev,
+                          warningThresholds: { ...(prev.warningThresholds ?? { networkWarn: 25, zombieWarn: 5, diskWarn: 90 }), zombieWarn: parseInt(e.target.value) || 5 },
+                        }))}
+                        className="w-24 font-mono text-sm"
+                      />
+                      <span className="text-xs text-muted-foreground">stopped</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Disk Usage Warning</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={localSettings.warningThresholds?.diskWarn ?? 90}
+                        onChange={e => setLocalSettings(prev => ({
+                          ...prev,
+                          warningThresholds: { ...(prev.warningThresholds ?? { networkWarn: 25, zombieWarn: 5, diskWarn: 90 }), diskWarn: parseInt(e.target.value) || 90 },
+                        }))}
+                        className="w-24 font-mono text-sm"
+                      />
+                      <span className="text-xs text-muted-foreground">%</span>
+                    </div>
+                  </div>
+                </div>
+              </Card>
 
             </div>
           </TabsContent>

@@ -105,6 +105,7 @@ router.get('/', asyncHandler(async (_req, res) => {
       registryConfigPresent: await getRegistryConfigPresent(),
     },
     copyPasteHelpers: settings.copy_paste_helpers ?? [],
+    warningThresholds: settings.warning_thresholds ?? { networkWarn: 25, zombieWarn: 5, diskWarn: 90 },
   });
 }));
 
@@ -130,6 +131,7 @@ router.put('/', validateBody(updateSettingsBody), asyncHandler(async (req, res) 
   if (b.autoUpdateSchedule !== undefined) { updates.push(`auto_update_schedule = $${idx++}`); values.push(JSON.stringify(b.autoUpdateSchedule)); }
   if (b.ai !== undefined) { updates.push(`ai_config = $${idx++}`); values.push(JSON.stringify(b.ai)); }
   if (b.copyPasteHelpers !== undefined) { updates.push(`copy_paste_helpers = $${idx++}`); values.push(JSON.stringify(b.copyPasteHelpers)); }
+  if (b.warningThresholds !== undefined) { updates.push(`warning_thresholds = $${idx++}`); values.push(JSON.stringify(b.warningThresholds)); }
 
   if (updates.length === 0) {
     res.json({ ok: true });

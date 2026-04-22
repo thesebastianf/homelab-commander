@@ -25,7 +25,7 @@ import { SmartStartupDialog } from '@/components/SmartStartupDialog'
 import { PortRegistryDialog } from '@/components/PortRegistryDialog'
 import { DatabaseExplorer } from '@/components/DatabaseExplorer'
 import { ClockWidget } from '@/components/ClockWidget'
-import { Loader2, RefreshCw, Maximize2, Minimize2 } from 'lucide-react'
+import { Loader2, RefreshCw, Maximize2, Minimize2, AlertTriangle } from 'lucide-react'
 import {
   Box,
   Home,
@@ -501,6 +501,40 @@ function App() {
 
           {/* ═══ DASHBOARD ═══ */}
           <TabsContent value="dashboard" className="space-y-4">
+
+            {/* Warning banners */}
+            {(() => {
+              const NETWORK_WARN = currentSettings.warningThresholds?.networkWarn ?? 25
+              const DISK_WARN = currentSettings.warningThresholds?.diskWarn ?? 90
+              const ZOMBIE_WARN = currentSettings.warningThresholds?.zombieWarn ?? 5
+              const networkPoolWarning = networks.length > NETWORK_WARN
+              const diskWarning = (systemInfo?.diskUsedPercent ?? 0) > DISK_WARN
+              const stoppedCount = containers.filter(c => c.status !== 'running').length
+              const zombieWarning = stoppedCount > ZOMBIE_WARN
+              if (!networkPoolWarning && !diskWarning && !zombieWarning) return null
+              return (
+                <div className="space-y-2">
+                  {diskWarning && (
+                    <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      <span><strong>Disk {(systemInfo?.diskUsedPercent ?? 0).toFixed(1)}% full</strong> — Clean up unused images and volumes in System Maintenance (threshold: {DISK_WARN}%).</span>
+                    </div>
+                  )}
+                  {networkPoolWarning && (
+                    <div className="flex items-center gap-2 rounded-lg border border-orange-500/40 bg-orange-500/5 px-3 py-2 text-xs text-orange-300">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      <span><strong>Network pool nearly full</strong> — {networks.length} networks detected (threshold: {NETWORK_WARN}). Run Prune Networks in System Maintenance.</span>
+                    </div>
+                  )}
+                  {zombieWarning && (
+                    <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning/90">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      <span><strong>{stoppedCount} stopped containers</strong> — Consider running Container Prune in System Maintenance (threshold: {ZOMBIE_WARN}).</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Row 1: Resource Usage — 6 compact cards */}
             <div>

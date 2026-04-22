@@ -195,6 +195,11 @@ export interface AppSettings {
     registryConfigPresent: boolean
   }
   copyPasteHelpers?: Array<{ id: string; label: string; value: string }>
+  warningThresholds?: {
+    networkWarn: number
+    zombieWarn: number
+    diskWarn: number
+  }
 }
 
 export interface NotificationService {

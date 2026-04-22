@@ -70,9 +70,9 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
   const memPct = systemInfo?.memoryUsedPercent ?? 0
   const memTotal = systemInfo?.memoryTotal ?? '-'
 
-  const NETWORK_WARN_THRESHOLD = 25
-  const ZOMBIE_WARN_THRESHOLD = 5
-  const DISK_WARN_THRESHOLD = 90
+  const NETWORK_WARN_THRESHOLD = (appSettings as any)?.warningThresholds?.networkWarn ?? 25
+  const ZOMBIE_WARN_THRESHOLD = (appSettings as any)?.warningThresholds?.zombieWarn ?? 5
+  const DISK_WARN_THRESHOLD = (appSettings as any)?.warningThresholds?.diskWarn ?? 90
 
   const networkPoolWarning = networkCount > NETWORK_WARN_THRESHOLD
   const zombieWarning = stoppedContainers.length > ZOMBIE_WARN_THRESHOLD
@@ -85,10 +85,10 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
     try {
       await api.fetchSystemInfo()
       setSocketResult('ok')
-      toast.success('Docker Socket erreichbar — Verbindung OK')
+      toast.success('Docker socket reachable — connection OK')
     } catch {
       setSocketResult('error')
-      toast.error('Docker Socket nicht erreichbar!')
+      toast.error('Docker socket unreachable!')
     } finally {
       setSocketChecking(false)
     }
@@ -328,7 +328,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
                   <h4 className="font-mono font-semibold text-sm">Prune Networks</h4>
                 </div>
                 {networkPoolWarning && (
-                  <Badge className="text-[10px] bg-orange-500/15 text-orange-400 border-orange-500/30">Pool fast voll!</Badge>
+                  <Badge className="text-[10px] bg-orange-500/15 text-orange-400 border-orange-500/30">Pool Nearly Full!</Badge>
                 )}
               </div>
               <p className="text-xs text-muted-foreground">Remove unused networks. Prevents "address pool exhausted" errors during deploys.</p>
@@ -338,13 +338,13 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
                   <p className={`text-xl font-mono font-bold ${networkPoolWarning ? 'text-orange-400' : 'text-orange-500'}`}>{networkCount}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Warnschwelle</p>
+                  <p className="text-xs text-muted-foreground">Threshold</p>
                   <p className="text-xl font-mono font-bold text-muted-foreground">{NETWORK_WARN_THRESHOLD}</p>
                 </div>
               </div>
               {networkPoolWarning && (
                 <div className="rounded bg-orange-500/10 border border-orange-500/20 p-2 text-xs text-orange-400">
-                  Netzwerk-Pool fast voll. Nicht genutzte Stacks löschen oder Netzwerke bereinigen.
+                  Network pool nearly full. Remove unused stacks or run Prune Networks.
                 </div>
               )}
               <div className="flex flex-col gap-1">
@@ -385,13 +385,13 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
           {hasAnyWarning && (
             <div className="space-y-2">
               <h3 className="font-mono font-semibold text-sm flex items-center gap-2 text-warning">
-                <AlertTriangle className="w-4 h-4" /> Docker Warnungen
+                <AlertTriangle className="w-4 h-4" /> Docker Warnings
               </h3>
               {diskWarning && (
                 <Alert variant="destructive" className="py-2">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription className="text-xs">
-                    <strong>Disk &gt;{DISK_WARN_THRESHOLD}%:</strong> Docker Partition fast voll ({diskPct.toFixed(1)}%). Images/Volumes aufräumen.
+                    <strong>Disk &gt;{DISK_WARN_THRESHOLD}%:</strong> Docker partition nearly full ({diskPct.toFixed(1)}%). Clean up images and volumes.
                   </AlertDescription>
                 </Alert>
               )}
@@ -399,7 +399,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
                 <Alert className="py-2 border-orange-500/40 bg-orange-500/5">
                   <Network className="h-4 w-4 text-orange-400" />
                   <AlertDescription className="text-xs text-orange-300">
-                    <strong>Netzwerk-Pool fast voll:</strong> {networkCount} Netzwerke (Schwelle: {NETWORK_WARN_THRESHOLD}). Nicht genutzte Stacks löschen oder Prune Networks ausführen.
+                    <strong>Network pool nearly full:</strong> {networkCount} networks (threshold: {NETWORK_WARN_THRESHOLD}). Remove unused stacks or run Prune Networks.
                   </AlertDescription>
                 </Alert>
               )}
@@ -407,7 +407,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
                 <Alert className="py-2 border-warning/40 bg-warning/5">
                   <Box className="h-4 w-4 text-warning" />
                   <AlertDescription className="text-xs text-warning/90">
-                    <strong>Zombie-Container:</strong> {stoppedContainers.length} gestoppte Container (Schwelle: {ZOMBIE_WARN_THRESHOLD}). Container Prune ausführen empfohlen.
+                    <strong>Zombie containers:</strong> {stoppedContainers.length} stopped containers (threshold: {ZOMBIE_WARN_THRESHOLD}). Consider running Container Prune.
                   </AlertDescription>
                 </Alert>
               )}
@@ -415,7 +415,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
                 <Alert className="py-2 border-muted/40 bg-muted/5">
                   <ShieldAlert className="h-4 w-4 text-muted-foreground" />
                   <AlertDescription className="text-xs text-muted-foreground">
-                    <strong>Kein GHCR-Zugriff:</strong> /root/.docker/config.json fehlt. Private Images (GHCR) können nicht gepullt werden. Prüfe das Volume-Mapping in docker-compose.
+                    <strong>No GHCR access:</strong> /root/.docker/config.json is missing. Private images (GHCR) cannot be pulled. Check the volume mapping in docker-compose.
                   </AlertDescription>
                 </Alert>
               )}

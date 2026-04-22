@@ -391,6 +391,7 @@ export function StacksEditor({
   // Operation terminal
   const [isOperating, setIsOperating] = useState(false)
   const [operationDone, setOperationDone] = useState(false)
+  const [currentOperation, setCurrentOperation] = useState('')
   const logsViewportRef = useRef<HTMLDivElement>(null)
   // Create mode right panel
   const [createRightPanel, setCreateRightPanel] = useState<'conflicts' | 'reference' | 'helpers' | 'backup' | 'autoupdate' | 'ai'>('conflicts')
@@ -613,9 +614,40 @@ export function StacksEditor({
     onSuccess: () => {
       setIsOperating(true)
       setOperationDone(false)
+      setCurrentOperation('Updating images')
       toast.info('Update started - pulling new images...')
     },
     onError: (e: any) => toast.error(e.message || 'Update failed'),
+  })
+
+  const deployActionMutation = useMutation({
+    mutationFn: (id: string) => api.deployStack(id),
+    onMutate: () => { setIsOperating(true); setOperationDone(false); setCurrentOperation('Starting') },
+    onError: (e: any) => { setIsOperating(false); toast.error(e.message || 'Failed to start stack') },
+  })
+
+  const stopActionMutation = useMutation({
+    mutationFn: (id: string) => api.stopStack(id),
+    onMutate: () => { setIsOperating(true); setOperationDone(false); setCurrentOperation('Stopping') },
+    onError: (e: any) => { setIsOperating(false); toast.error(e.message || 'Failed to stop stack') },
+  })
+
+  const restartActionMutation = useMutation({
+    mutationFn: (id: string) => api.restartStack(id),
+    onMutate: () => { setIsOperating(true); setOperationDone(false); setCurrentOperation('Restarting') },
+    onError: (e: any) => { setIsOperating(false); toast.error(e.message || 'Failed to restart stack') },
+  })
+
+  const deactivateActionMutation = useMutation({
+    mutationFn: (id: string) => api.deactivateStack(id),
+    onMutate: () => { setIsOperating(true); setOperationDone(false); setCurrentOperation('Deactivating') },
+    onError: (e: any) => { setIsOperating(false); toast.error(e.message || 'Failed to deactivate stack') },
+  })
+
+  const recreateActionMutation = useMutation({
+    mutationFn: (id: string) => api.recreateStack(id),
+    onMutate: () => { setIsOperating(true); setOperationDone(false); setCurrentOperation('Recreating') },
+    onError: (e: any) => { setIsOperating(false); toast.error(e.message || 'Failed to recreate stack') },
   })
 
   const syncGitMutation = useMutation({
@@ -1450,7 +1482,7 @@ export function StacksEditor({
                     <div className="flex items-center gap-2">
                       <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
                       <span className="text-xs font-mono text-muted-foreground">
-                        {isOperating ? 'Updating...' : 'Update complete'}
+                        {isOperating ? `${currentOperation}...` : `${currentOperation} complete`}
                       </span>
                       {isOperating && <Loader2 className="w-3 h-3 animate-spin text-blue-400" />}
                       {operationDone && !isOperating && <CheckCircle2 className="w-3 h-3 text-green-500" />}
@@ -1466,9 +1498,11 @@ export function StacksEditor({
                     <div className="font-mono text-xs space-y-0.5">
                       {opLines.map((line, i) => (
                         <div key={i} className={
-                          line.includes('OK') || line.includes('Started') || line.includes('Running') ? 'text-green-400' :
-                          line.includes('Error') || line.includes('error') || line.includes('failed') ? 'text-red-400' :
-                          line.includes('Pulling') || line.includes('Pulled') || line.includes('pull') ? 'text-blue-400' :
+                          line.startsWith('✅') || line.includes('Started') || line.includes('Running') || line.includes('[+] Running') ? 'text-green-400' :
+                          line.startsWith('❌') || line.startsWith('🔴') || line.includes('Error') || line.includes('error') || line.includes('failed') ? 'text-red-400' :
+                          line.startsWith('🟡') || line.includes('warn') || line.includes('Warning') ? 'text-yellow-400' :
+                          line.startsWith('ℹ️') || line.includes('Pulling') || line.includes('Pulled') ? 'text-blue-400' :
+                          line.includes('✓') ? 'text-green-400' :
                           'text-foreground/70'
                         }>
                           {line}
@@ -1491,7 +1525,7 @@ export function StacksEditor({
                       <>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button size="sm" variant="outline" onClick={() => onRestartStack(selectedStack.id)} disabled={isOperating} className="gap-1 text-xs">
+                            <Button size="sm" variant="outline" onClick={() => restartActionMutation.mutate(selectedStack.id)} disabled={isOperating} className="gap-1 text-xs">
                               <RotateCw className="w-3.5 h-3.5" />
                               Restart
                             </Button>
@@ -1500,7 +1534,7 @@ export function StacksEditor({
                         </Tooltip>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button size="sm" variant="outline" onClick={() => onStopStack(selectedStack.id)} disabled={isOperating} className="gap-1 text-xs">
+                            <Button size="sm" variant="outline" onClick={() => stopActionMutation.mutate(selectedStack.id)} disabled={isOperating} className="gap-1 text-xs">
                               <Square className="w-3.5 h-3.5" />
                               Stop
                             </Button>
@@ -1509,7 +1543,7 @@ export function StacksEditor({
                         </Tooltip>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button size="sm" variant="outline" onClick={() => onDeactivateStack(selectedStack.id)} disabled={isOperating} className="gap-1 text-xs">
+                            <Button size="sm" variant="outline" onClick={() => deactivateActionMutation.mutate(selectedStack.id)} disabled={isOperating} className="gap-1 text-xs">
                               <XCircle className="w-3.5 h-3.5" />
                               Deactivate
                             </Button>
@@ -1521,7 +1555,7 @@ export function StacksEditor({
                       <>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button size="sm" onClick={() => onDeployStack(selectedStack.id)} disabled={isOperating} className="gap-1 text-xs">
+                            <Button size="sm" onClick={() => deployActionMutation.mutate(selectedStack.id)} disabled={isOperating} className="gap-1 text-xs">
                               <Play className="w-3.5 h-3.5" />
                               Start
                             </Button>
@@ -1530,7 +1564,7 @@ export function StacksEditor({
                         </Tooltip>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button size="sm" variant="outline" onClick={() => onRecreateStack(selectedStack.id)} disabled={isOperating} className="gap-1 text-xs">
+                            <Button size="sm" variant="outline" onClick={() => recreateActionMutation.mutate(selectedStack.id)} disabled={isOperating} className="gap-1 text-xs">
                               <History className="w-3.5 h-3.5" />
                               Recreate
                             </Button>
@@ -1548,7 +1582,7 @@ export function StacksEditor({
                           disabled={isOperating || updateImagesMutation.isPending}
                           className="gap-1 text-xs"
                         >
-                          {isOperating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                          {updateImagesMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                           Update
                         </Button>
                       </TooltipTrigger>
