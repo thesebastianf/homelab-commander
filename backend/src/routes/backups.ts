@@ -62,6 +62,32 @@ router.get('/:stackId/databases', asyncHandler(async (req, res) => {
   res.json(databases.map((db) => ({ name: db.serviceName, type: db.type, containerName: db.containerName })));
 }));
 
+// Debug: Show container labels and mounts for a stack
+router.get('/:stackId/debug/containers', asyncHandler(async (req, res) => {
+  const { rows: [stack] } = await pool.query('SELECT id, name FROM stacks WHERE id = $1', [req.params.stackId]);
+  if (!stack) {
+    res.status(404).json({ error: 'Stack not found' });
+    return;
+  }
+
+  const Dockerode = (await import('dockerode')).default;
+  const docker = new Dockerode({ socketPath: '/var/run/docker.sock' });
+  const allContainers = await docker.listContainers({ all: true });
+  
+  const debugInfo = {
+    stackName: stack.name,
+    totalContainers: allContainers.length,
+    containers: allContainers.map(c => ({
+      id: c.Id?.slice(0, 12),
+      name: c.Names?.[0]?.replace(/^\//, ''),
+      image: c.Image,
+      labels: c.Labels || {},
+      mounts: (c.Mounts || []).map(m => ({ name: m.Name, type: m.Type })),
+    })),
+  };
+  res.json(debugInfo);
+}));
+
 // Update backup config
 router.put('/:stackId/config', validateBody(backupConfigBody), asyncHandler(async (req, res) => {
   const b = req.body;

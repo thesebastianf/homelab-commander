@@ -226,16 +226,49 @@ async function enforceRetention(stackName: string, config: any): Promise<void> {
 export async function detectStackVolumeNames(stackName: string): Promise<string[]> {
   const containers = await docker.listContainers({ all: true });
   const volumeNames = new Set<string>();
+  let matchedContainers = 0;
 
+  // First pass: try exact project name match
   for (const container of containers) {
     const project = container.Labels?.['com.docker.compose.project'];
     if (!project || project.toLowerCase() !== stackName.toLowerCase()) continue;
-
+    
+    matchedContainers++;
     for (const mount of container.Mounts || []) {
       if (mount.Type === 'volume' && mount.Name) {
         volumeNames.add(mount.Name);
       }
     }
+  }
+
+  // If no containers found with exact match, try to find by any compose project (fallback for renamed/adopted stacks)
+  if (matchedContainers === 0) {
+    logger.warn({ stackName }, 'No containers found with matching docker-compose project label; trying fallback detection');
+    
+    // Fallback: check if any containers have labels with our stack name in any form
+    for (const container of containers) {
+      const project = container.Labels?.['com.docker.compose.project'];
+      // Try case-insensitive match and also try normalization that docker-compose might use
+      if (!project) continue;
+      
+      const stackNameNorm = stackName.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      const projectNorm = project.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      
+      if (stackNameNorm === projectNorm && stackNameNorm.length > 0) {
+        matchedContainers++;
+        for (const mount of container.Mounts || []) {
+          if (mount.Type === 'volume' && mount.Name) {
+            volumeNames.add(mount.Name);
+          }
+        }
+      }
+    }
+  }
+
+  if (matchedContainers === 0) {
+    logger.warn({ stackName, containerCount: containers.length }, 'No containers found for stack with any detection method');
+  } else {
+    logger.debug({ stackName, matchedContainers, volumeCount: volumeNames.size }, 'Detected stack volumes');
   }
 
   return [...volumeNames].sort((a, b) => a.localeCompare(b));
@@ -251,15 +284,23 @@ export async function detectStackDatabaseNames(stackName: string): Promise<Datab
   const containers = await docker.listContainers({ all: true });
   const databases: DatabaseInfo[] = [];
   const seen = new Set<string>();
+  let matchedContainers = 0;
+  let dbTypesFound = 0;
 
+  // First pass: try exact project name match
   for (const container of containers) {
     const project = container.Labels?.['com.docker.compose.project'];
     if (!project || project.toLowerCase() !== stackName.toLowerCase()) continue;
 
+    matchedContainers++;
     const image = container.Image || '';
     const type = inferDatabaseType(image);
-    if (!type) continue;
+    if (!type) {
+      logger.debug({ image, containerName: container.Names?.[0] }, 'Container image does not match any database type');
+      continue;
+    }
 
+    dbTypesFound++;
     const serviceName = container.Labels?.['com.docker.compose.service'] || container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12);
     
     if (!seen.has(serviceName)) {
@@ -270,6 +311,48 @@ export async function detectStackDatabaseNames(stackName: string): Promise<Datab
         containerName: container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12),
       });
     }
+  }
+
+  // If no containers found with exact match, try to find by any compose project (fallback for renamed/adopted stacks)
+  if (matchedContainers === 0) {
+    logger.warn({ stackName }, 'No containers found with matching docker-compose project label; trying fallback detection');
+    
+    // Fallback: check if any containers have labels with our stack name in any form
+    for (const container of containers) {
+      const project = container.Labels?.['com.docker.compose.project'];
+      if (!project) continue;
+      
+      const stackNameNorm = stackName.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      const projectNorm = project.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      
+      if (stackNameNorm === projectNorm && stackNameNorm.length > 0) {
+        matchedContainers++;
+        const image = container.Image || '';
+        const type = inferDatabaseType(image);
+        if (!type) {
+          logger.debug({ image, containerName: container.Names?.[0] }, 'Container image does not match any database type');
+          continue;
+        }
+
+        dbTypesFound++;
+        const serviceName = container.Labels?.['com.docker.compose.service'] || container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12);
+        
+        if (!seen.has(serviceName)) {
+          seen.add(serviceName);
+          databases.push({
+            serviceName,
+            type,
+            containerName: container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12),
+          });
+        }
+      }
+    }
+  }
+
+  if (matchedContainers === 0) {
+    logger.warn({ stackName, containerCount: containers.length }, 'No containers found for stack with any detection method');
+  } else {
+    logger.debug({ stackName, matchedContainers, dbTypesFound, databaseCount: databases.length }, 'Detected stack databases');
   }
 
   return databases.sort((a, b) => a.serviceName.localeCompare(b.serviceName));

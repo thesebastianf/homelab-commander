@@ -974,8 +974,47 @@ export function StacksEditor({
         const rawPorts: unknown[] = Array.isArray(svc?.ports) ? svc.ports : []
         const ports = rawPorts.flatMap((p): Array<{ host: number; container: number }> => {
           const str = String(p)
-          const match = str.match(/(?:[\d.]+:)?(\d+):(\d+)/)
-          if (match) return [{ host: parseInt(match[1]), container: parseInt(match[2]) }]
+          
+          // Try standard format first: "host:container" or "ip:host:container"
+          let match = str.match(/(?:[\d.]+:)?(\d+):(\d+)/)
+          if (match) {
+            return [{ host: parseInt(match[1]), container: parseInt(match[2]) }]
+          }
+          
+          // Handle variable substitution formats like "${PORT:-8080}:80"
+          // Extract numbers from after colons
+          const colonParts = str.split(':')
+          if (colonParts.length >= 2) {
+            // Try to parse from right to left: last part is container port, second-to-last could be host
+            const lastPart = colonParts[colonParts.length - 1]
+            const container = parseInt(lastPart)
+            
+            if (!isNaN(container)) {
+              // Found container port. Now find host port.
+              const secondLastPart = colonParts[colonParts.length - 2]
+              
+              // Try to extract number from variable substitution like "${VAR:-8080}"
+              const varMatch = secondLastPart?.match(/(\d+)\}?$/)
+              if (varMatch) {
+                const host = parseInt(varMatch[1])
+                if (!isNaN(host)) {
+                  return [{ host, container }]
+                }
+              }
+              
+              // Or if secondLastPart is just a number, use it as host port
+              const host = parseInt(secondLastPart || '')
+              if (!isNaN(host)) {
+                return [{ host, container }]
+              }
+              
+              // If only container port found, assume host === container
+              if (!isNaN(container)) {
+                return [{ host: container, container }]
+              }
+            }
+          }
+          
           return []
         })
         return { name, ports, image: svc?.image as string | undefined }
