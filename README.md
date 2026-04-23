@@ -95,7 +95,7 @@ docker compose up -d --build
 
 Open the UI at:
 
-- http://localhost:3210
+- http://localhost:3210 or http://your_homelab_ip:3210
 
 ### 5. Verify Health
 
@@ -110,7 +110,7 @@ docker compose logs -f app
 - App URL in containerized mode: `http://localhost:3210`
 - Full dev stack: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`
 
-## Mobile/Compact View Links
+## Mobile/Compact View Links (Forced Mode; Auto Detection built-in)
 
 - Compact stacks: `http://localhost:3210/?mobile=1&tab=stacks`
 - Compact dashboard: `http://localhost:3210/?mobile=1&tab=dashboard`
@@ -135,8 +135,24 @@ docker compose logs -f app
 
 Apache License 2.0. See [LICENSE](LICENSE).
 
+
 ## 🛡️ Legal & Security
 
+### License
+This project is licensed under the **Apache License 2.0**. It is free for personal and commercial use, provided that the copyright notice and permission notice are included in all copies or substantial portions of the software.
+
+### ⚠️ Liability Disclaimer
+**IMPORTANT:** This software is a management tool for Docker infrastructure. By using this software, you acknowledge that:
+* **"AS IS" Basis:** This software is provided without warranties of any kind. The authors are not responsible for any data loss, system downtime, or hardware damage.
+* **High Privilege:** This app requires access to the Docker socket (`docker.sock`). Improper configuration can grant container users root-level access to your host system.
+* **No Professional Advice:** Documentation provided is for educational purposes and does not constitute professional systems administration advice.
+
+### 🔒 Security Recommendations
+To maintain a secure homelab environment:
+1. **No Direct Exposure:** Never expose this app's port directly to the internet. Use a VPN or a Reverse Proxy with MFA.
+2. **Backups:** Always maintain external backups of your Docker volumes before performing bulk operations with this tool.
+
+## 🛡️ Summary
 - This project is released under Apache License 2.0. Keep copyright notices and include the full Apache-2.0 license text in redistributions.
 - The application requires access to `/var/run/docker.sock` to manage Docker resources. This grants high host-level control; only deploy in trusted environments.
 - Never expose this app directly to the public internet without authentication, TLS, and network controls.
