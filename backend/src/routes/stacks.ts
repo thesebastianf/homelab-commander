@@ -146,26 +146,20 @@ async function sendStackOperationNotification(
   succeeded: boolean,
   details?: Record<string, unknown>
 ): Promise<void> {
+  const normalizedDetails = details || {};
+  const trigger = String(normalizedDetails.trigger || (action === 'auto_update' ? 'schedule' : 'manual'));
   const eventType = succeeded
     ? (action === 'stop' || action === 'deactivate' ? 'containerStopped'
       : action === 'update' || action === 'bulk-update' ? 'containerAutoUpdated'
       : 'stackDeployed')
     : 'stackFailed';
 
-  const title = succeeded
-    ? `Stack ${stack.name} ${action} succeeded`
-    : `Stack ${stack.name} ${action} failed`;
-
-  const body = succeeded
-    ? `Stack "${stack.name}" completed action "${action}" successfully.`
-    : `Stack "${stack.name}" failed during action "${action}".`;
-
   try {
     await sendNotification(eventType, {
-      title,
-      message: body,
       stackName: stack.name,
-      details: { action, ...(details || {}) },
+      action,
+      trigger,
+      ...normalizedDetails,
     });
   } catch (notificationErr: any) {
     logger.warn(
@@ -311,6 +305,7 @@ interface OperationState {
   startedAt: Date;
   action: string;
   stackName: string;
+  trigger?: string;
 }
 const operationStore = new Map<string, OperationState>();
 
@@ -504,7 +499,7 @@ async function finishActionOnFailure(
   return reconciledStatus;
 }
 
-async function runUpdateOperation(id: string, stack: any, op: OperationState): Promise<void> {
+async function runUpdateOperation(id: string, stack: any, op: OperationState, trigger = 'manual'): Promise<void> {
   let cwd = '';
   let cleanup: (() => Promise<void>) | null = null;
   try {
@@ -527,15 +522,15 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState): P
     await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
     setStackUpdateStatus(stack.name, false);
     op.lines.push('✓ Update complete — containers restarted with latest images');
-    await auditLog('update', 'stack', id);
-    await sendStackOperationNotification('update', stack, true);
+    await auditLog('update', 'stack', id, { trigger, source: trigger === 'schedule' ? 'auto-update' : 'user' });
+    await sendStackOperationNotification('update', stack, true, { trigger });
   } catch (err: any) {
     logger.error({ action: 'update', stackId: id, stackName: stack.name, stackPath: stack.stack_path, cwd, error: formatExecError(err) }, 'Stack update operation failed');
     op.lines.push(`✗ Error: ${formatExecError(err)}`);
     op.error = formatExecError(err);
     const reconciledStatus = await reconcileStackStatusFromRuntime(id, stack);
     await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [reconciledStatus, id]);
-    await sendStackOperationNotification('update', stack, false, { reconciledStatus });
+    await sendStackOperationNotification('update', stack, false, { reconciledStatus, trigger });
     if (reconciledStatus === 'running') {
       op.lines.push('⚠ Update failed but existing containers are still running.');
     }
@@ -553,7 +548,8 @@ async function runStreamingStackOperation(
   op: OperationState,
   composeCommand: string[],
   desiredStatus: 'running' | 'stopped',
-  auditAction: string
+  auditAction: string,
+  trigger = 'manual'
 ): Promise<void> {
   const { cwd, cleanup } = await resolveStackCwd(stack);
   try {
@@ -610,8 +606,8 @@ async function runStreamingStackOperation(
         logger.info({ stackId, stackName: stack.name, action: op.action, attemptIndex: attemptIdx }, 'Stack operation succeeded');
         await pool.query("UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2", [desiredStatus, stackId]);
         op.lines.push(`✅ Operation complete: ${op.action}`);
-        await auditLog(auditAction, 'stack', stackId);
-        await sendStackOperationNotification(op.action, stack, true, { desiredStatus });
+        await auditLog(auditAction, 'stack', stackId, { trigger, source: trigger === 'schedule' ? 'auto-update' : 'user' });
+        await sendStackOperationNotification(op.action, stack, true, { desiredStatus, trigger });
         return;
       } catch (err: any) {
         lastError = err;
@@ -636,7 +632,7 @@ async function runStreamingStackOperation(
     // Reconcile actual status
     const reconciledStatus = await reconcileStackStatusFromRuntime(stackId, stack);
     await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [reconciledStatus, stackId]);
-    await sendStackOperationNotification(op.action, stack, false, { desiredStatus, reconciledStatus });
+    await sendStackOperationNotification(op.action, stack, false, { desiredStatus, reconciledStatus, trigger });
 
     if (reconciledStatus === desiredStatus) {
       op.lines.push(`⚠️ Operation failed but desired state (${desiredStatus}) was reached`);
@@ -841,15 +837,40 @@ router.get('/:id/update-history', asyncHandler(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT id, action, details, created_at
      FROM audit_log
-     WHERE resource_type = 'stack' AND resource_id = $1 AND action IN ('update', 'deploy', 'restart', 'recreate')
+     WHERE resource_type = 'stack' AND resource_id = $1 AND action IN ('update', 'deploy', 'restart', 'recreate', 'auto_update', 'stop', 'deactivate')
      ORDER BY created_at DESC
      LIMIT 20`,
     [id],
   );
+
+  const actionLabels: Record<string, string> = {
+    update: 'Update',
+    deploy: 'Deploy',
+    restart: 'Restart',
+    recreate: 'Recreate',
+    auto_update: 'Auto update',
+    stop: 'Stop',
+    deactivate: 'Deactivate',
+  };
+
+  const triggerLabel = (value: string): string => {
+    const normalized = value.toLowerCase();
+    if (!normalized) return 'Manual';
+    if (normalized === 'schedule') return 'Auto update schedule';
+    if (normalized === 'manual') return 'Manual';
+    if (normalized === 'detached-self-update') return 'Self-update handoff';
+    return normalized.replace(/[_-]+/g, ' ').replace(/^./, (char) => char.toUpperCase());
+  };
+
+  const updateLike = new Set(['update', 'auto_update', 'recreate']);
+
   res.json(rows.map((row: any) => ({
     id: row.id,
     action: row.action,
     details: row.details || {},
+    actionLabel: actionLabels[row.action] || row.action,
+    trigger: triggerLabel(String(row.details?.trigger || (row.action === 'auto_update' ? 'schedule' : 'manual'))),
+    isUpdate: updateLike.has(String(row.action)),
     createdAt: row.created_at,
   })));
 }));
@@ -893,10 +914,10 @@ router.post('/actions/update-all', asyncHandler(async (_req, res) => {
         }
       }
 
-      const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'bulk-update', stackName: name };
+      const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'bulk-update', stackName: name, trigger: 'manual' };
       operationStore.set(id, op);
       await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [id]);
-      await runUpdateOperation(id, stack, op);
+      await runUpdateOperation(id, stack, op, 'manual');
       summary.updated.push({ id, name });
     } catch (err: any) {
       summary.failed.push({ id, name, error: err?.message || 'unknown error' });
@@ -1045,12 +1066,12 @@ router.post('/:id/deploy', asyncHandler(async (req, res) => {
   const existing = operationStore.get(id);
   if (existing && !existing.done) { res.status(409).json({ error: 'Operation already running' }); return; }
 
-  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'deploy', stackName: stack.name };
+  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'deploy', stackName: stack.name, trigger: 'manual' };
   operationStore.set(id, op);
   await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [id]);
 
   // Fire-and-forget: start operation in background
-  runStreamingStackOperation(id, stack, op, ['up', '-d'], 'running', 'deploy').catch(() => { /* handled inside */ });
+  runStreamingStackOperation(id, stack, op, ['up', '-d'], 'running', 'deploy', 'manual').catch(() => { /* handled inside */ });
   res.json({ ok: true });
 }));
 
@@ -1064,11 +1085,11 @@ router.post('/:id/stop', asyncHandler(async (req, res) => {
   const existing = operationStore.get(id);
   if (existing && !existing.done) { res.status(409).json({ error: 'Operation already running' }); return; }
 
-  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'stop', stackName: stack.name };
+  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'stop', stackName: stack.name, trigger: 'manual' };
   operationStore.set(id, op);
 
   // Fire-and-forget: start operation in background
-  runStreamingStackOperation(id, stack, op, ['stop'], 'stopped', 'stop').catch(() => { /* handled inside */ });
+  runStreamingStackOperation(id, stack, op, ['stop'], 'stopped', 'stop', 'manual').catch(() => { /* handled inside */ });
   res.json({ ok: true });
 }));
 
@@ -1082,11 +1103,11 @@ router.post('/:id/deactivate', asyncHandler(async (req, res) => {
   const existing = operationStore.get(id);
   if (existing && !existing.done) { res.status(409).json({ error: 'Operation already running' }); return; }
 
-  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'deactivate', stackName: stack.name };
+  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'deactivate', stackName: stack.name, trigger: 'manual' };
   operationStore.set(id, op);
 
   // Fire-and-forget: start operation in background
-  runStreamingStackOperation(id, stack, op, ['down'], 'stopped', 'deactivate').catch(() => { /* handled inside */ });
+  runStreamingStackOperation(id, stack, op, ['down'], 'stopped', 'deactivate', 'manual').catch(() => { /* handled inside */ });
   res.json({ ok: true });
 }));
 
@@ -1100,11 +1121,11 @@ router.post('/:id/restart', asyncHandler(async (req, res) => {
   const existing = operationStore.get(id);
   if (existing && !existing.done) { res.status(409).json({ error: 'Operation already running' }); return; }
 
-  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'restart', stackName: stack.name };
+  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'restart', stackName: stack.name, trigger: 'manual' };
   operationStore.set(id, op);
 
   // Fire-and-forget: start operation in background
-  runStreamingStackOperation(id, stack, op, ['restart'], 'running', 'restart').catch(() => { /* handled inside */ });
+  runStreamingStackOperation(id, stack, op, ['restart'], 'running', 'restart', 'manual').catch(() => { /* handled inside */ });
   res.json({ ok: true });
 }));
 
@@ -1118,12 +1139,12 @@ router.post('/:id/recreate', asyncHandler(async (req, res) => {
   const existing = operationStore.get(id);
   if (existing && !existing.done) { res.status(409).json({ error: 'Operation already running' }); return; }
 
-  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'recreate', stackName: stack.name };
+  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'recreate', stackName: stack.name, trigger: 'manual' };
   operationStore.set(id, op);
   await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [id]);
 
   // Fire-and-forget: start operation in background
-  runStreamingStackOperation(id, stack, op, ['up', '-d', '--force-recreate'], 'running', 'recreate').catch(() => { /* handled inside */ });
+  runStreamingStackOperation(id, stack, op, ['up', '-d', '--force-recreate'], 'running', 'recreate', 'manual').catch(() => { /* handled inside */ });
   res.json({ ok: true });
 }));
 
@@ -1437,12 +1458,12 @@ router.post('/:id/update', asyncHandler(async (req, res) => {
   const existing = operationStore.get(id);
   if (existing && !existing.done) { res.status(409).json({ error: 'Operation already running' }); return; }
 
-  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'update', stackName: stack.name };
+  const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'update', stackName: stack.name, trigger: 'manual' };
   operationStore.set(id, op);
   await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [id]);
 
   // Fire-and-forget: start operation in background
-  runUpdateOperation(id, stack, op).catch(() => { /* handled inside */ });
+  runUpdateOperation(id, stack, op, 'manual').catch(() => { /* handled inside */ });
   res.json({ ok: true });
 }));
 

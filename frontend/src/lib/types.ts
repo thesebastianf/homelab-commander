@@ -87,6 +87,9 @@ export interface StackVersion {
 export interface StackUpdateHistoryEntry {
   id: string
   action: string
+  actionLabel?: string
+  trigger?: string
+  isUpdate?: boolean
   createdAt: string
   details?: Record<string, unknown>
 }
@@ -251,6 +254,8 @@ export interface BackupConfig {
   databaseConfig?: {
     containerName?: string
     databaseName?: string
+    volumeNames?: string[]
+    databaseNames?: string[]
     targets?: Array<{
       serviceName?: string
       containerName?: string

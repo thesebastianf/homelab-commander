@@ -266,7 +266,7 @@ export async function updateAllStacksNow(): Promise<{ updated: Array<{ id: strin
   return request('/stacks/actions/update-all', { method: 'POST' });
 }
 
-export async function fetchStackUpdateHistory(id: string): Promise<Array<{ id: string; action: string; createdAt: string; details?: Record<string, unknown> }>> {
+export async function fetchStackUpdateHistory(id: string): Promise<Array<{ id: string; action: string; actionLabel?: string; trigger?: string; isUpdate?: boolean; createdAt: string; details?: Record<string, unknown> }>> {
   return request(`/stacks/${id}/update-history`);
 }
 
@@ -310,6 +310,14 @@ export async function pushStackGit(id: string, message?: string): Promise<void> 
 
 export async function fetchBackupConfig(stackId: string): Promise<BackupConfig> {
   return request(`/backups/${stackId}/config`);
+}
+
+export async function fetchBackupVolumes(stackId: string): Promise<Array<{ name: string }>> {
+  return request(`/backups/${stackId}/volumes`);
+}
+
+export async function fetchBackupDatabases(stackId: string): Promise<Array<{ name: string; type: string; containerName: string }>> {
+  return request(`/backups/${stackId}/databases`);
 }
 
 export async function updateBackupConfig(stackId: string, config: Partial<BackupConfig>): Promise<void> {

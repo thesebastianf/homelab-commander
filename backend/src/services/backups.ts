@@ -1,6 +1,6 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { mkdir, writeFile, readdir, rm, stat } from 'fs/promises';
+import { mkdir, writeFile, readdir, rm, stat, cp } from 'fs/promises';
 import { join } from 'path';
 import Dockerode from 'dockerode';
 import { pool } from '../database.js';
@@ -38,7 +38,9 @@ export async function runBackup(stackId: string): Promise<void> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 17);
   const dirTimestamp = timestamp.replace(/-/g, '').replace('_', '-');
   const backupDir = join(config.backupsPath, `${stack.name}_${dirTimestamp}`);
+  const stagingDir = join(backupDir, 'staging');
   await mkdir(backupDir, { recursive: true });
+  await mkdir(stagingDir, { recursive: true });
 
   // Create job record
   const { rows: [job] } = await pool.query(
@@ -52,39 +54,53 @@ export async function runBackup(stackId: string): Promise<void> {
   );
 
   try {
-    let totalSize = 0;
+    let artifactsCount = 0;
+    const selectedVolumes = backupConfig.include_volumes
+      ? await resolveSelectedVolumeNames(stack.name, backupConfig)
+      : [];
 
-    // Backup stack folder — named: stackname_stack_YYYYMMDD-HHmmss.tar.gz
+    // Backup stack folder into STACK/
     if (backupConfig.include_stack_folder && stack.stack_path) {
       try {
-        const archivePath = join(backupDir, `${stack.name}_stack_${dirTimestamp}.tar.gz`);
-        await execFileAsync('tar', ['czf', archivePath, '-C', stack.stack_path, '.', '--exclude=.git'], { timeout: 120000 });
-        const s = await stat(archivePath);
-        totalSize += s.size;
+        const stackTarget = join(stagingDir, 'STACK');
+        await mkdir(stackTarget, { recursive: true });
+        await cp(stack.stack_path, stackTarget, {
+          recursive: true,
+          filter: (source) => !source.split('/').includes('.git'),
+        });
+        artifactsCount += 1;
       } catch (err) {
         logger.warn({ err, stackId }, 'Stack folder backup failed (may not exist yet)');
       }
     }
 
-    // Backup volumes — named: stackname_vol-volname_YYYYMMDD-HHmmss.tar.gz
-    if (backupConfig.include_volumes) {
+    // Backup selected volumes into VOLUMES/<volume>.tar.gz
+    if (backupConfig.include_volumes && selectedVolumes.length > 0) {
       try {
-        const stackVolumes = await detectStackVolumeNames(stack.name);
-
-        for (const vol of stackVolumes) {
+        const volumeDir = join(stagingDir, 'VOLUMES');
+        await mkdir(volumeDir, { recursive: true });
+        for (const vol of selectedVolumes) {
+          const helperName = `hlc-backup-${Date.now()}-${Math.random().toString(16).slice(2)}`;
           try {
-            const archiveName = `${stack.name}_vol-${vol}_${dirTimestamp}.tar.gz`;
+            const targetDir = join(volumeDir, vol);
+            await mkdir(targetDir, { recursive: true });
+
             await execFileAsync('docker', [
-              'run', '--rm',
+              'create',
+              '--name', helperName,
               '-v', `${vol}:/source:ro`,
-              '-v', `${backupDir}:/backup`,
               'alpine',
-              'tar', 'czf', `/backup/${archiveName}`, '-C', '/source', '.',
-            ], { timeout: 300000 });
-            const s = await stat(join(backupDir, archiveName));
-            totalSize += s.size;
+              'true',
+            ], { timeout: 30000 });
+            await execFileAsync('docker', ['cp', `${helperName}:/source/.`, targetDir], {
+              timeout: 300000,
+              maxBuffer: 512 * 1024 * 1024,
+            });
+            artifactsCount += 1;
           } catch (err) {
             logger.warn({ err, volume: vol }, 'Volume backup failed');
+          } finally {
+            await execFileAsync('docker', ['rm', '-f', helperName], { timeout: 30000 }).catch(() => {});
           }
         }
       } catch (err) {
@@ -92,24 +108,43 @@ export async function runBackup(stackId: string): Promise<void> {
       }
     }
 
+    let databaseBytes = 0;
     if (backupConfig.include_databases) {
-      totalSize += await backupDatabaseTargets(stack, backupConfig, backupDir, dirTimestamp);
+      const dbDir = join(stagingDir, 'DATABASES');
+      await mkdir(dbDir, { recursive: true });
+      databaseBytes = await backupDatabaseTargets(stack, backupConfig, dbDir, dirTimestamp);
+      if (databaseBytes > 0) {
+        artifactsCount += 1;
+      }
     }
+
+    if (artifactsCount === 0) {
+      throw new Error('Backup produced no content. Verify stack path/volumes and backup selection.');
+    }
+
+    const archiveName = `${stack.name}_backup_${dirTimestamp}.tar.gz`;
+    const archivePath = join(backupDir, archiveName);
+    await execFileAsync('tar', ['czf', archivePath, '-C', stagingDir, '.'], { timeout: 300000 });
+    const archiveStat = await stat(archivePath);
+    const totalSize = archiveStat.size;
 
     // Write manifest
     const manifest = {
       stackId,
       stackName: stack.name,
       timestamp: new Date().toISOString(),
-      namingConvention: `${stack.name}_{type}_{timestamp}.tar.gz`,
+      archive: archiveName,
       includes: {
         stackFolder: backupConfig.include_stack_folder,
         volumes: backupConfig.include_volumes,
+        selectedVolumes,
         databases: backupConfig.include_databases,
       },
+      databaseBytes,
       totalSize,
     };
     await writeFile(join(backupDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+    await rm(stagingDir, { recursive: true, force: true });
 
     await pool.query(
       `UPDATE backup_jobs SET status = 'completed', size_bytes = $1, completed_at = NOW()
@@ -117,10 +152,15 @@ export async function runBackup(stackId: string): Promise<void> {
       [totalSize, job.id]
     );
 
-    await sendNotification('backupCompleted', { stack: stack.name, size: `${(totalSize / 1024 / 1024).toFixed(1)} MB` });
+    await sendNotification('backupCompleted', {
+      stackName: stack.name,
+      sizeBytes: totalSize,
+      archive: archiveName,
+    });
     await enforceRetention(stack.name, backupConfig);
     logger.info({ stackId, backupDir, totalSize }, 'Backup completed');
   } catch (err) {
+    await rm(stagingDir, { recursive: true, force: true }).catch(() => {});
     await pool.query(
       `UPDATE backup_jobs SET status = 'failed', error_message = $1, completed_at = NOW()
        WHERE id = $2`,
@@ -130,6 +170,36 @@ export async function runBackup(stackId: string): Promise<void> {
     logger.error({ err, stackId }, 'Backup failed');
     throw err;
   }
+}
+
+async function resolveSelectedVolumeNames(stackName: string, backupConfig: any): Promise<string[]> {
+  const detected = await detectStackVolumeNames(stackName);
+  const requested = Array.isArray(backupConfig.database_config?.volumeNames)
+    ? backupConfig.database_config.volumeNames
+    : [];
+
+  if (requested.length === 0) {
+    return detected;
+  }
+
+  const selected = new Set(requested.map((entry: string) => String(entry)));
+  return detected.filter((name) => selected.has(name));
+}
+
+async function resolveSelectedDatabaseNames(stackName: string, backupConfig: any): Promise<string[]> {
+  const detected = await detectStackDatabaseNames(stackName);
+  const requested = Array.isArray(backupConfig.database_config?.databaseNames)
+    ? backupConfig.database_config.databaseNames
+    : [];
+
+  if (requested.length === 0) {
+    return detected.map(db => db.serviceName);
+  }
+
+  const selected = new Set(requested.map((entry: string) => String(entry)));
+  return detected
+    .filter((db) => selected.has(db.serviceName))
+    .map(db => db.serviceName);
 }
 
 async function enforceRetention(stackName: string, config: any): Promise<void> {
@@ -153,7 +223,7 @@ async function enforceRetention(stackName: string, config: any): Promise<void> {
   } catch { /* directory may not exist */ }
 }
 
-async function detectStackVolumeNames(stackName: string): Promise<string[]> {
+export async function detectStackVolumeNames(stackName: string): Promise<string[]> {
   const containers = await docker.listContainers({ all: true });
   const volumeNames = new Set<string>();
 
@@ -169,6 +239,40 @@ async function detectStackVolumeNames(stackName: string): Promise<string[]> {
   }
 
   return [...volumeNames].sort((a, b) => a.localeCompare(b));
+}
+
+export interface DatabaseInfo {
+  serviceName: string;
+  type: 'postgresql' | 'mysql' | 'mongodb' | 'redis' | 'influxdb';
+  containerName: string;
+}
+
+export async function detectStackDatabaseNames(stackName: string): Promise<DatabaseInfo[]> {
+  const containers = await docker.listContainers({ all: true });
+  const databases: DatabaseInfo[] = [];
+  const seen = new Set<string>();
+
+  for (const container of containers) {
+    const project = container.Labels?.['com.docker.compose.project'];
+    if (!project || project.toLowerCase() !== stackName.toLowerCase()) continue;
+
+    const image = container.Image || '';
+    const type = inferDatabaseType(image);
+    if (!type) continue;
+
+    const serviceName = container.Labels?.['com.docker.compose.service'] || container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12);
+    
+    if (!seen.has(serviceName)) {
+      seen.add(serviceName);
+      databases.push({
+        serviceName,
+        type,
+        containerName: container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12),
+      });
+    }
+  }
+
+  return databases.sort((a, b) => a.serviceName.localeCompare(b.serviceName));
 }
 
 async function backupDatabaseTargets(stack: any, backupConfig: any, backupDir: string, dirTimestamp: string): Promise<number> {
@@ -197,9 +301,6 @@ async function backupDatabaseTargets(stack: any, backupConfig: any, backupDir: s
 }
 
 async function detectDatabaseTargets(stackName: string, backupConfig: any): Promise<DatabaseTarget[]> {
-  const requestedTargets = Array.isArray(backupConfig.database_config?.targets)
-    ? backupConfig.database_config.targets
-    : [];
   const forcedType = backupConfig.database_type && backupConfig.database_type !== 'auto' && backupConfig.database_type !== 'none'
     ? backupConfig.database_type
     : null;
@@ -219,18 +320,18 @@ async function detectDatabaseTargets(stackName: string, backupConfig: any): Prom
         serviceName: container.Labels?.['com.docker.compose.service'] || container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12),
         containerName: container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12),
         containerId: container.Id,
-        databaseName: requestedTargets.find((target: any) => target.serviceName === container.Labels?.['com.docker.compose.service'])?.databaseName,
+        databaseName: undefined,
       } as DatabaseTarget;
     })
     .filter((target): target is DatabaseTarget => Boolean(target));
 
+  // Get selected database names; if none specified, use all detected
+  const selectedNames = await resolveSelectedDatabaseNames(stackName, backupConfig);
+  const selectedSet = new Set(selectedNames.map((name: string) => String(name)));
+
   return detected.filter((target) => {
     if (forcedType && target.type !== forcedType) return false;
-    if (requestedTargets.length === 0) return true;
-    return requestedTargets.some((requested: any) =>
-      (requested.serviceName && requested.serviceName === target.serviceName) ||
-      (requested.containerName && requested.containerName === target.containerName)
-    );
+    return selectedSet.has(target.serviceName);
   });
 }
 

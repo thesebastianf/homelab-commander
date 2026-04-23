@@ -60,6 +60,16 @@ function StackBackupItem({ stack }: { stack: Stack }) {
     queryKey: ['backupConfig', stack.id],
     queryFn: () => api.fetchBackupConfig(stack.id),
   })
+  const { data: backupVolumes = [] } = useQuery({
+    queryKey: ['backupVolumes', stack.id],
+    queryFn: () => api.fetchBackupVolumes(stack.id),
+    enabled: !!stack.id,
+  })
+  const { data: backupDatabases = [] } = useQuery({
+    queryKey: ['backupDatabases', stack.id],
+    queryFn: () => api.fetchBackupDatabases(stack.id),
+    enabled: !!stack.id,
+  })
 
   const update = useMutation({
     mutationFn: (patch: Partial<BackupConfig>) => api.updateBackupConfig(stack.id, { ...cfg, ...patch }),
@@ -77,6 +87,58 @@ function StackBackupItem({ stack }: { stack: Stack }) {
   })
 
   const u = (patch: Partial<BackupConfig>) => update.mutate(patch)
+  const selectedVolumeNames = cfg.databaseConfig?.volumeNames || []
+  const usingAllVolumes = selectedVolumeNames.length === 0
+  const selectedDatabaseNames = cfg.databaseConfig?.databaseNames || []
+  const usingAllDatabases = selectedDatabaseNames.length === 0
+
+  const setVolumeSelection = (name: string, checked: boolean) => {
+    const baseline = usingAllVolumes
+      ? backupVolumes.map((entry) => entry.name)
+      : [...selectedVolumeNames]
+    const next = new Set(baseline)
+    if (checked) {
+      next.add(name)
+    } else {
+      next.delete(name)
+    }
+    u({
+      includeVolumes: next.size > 0,
+      databaseConfig: {
+        ...cfg.databaseConfig,
+        volumeNames: [...next],
+      },
+    })
+  }
+
+  const setDatabaseSelection = (name: string, checked: boolean) => {
+    const baseline = usingAllDatabases
+      ? backupDatabases.map((entry) => entry.name)
+      : [...selectedDatabaseNames]
+    const next = new Set(baseline)
+    if (checked) {
+      next.add(name)
+    } else {
+      next.delete(name)
+    }
+    u({
+      includeDatabases: next.size > 0,
+      databaseConfig: {
+        ...cfg.databaseConfig,
+        databaseNames: [...next],
+      },
+    })
+  }
+
+  // Detect new databases added after config was created
+  const allDetectedDbNames = new Set(backupDatabases.map((db) => db.name))
+  const configuredDbNames = new Set(selectedDatabaseNames)
+  const newDatabaseCount = [...allDetectedDbNames].filter((name) => !configuredDbNames.has(name)).length
+
+  // Detect new volumes added after config was created
+  const allDetectedVolNames = new Set(backupVolumes.map((vol) => vol.name))
+  const configuredVolNames = new Set(selectedVolumeNames)
+  const newVolumeCount = [...allDetectedVolNames].filter((name) => !configuredVolNames.has(name)).length
 
   return (
     <AccordionItem value={stack.id} className="border rounded-lg px-4 !border-b">
@@ -173,8 +235,48 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <Checkbox checked={cfg.includeVolumes} onCheckedChange={(v) => u({ includeVolumes: !!v })} />
-                  <Label className="text-xs">All attached Docker volumes</Label>
+                  <Label className="text-xs">Docker volumes</Label>
                 </div>
+                {cfg.includeVolumes && (
+                  <div className="ml-5 mt-1 p-2 bg-muted/50 rounded space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold">Select Volumes</Label>
+                      {newVolumeCount > 0 && (
+                        <Badge className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30">
+                          +{newVolumeCount} new
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={usingAllVolumes}
+                        onCheckedChange={(v) => u({
+                          databaseConfig: {
+                            ...cfg.databaseConfig,
+                            volumeNames: v ? undefined : backupVolumes.map((entry) => entry.name),
+                          },
+                        })}
+                      />
+                      <Label className="text-xs">All attached Docker volumes</Label>
+                    </div>
+                    {!usingAllVolumes && backupVolumes.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {backupVolumes.map((entry) => (
+                          <label key={entry.name} className="flex items-center gap-2 cursor-pointer text-xs">
+                            <Checkbox
+                              checked={selectedVolumeNames.includes(entry.name)}
+                              onCheckedChange={(checked) => setVolumeSelection(entry.name, !!checked)}
+                            />
+                            <span className="font-mono truncate">{entry.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    {backupVolumes.length === 0 && (
+                      <p className="text-[11px] text-muted-foreground">No named volumes attached to this stack were detected.</p>
+                    )}
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <Checkbox checked={cfg.includeDatabases} onCheckedChange={(v) => u({ includeDatabases: !!v })} />
                   <Label className="text-xs">Database dumps</Label>
@@ -196,13 +298,51 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Container Name</Label>
-                    <Input value={cfg.databaseConfig?.containerName || ''} onChange={(e) => u({ databaseConfig: { ...cfg.databaseConfig, containerName: e.target.value } })} className="h-7 text-xs font-mono" placeholder="postgres-db" />
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold">Select Databases</Label>
+                      {newDatabaseCount > 0 && (
+                        <Badge className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30">
+                          +{newDatabaseCount} new
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={usingAllDatabases}
+                        onCheckedChange={(v) => u({
+                          databaseConfig: {
+                            ...cfg.databaseConfig,
+                            databaseNames: v ? undefined : backupDatabases.map((entry) => entry.name),
+                          },
+                        })}
+                      />
+                      <Label className="text-xs">All detected databases</Label>
+                    </div>
+                    {!usingAllDatabases && backupDatabases.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {backupDatabases.map((entry) => (
+                          <label key={entry.name} className="flex items-center gap-2 cursor-pointer text-xs">
+                            <Checkbox
+                              checked={selectedDatabaseNames.includes(entry.name)}
+                              onCheckedChange={(checked) => setDatabaseSelection(entry.name, !!checked)}
+                            />
+                            <span className="font-mono truncate">{entry.name}</span>
+                            <Badge className="text-[10px] bg-muted text-muted-foreground py-0 px-1 ml-auto shrink-0">
+                              {entry.type}
+                            </Badge>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    {backupDatabases.length === 0 && (
+                      <p className="text-[11px] text-muted-foreground">No databases detected in this stack.</p>
+                    )}
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Database Name</Label>
-                    <Input value={cfg.databaseConfig?.databaseName || ''} onChange={(e) => u({ databaseConfig: { ...cfg.databaseConfig, databaseName: e.target.value } })} className="h-7 text-xs font-mono" placeholder="mydb" />
+                  <div className="pt-2 space-y-1 border-t border-muted">
+                    <Label className="text-xs">Legacy Options (optional)</Label>
+                    <Input value={cfg.databaseConfig?.containerName || ''} onChange={(e) => u({ databaseConfig: { ...cfg.databaseConfig, containerName: e.target.value } })} className="h-7 text-xs font-mono" placeholder="Container name (optional)" />
+                    <Input value={cfg.databaseConfig?.databaseName || ''} onChange={(e) => u({ databaseConfig: { ...cfg.databaseConfig, databaseName: e.target.value } })} className="h-7 text-xs font-mono" placeholder="Database name (optional)" />
                   </div>
                   <p className="text-[11px] text-muted-foreground">
                     Redis and InfluxDB are best protected by volume backups. Logical dumps are used when supported by the running container image.

@@ -3,7 +3,7 @@ import { pool } from '../database.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { validateBody } from '../middleware/validate.js';
 import { backupConfigBody } from '../validation/schemas.js';
-import { runBackup } from '../services/backups.js';
+import { runBackup, detectStackVolumeNames, detectStackDatabaseNames } from '../services/backups.js';
 import { rescheduleBackup } from '../services/backupScheduler.js';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
@@ -36,6 +36,30 @@ router.get('/:stackId/config', asyncHandler(async (req, res) => {
     return;
   }
   res.json(mapBackupConfig(config));
+}));
+
+// List attachable named volumes for a stack
+router.get('/:stackId/volumes', asyncHandler(async (req, res) => {
+  const { rows: [stack] } = await pool.query('SELECT id, name FROM stacks WHERE id = $1', [req.params.stackId]);
+  if (!stack) {
+    res.status(404).json({ error: 'Stack not found' });
+    return;
+  }
+
+  const volumeNames = await detectStackVolumeNames(String(stack.name));
+  res.json(volumeNames.map((name) => ({ name })));
+}));
+
+// List detectable databases for a stack
+router.get('/:stackId/databases', asyncHandler(async (req, res) => {
+  const { rows: [stack] } = await pool.query('SELECT id, name FROM stacks WHERE id = $1', [req.params.stackId]);
+  if (!stack) {
+    res.status(404).json({ error: 'Stack not found' });
+    return;
+  }
+
+  const databases = await detectStackDatabaseNames(String(stack.name));
+  res.json(databases.map((db) => ({ name: db.serviceName, type: db.type, containerName: db.containerName })));
 }));
 
 // Update backup config
@@ -129,18 +153,25 @@ router.put('/:stackId/config', validateBody(backupConfigBody), asyncHandler(asyn
 ## Contents
 
 - [${b.includeStackFolder !== false ? 'x' : ' '}] Full stack folder (everything except \`.git\`)
-- [${b.includeVolumes !== false ? 'x' : ' '}] Docker volumes
+- [${b.includeVolumes !== false ? 'x' : ' '}] Docker volumes${Array.isArray(b.databaseConfig?.volumeNames) && b.databaseConfig.volumeNames.length > 0 ? ` (${b.databaseConfig.volumeNames.length} selected)` : ' (all attached)'}
 - [${b.includeDatabases ? 'x' : ' '}] Database dumps${b.includeDatabases ? ` (${b.databaseType || 'postgres'})` : ''}
 
 ## Naming Convention
 
 \`\`\`
-{stackName}_stack_{YYYYMMDD-HHmmss}.tar.gz
-{stackName}_vol-{volumeName}_{YYYYMMDD-HHmmss}.tar.gz
-{stackName}_db-{dbName}_{YYYYMMDD-HHmmss}.sql.gz
+{stackName}_backup_{YYYYMMDD-HHmmss}.tar.gz
 \`\`\`
 
-Example: \`${stack.name}_stack_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-070000.tar.gz\`
+Example: \`${stack.name}_backup_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-070000.tar.gz\`
+
+Archive structure:
+
+\`\`\`
+STACK/
+VOLUMES/
+DATABASES/
+manifest.json
+\`\`\`
 
 ## Runtime Behavior Notes
 

@@ -81,8 +81,13 @@ async function runScheduledUpdates(): Promise<void> {
           "UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1",
           [stack.id]
         );
-        await auditLog('auto_update', 'stack', String(stack.id), { trigger: 'schedule' });
-        await sendNotification('containerAutoUpdated', { name: stack.name });
+        await auditLog('auto_update', 'stack', String(stack.id), { trigger: 'schedule', action: 'update', source: 'auto-update' });
+        await sendNotification('containerAutoUpdated', {
+          stackName: stack.name,
+          action: 'update',
+          trigger: 'schedule',
+          source: 'auto-update',
+        });
         logger.info({ stackName: stack.name }, 'Auto-update complete');
       } catch (err: any) {
         logger.error({ err, stackName: stack.name }, 'Auto-update failed for stack');
@@ -90,7 +95,13 @@ async function runScheduledUpdates(): Promise<void> {
           "UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1",
           [stack.id]
         ).catch(() => { /* best-effort */ });
-        await sendNotification('stackFailed', { name: stack.name, error: err.message }).catch(() => { /* best-effort */ });
+        await sendNotification('stackFailed', {
+          stackName: stack.name,
+          action: 'update',
+          trigger: 'schedule',
+          source: 'auto-update',
+          error: err.message,
+        }).catch(() => { /* best-effort */ });
       }
     }
   } catch (err) {

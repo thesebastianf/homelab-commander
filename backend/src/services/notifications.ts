@@ -8,6 +8,223 @@ interface NotificationPayload {
   timestamp: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function toStringValue(value: unknown): string {
+  if (value === null || value === undefined) return '-';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) {
+    return value.map((item) => toStringValue(item)).join(', ');
+  }
+  if (isRecord(value)) {
+    return Object.entries(value)
+      .map(([key, inner]) => `${humanizeKey(key)}: ${toStringValue(inner)}`)
+      .join(', ');
+  }
+  return String(value);
+}
+
+function humanizeKey(key: string): string {
+  const lookup: Record<string, string> = {
+    stack: 'Stack',
+    stackName: 'Stack',
+    name: 'Name',
+    action: 'Action',
+    container: 'Container',
+    usage: 'Usage',
+    threshold: 'Threshold',
+    trigger: 'Triggered By',
+    mode: 'Mode',
+    desiredStatus: 'Target Status',
+    reconciledStatus: 'Runtime Status',
+    size: 'Size',
+    sizeBytes: 'Size',
+    error: 'Error',
+    address: 'Address',
+    stackId: 'Stack ID',
+    triggeredBy: 'Triggered By',
+  };
+  return lookup[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, (char) => char.toUpperCase());
+}
+
+function triggerLabel(trigger: unknown): string {
+  const value = String(trigger || '').toLowerCase();
+  if (!value) return 'Manual';
+  if (value === 'schedule' || value === 'auto_update_schedule') return 'Auto update schedule';
+  if (value === 'manual') return 'Manual';
+  if (value === 'detached-self-update') return 'Self-update handoff';
+  return value.replace(/[_-]+/g, ' ').replace(/^./, (char) => char.toUpperCase());
+}
+
+function actionLabel(action: unknown): string {
+  const value = String(action || '').toLowerCase();
+  const labels: Record<string, string> = {
+    deploy: 'Deploy',
+    update: 'Update',
+    'bulk-update': 'Bulk update',
+    restart: 'Restart',
+    recreate: 'Recreate',
+    stop: 'Stop',
+    deactivate: 'Deactivate',
+    auto_update: 'Auto update',
+  };
+  return labels[value] || (value ? value.replace(/[_-]+/g, ' ') : 'Update');
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let idx = 0;
+  while (value >= 1024 && idx < units.length - 1) {
+    value /= 1024;
+    idx += 1;
+  }
+  const precision = idx === 0 ? 0 : idx === 1 ? 1 : 2;
+  return `${value.toFixed(precision)} ${units[idx]}`;
+}
+
+function extractNestedDetails(data: Record<string, unknown>): Record<string, unknown> {
+  return isRecord(data.details) ? data.details : {};
+}
+
+function pickString(data: Record<string, unknown>, details: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    if (data[key] !== undefined && data[key] !== null && String(data[key]).trim()) {
+      return toStringValue(data[key]);
+    }
+    if (details[key] !== undefined && details[key] !== null && String(details[key]).trim()) {
+      return toStringValue(details[key]);
+    }
+  }
+  return undefined;
+}
+
+function buildGenericLines(data: Record<string, unknown>, details: Record<string, unknown>, exclude: string[] = []): string[] {
+  const excluded = new Set([...exclude, 'title', 'message', 'details']);
+  const source: Record<string, unknown> = { ...data, ...details };
+  return Object.entries(source)
+    .filter(([key, value]) => !excluded.has(key) && value !== undefined)
+    .map(([key, value]) => `${humanizeKey(key)}: ${toStringValue(value)}`);
+}
+
+function buildHumanMessage(eventType: string, data: Record<string, unknown>): { title: string; message: string; level: 'info' | 'warning' | 'error' } {
+  const details = extractNestedDetails(data);
+  const stackName = pickString(data, details, ['stackName', 'stack', 'name']);
+  const container = pickString(data, details, ['container', 'name']);
+  const action = actionLabel(pickString(data, details, ['action']) || eventType);
+  const trigger = triggerLabel(pickString(data, details, ['trigger', 'triggeredBy', 'mode']) || 'manual');
+
+  switch (eventType) {
+    case 'containerAutoUpdated': {
+      const lines = [
+        stackName ? `Stack: ${stackName}` : 'Stack: Unknown',
+        `Action: ${action}`,
+        `Triggered By: ${trigger}`,
+      ];
+      lines.push(...buildGenericLines(data, details, ['stackName', 'stack', 'name', 'action', 'trigger', 'triggeredBy', 'mode']));
+      return {
+        title: '✅ Stack Update Succeeded',
+        message: lines.join('\n'),
+        level: 'info',
+      };
+    }
+    case 'stackDeployed': {
+      const lines = [stackName ? `Stack: ${stackName}` : 'Stack: Unknown', `Action: ${action}`, `Triggered By: ${trigger}`];
+      lines.push(...buildGenericLines(data, details, ['stackName', 'stack', 'name', 'action', 'trigger', 'triggeredBy', 'mode']));
+      return { title: '🚀 Stack Deploy Succeeded', message: lines.join('\n'), level: 'info' };
+    }
+    case 'stackFailed': {
+      const lines = [
+        stackName ? `Stack: ${stackName}` : 'Stack: Unknown',
+        `Action: ${action}`,
+        `Triggered By: ${trigger}`,
+      ];
+      const error = pickString(data, details, ['error', 'message']);
+      if (error) lines.push(`Error: ${error}`);
+      lines.push(...buildGenericLines(data, details, ['stackName', 'stack', 'name', 'action', 'trigger', 'triggeredBy', 'mode', 'error', 'message']));
+      return {
+        title: '❌ Stack Action Failed',
+        message: lines.join('\n'),
+        level: 'error',
+      };
+    }
+    case 'highCpu': {
+      return {
+        title: '🔥 High CPU Usage',
+        message: [
+          `Container: ${container || 'Unknown'}`,
+          `Usage: ${pickString(data, details, ['usage']) || '-'}`,
+          `Threshold: ${pickString(data, details, ['threshold']) || '-'}`,
+        ].join('\n'),
+        level: 'warning',
+      };
+    }
+    case 'highMemory': {
+      return {
+        title: '🧠 High Memory Usage',
+        message: [
+          `Container: ${container || 'Unknown'}`,
+          `Usage: ${pickString(data, details, ['usage']) || '-'}`,
+          `Threshold: ${pickString(data, details, ['threshold']) || '-'}`,
+        ].join('\n'),
+        level: 'warning',
+      };
+    }
+    case 'backupCompleted': {
+      const sizeBytesRaw = data.sizeBytes ?? details.sizeBytes;
+      const parsed = typeof sizeBytesRaw === 'number' ? sizeBytesRaw : Number(sizeBytesRaw);
+      const size = Number.isFinite(parsed) && parsed > 0
+        ? formatBytes(parsed)
+        : pickString(data, details, ['size']) || 'Unknown';
+      const lines = [
+        `Stack: ${stackName || 'Unknown'}`,
+        `Backup Size: ${size}`,
+      ];
+      lines.push(...buildGenericLines(data, details, ['stackName', 'stack', 'name', 'size', 'sizeBytes']));
+      return {
+        title: '🗄️ Backup Completed',
+        message: lines.join('\n'),
+        level: 'info',
+      };
+    }
+    case 'backupFailed': {
+      const lines = [`Stack: ${stackName || 'Unknown'}`];
+      const error = pickString(data, details, ['error', 'message']);
+      if (error) lines.push(`Error: ${error}`);
+      lines.push(...buildGenericLines(data, details, ['stackName', 'stack', 'name', 'error', 'message']));
+      return {
+        title: '🚨 Backup Failed',
+        message: lines.join('\n'),
+        level: 'error',
+      };
+    }
+    default: {
+      const genericTitle = pickString(data, details, ['title']) || `Homelab Commander: ${eventType}`;
+      const message = pickString(data, details, ['message']);
+      if (message) {
+        const remainder = buildGenericLines(data, details, ['message']);
+        return {
+          title: genericTitle,
+          message: [message, ...remainder].join('\n'),
+          level: eventType.toLowerCase().includes('fail') || eventType.toLowerCase().includes('error') ? 'error' : 'info',
+        };
+      }
+      const fallbackLines = buildGenericLines(data, details);
+      return {
+        title: genericTitle,
+        message: fallbackLines.length > 0 ? fallbackLines.join('\n') : 'No details provided',
+        level: eventType.toLowerCase().includes('high') ? 'warning'
+          : eventType.toLowerCase().includes('fail') || eventType.toLowerCase().includes('error') ? 'error'
+            : 'info',
+      };
+    }
+  }
+}
+
 export async function sendNotification(
   eventType: string,
   data: Record<string, unknown>
@@ -48,27 +265,12 @@ export async function sendNotificationToService(
 }
 
 function buildPayload(eventType: string, data: Record<string, unknown>): NotificationPayload {
-  const titles: Record<string, string> = {
-    updateAvailable: 'Update Available',
-    containerAutoUpdated: 'Container Auto-Updated',
-    containerFailed: 'Container Failed',
-    highMemory: 'High Memory Usage',
-    highCpu: 'High CPU Usage',
-    containerStarted: 'Container Started',
-    containerStopped: 'Container Stopped',
-    stackDeployed: 'Stack Deployed',
-    stackFailed: 'Stack Deploy Failed',
-    backupCompleted: 'Backup Completed',
-    backupFailed: 'Backup Failed',
-    smartStartupDeviceOnline: 'Smart Startup: Device Online',
-    smartStartupStackStarted: 'Smart Startup: Stack Started',
-  };
+  const friendly = buildHumanMessage(eventType, data);
 
   return {
-    title: titles[eventType] || `Homelab Commander: ${eventType}`,
-    message: Object.entries(data).map(([k, v]) => `${k}: ${v}`).join('\n'),
-    level: eventType.includes('Failed') || eventType.includes('error') ? 'error'
-      : eventType.includes('High') ? 'warning' : 'info',
+    title: friendly.title,
+    message: friendly.message,
+    level: friendly.level,
     timestamp: new Date().toISOString(),
   };
 }
@@ -104,11 +306,11 @@ async function sendTelegram(
     throw new Error('Telegram configuration requires botToken and chatId');
   }
 
-  const text = `*${payload.title}*\n\n${payload.message}`;
+  const text = `${payload.title}\n\n${payload.message}`;
   const response = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: config.chatId, text, parse_mode: 'Markdown' }),
+    body: JSON.stringify({ chat_id: config.chatId, text }),
   });
 
   const body = await response.text();

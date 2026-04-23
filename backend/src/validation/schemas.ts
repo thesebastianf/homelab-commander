@@ -114,6 +114,8 @@ export const backupConfigBody = z.object({
   databaseConfig: z.object({
     containerName: z.string().max(200).optional(),
     databaseName: z.string().max(200).optional(),
+    volumeNames: z.array(z.string().min(1).max(255)).max(500).optional(),
+    databaseNames: z.array(z.string().min(1).max(255)).max(500).optional(),
     targets: z.array(z.object({
       serviceName: z.string().max(200).optional(),
       containerName: z.string().max(200).optional(),

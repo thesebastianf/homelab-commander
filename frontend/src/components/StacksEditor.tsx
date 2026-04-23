@@ -74,13 +74,79 @@ import { toHumanCronLabel } from '@/lib/cron'
 interface FullBackupPanelProps {
   config: Partial<BackupConfig>
   onChange: (cfg: Partial<BackupConfig>) => void
+  stackId?: string
   onSave?: () => void
   isSaving?: boolean
   onRunNow?: () => void
   isRunning?: boolean
 }
 
-function FullBackupPanel({ config: cfg, onChange: u, onSave, isSaving, onRunNow, isRunning }: FullBackupPanelProps) {
+function FullBackupPanel({ config: cfg, onChange: u, stackId, onSave, isSaving, onRunNow, isRunning }: FullBackupPanelProps) {
+  const { data: backupVolumes = [] } = useQuery({
+    queryKey: ['backupVolumes', stackId],
+    queryFn: () => api.fetchBackupVolumes(stackId!),
+    enabled: !!stackId,
+  })
+  const { data: backupDatabases = [] } = useQuery({
+    queryKey: ['backupDatabases', stackId],
+    queryFn: () => api.fetchBackupDatabases(stackId!),
+    enabled: !!stackId,
+  })
+  const selectedVolumeNames = cfg.databaseConfig?.volumeNames || []
+  const usingAllVolumes = selectedVolumeNames.length === 0
+  const selectedDatabaseNames = cfg.databaseConfig?.databaseNames || []
+  const usingAllDatabases = selectedDatabaseNames.length === 0
+
+  const setVolumeSelection = (name: string, checked: boolean) => {
+    const baseline = usingAllVolumes
+      ? backupVolumes.map((entry) => entry.name)
+      : [...selectedVolumeNames]
+    const next = new Set(baseline)
+    if (checked) {
+      next.add(name)
+    } else {
+      next.delete(name)
+    }
+    u({
+      ...cfg,
+      includeVolumes: next.size > 0,
+      databaseConfig: {
+        ...cfg.databaseConfig,
+        volumeNames: [...next],
+      },
+    })
+  }
+
+  const setDatabaseSelection = (name: string, checked: boolean) => {
+    const baseline = usingAllDatabases
+      ? backupDatabases.map((entry) => entry.name)
+      : [...selectedDatabaseNames]
+    const next = new Set(baseline)
+    if (checked) {
+      next.add(name)
+    } else {
+      next.delete(name)
+    }
+    u({
+      ...cfg,
+      includeDatabases: next.size > 0,
+      databaseConfig: {
+        ...cfg.databaseConfig,
+        databaseNames: [...next],
+      },
+    })
+  }
+
+  // Detect new databases added after config was created
+  const allDetectedDbNames = new Set(backupDatabases.map((db) => db.name))
+  const configuredDbNames = new Set(selectedDatabaseNames)
+  const newDatabaseCount = [...allDetectedDbNames].filter((name) => !configuredDbNames.has(name)).length
+
+  // Detect new volumes added after config was created
+  const allDetectedVolNames = new Set(backupVolumes.map((vol) => vol.name))
+  const configuredVolNames = new Set(selectedVolumeNames)
+  const newVolumeCount = [...allDetectedVolNames].filter((name) => !configuredVolNames.has(name)).length
+
   return (
     <div className="space-y-3">
       {/* Enable */}
@@ -170,8 +236,49 @@ function FullBackupPanel({ config: cfg, onChange: u, onSave, isSaving, onRunNow,
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <Checkbox checked={cfg.includeVolumes ?? true} onCheckedChange={v => u({ ...cfg, includeVolumes: !!v })} />
-                <Label className="text-xs">All attached Docker volumes</Label>
+                <Label className="text-xs">Docker volumes</Label>
               </label>
+              {cfg.includeVolumes && (
+                <div className="ml-5 mt-1 p-2 bg-muted/50 rounded space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold">Select Volumes</Label>
+                    {newVolumeCount > 0 && (
+                      <Badge className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30">
+                        +{newVolumeCount} new
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={usingAllVolumes}
+                      onCheckedChange={v => u({
+                        ...cfg,
+                        databaseConfig: {
+                          ...cfg.databaseConfig,
+                          volumeNames: v ? undefined : backupVolumes.map((entry) => entry.name),
+                        },
+                      })}
+                    />
+                    <Label className="text-xs">All attached Docker volumes</Label>
+                  </div>
+                  {!usingAllVolumes && backupVolumes.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {backupVolumes.map((entry) => (
+                        <label key={entry.name} className="flex items-center gap-2 cursor-pointer text-xs">
+                          <Checkbox
+                            checked={selectedVolumeNames.includes(entry.name)}
+                            onCheckedChange={checked => setVolumeSelection(entry.name, !!checked)}
+                          />
+                          <span className="font-mono truncate">{entry.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {stackId && backupVolumes.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground">No named volumes attached to this stack were detected.</p>
+                  )}
+                </div>
+              )}
               <label className="flex items-center gap-2 cursor-pointer">
                 <Checkbox checked={cfg.includeDatabases ?? false} onCheckedChange={v => u({ ...cfg, includeDatabases: !!v })} />
                 <Label className="text-xs">Database dumps</Label>
@@ -193,17 +300,56 @@ function FullBackupPanel({ config: cfg, onChange: u, onSave, isSaving, onRunNow,
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Container Name</Label>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold">Select Databases</Label>
+                    {newDatabaseCount > 0 && (
+                      <Badge className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30">
+                        +{newDatabaseCount} new
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={usingAllDatabases}
+                      onCheckedChange={v => u({
+                        ...cfg,
+                        databaseConfig: {
+                          ...cfg.databaseConfig,
+                          databaseNames: v ? undefined : backupDatabases.map((entry) => entry.name),
+                        },
+                      })}
+                    />
+                    <Label className="text-xs">All detected databases</Label>
+                  </div>
+                  {!usingAllDatabases && backupDatabases.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {backupDatabases.map((entry) => (
+                        <label key={entry.name} className="flex items-center gap-2 cursor-pointer text-xs">
+                          <Checkbox
+                            checked={selectedDatabaseNames.includes(entry.name)}
+                            onCheckedChange={checked => setDatabaseSelection(entry.name, !!checked)}
+                          />
+                          <span className="font-mono truncate">{entry.name}</span>
+                          <Badge className="text-[10px] bg-muted text-muted-foreground py-0 px-1 ml-auto shrink-0">
+                            {entry.type}
+                          </Badge>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  {stackId && backupDatabases.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground">No databases detected in this stack.</p>
+                  )}
+                </div>
+                <div className="pt-2 space-y-1 border-t border-muted">
+                  <Label className="text-xs">Legacy Options (optional)</Label>
                   <Input value={cfg.databaseConfig?.containerName || ''}
                     onChange={e => u({ ...cfg, databaseConfig: { ...cfg.databaseConfig, containerName: e.target.value } })}
-                    className="h-7 text-xs font-mono" placeholder="postgres-db" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Database Name</Label>
+                    className="h-7 text-xs font-mono" placeholder="Container name (optional)" />
                   <Input value={cfg.databaseConfig?.databaseName || ''}
                     onChange={e => u({ ...cfg, databaseConfig: { ...cfg.databaseConfig, databaseName: e.target.value } })}
-                    className="h-7 text-xs font-mono" placeholder="mydb" />
+                    className="h-7 text-xs font-mono" placeholder="Database name (optional)" />
                 </div>
                 <p className="text-[11px] text-muted-foreground">
                   Volume backup covers all named volumes attached to running containers in this stack. Logical DB dumps are added when the database container supports them.
@@ -269,6 +415,7 @@ function EditBackupPanel({ config, onSave, isSaving, stackId }: { config: Backup
     <FullBackupPanel
       config={local}
       onChange={setLocal}
+      stackId={stackId}
       onSave={() => onSave(local)}
       isSaving={isSaving}
       onRunNow={() => runMutation.mutate()}
@@ -2268,8 +2415,14 @@ export function StacksEditor({
                             {updateHistory.map((entry: any) => (
                               <div key={entry.id} className="rounded border border-border/40 bg-muted/20 px-2 py-1.5">
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="text-xs font-mono capitalize">{entry.action}</span>
+                                  <span className="text-xs font-mono">{entry.actionLabel || entry.action}</span>
                                   <span className="text-[10px] text-muted-foreground">{new Date(entry.createdAt).toLocaleString()}</span>
+                                </div>
+                                <div className="mt-1 flex items-center gap-2">
+                                  <Badge variant="outline" className="text-[10px] py-0 px-1.5">{entry.trigger || 'Manual'}</Badge>
+                                  <Badge variant={entry.isUpdate ? 'default' : 'secondary'} className="text-[10px] py-0 px-1.5">
+                                    {entry.isUpdate ? 'Update flow' : 'Operational action'}
+                                  </Badge>
                                 </div>
                               </div>
                             ))}
