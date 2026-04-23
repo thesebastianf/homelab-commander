@@ -176,36 +176,51 @@ async function startDetachedSelfUpdate(id: string, stack: any, op: OperationStat
     const project = composeProjectNameFromStack(stack);
     op.lines.push('Detected self stack update; handing off to helper container...');
 
-    const { stdout, stderr } = await execFileAsync(
-      'docker',
-      [
-        'run',
-        '-d',
-        '--rm',
-        '-v', '/var/run/docker.sock:/var/run/docker.sock',
-        '-v', `${cwd}:${cwd}`,
-        '-w', cwd,
-        'docker:cli',
-        'compose', '--project-name', project,
-        'up', '-d', '--pull', 'always',
-      ],
-      { timeout: 30000 },
-    );
-
-    if (stderr.trim()) {
-      stderr.split('\n').map((line) => line.trim()).filter(Boolean).forEach((line) => op.lines.push(`ℹ️ ${line}`));
+    // Get current container ID (self)
+    const currentContainerId = String(process.env.HOSTNAME || '').trim();
+    if (!currentContainerId) {
+      throw new Error('Cannot determine self container ID for graceful shutdown');
     }
 
-    const helperId = stdout.trim();
-    if (helperId) {
-      op.lines.push(`Helper container started: ${helperId.slice(0, 12)}`);
-    }
+    // Build the detached command: sleep + pull latest + stop old + start new + exit old
+    // This follows the Dockge "fire and forget" pattern
+    const updateCommand = [
+      'sh', '-c',
+      `sleep 5 && ` +
+      `docker compose --project-name ${project} -f ${cwd}/docker-compose.yml pull --quiet && ` +
+      `docker compose --project-name ${project} -f ${cwd}/docker-compose.yml up -d --force-recreate && ` +
+      `docker stop ${currentContainerId}`
+    ];
 
+    // Start the update process DETACHED so it survives even when this container dies
+    const child = spawn('docker', [
+      'run',
+      '--rm',
+      '-v', '/var/run/docker.sock:/var/run/docker.sock',
+      '-v', `${cwd}:${cwd}`,
+      'docker:cli',
+      ...updateCommand
+    ], {
+      detached: true,
+      stdio: 'ignore', // Completely detach from parent process
+    });
+
+    // Unref the child so parent process can exit without waiting
+    child.unref();
+
+    op.lines.push('Helper update process spawned (detached)');
     await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
     setStackUpdateStatus(stack.name, false);
-    await auditLog('update', 'stack', id, { mode: 'detached-self-update' });
-    await sendStackOperationNotification('update', stack, true, { mode: 'detached-self-update' });
+    await auditLog('update', 'stack', id, { trigger: 'manual', mode: 'detached-self-update' });
+    await sendStackOperationNotification('update', stack, true, { trigger: 'manual', mode: 'detached-self-update' });
     op.lines.push('✓ Detached self-update started. Services will restart shortly.');
+
+    // Exit gracefully after a short delay to allow response to be sent
+    setTimeout(() => {
+      logger.info({ stackId: id, stackName: stack.name }, 'Self-update handoff complete, exiting old container');
+      process.exit(0);
+    }, 100);
+
     return true;
   } catch (err: any) {
     logger.warn(
