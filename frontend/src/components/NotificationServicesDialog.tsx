@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,13 +17,20 @@ interface NotificationServicesDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   services: NotificationService[]
-  onSave: (services: NotificationService[]) => void
+  onSave: (services: NotificationService[]) => Promise<void>
 }
 
 export function NotificationServicesDialog({ open, onOpenChange, services, onSave }: NotificationServicesDialogProps) {
   const [localServices, setLocalServices] = useState<NotificationService[]>(services)
   const [newServiceType, setNewServiceType] = useState<NotificationService['type']>('telegram')
   const [testingId, setTestingId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      setLocalServices(services)
+    }
+  }, [open, services])
 
   const isSavedService = (id: string) => !id.startsWith('service-')
 
@@ -67,9 +74,16 @@ export function NotificationServicesDialog({ open, onOpenChange, services, onSav
     setLocalServices(localServices.filter(s => s.id !== id))
   }
 
-  const handleSave = () => {
-    onSave(localServices)
-    onOpenChange(false)
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await onSave(localServices)
+      onOpenChange(false)
+    } catch (e: any) {
+      toast.error(`Failed to save services: ${e.message || 'Unknown error'}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const getConfigFields = (type: NotificationService['type']) => {
@@ -113,7 +127,7 @@ export function NotificationServicesDialog({ open, onOpenChange, services, onSav
   return (
     <TooltipProvider delayDuration={350}>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] sm:max-w-5xl lg:max-w-6xl h-[88vh] max-h-[88vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Notification Services</DialogTitle>
           <DialogDescription>
@@ -121,7 +135,7 @@ export function NotificationServicesDialog({ open, onOpenChange, services, onSav
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 mt-4">
+        <div className="space-y-4 mt-4 flex-1 min-h-0 overflow-y-auto pr-1">
           <div className="flex items-center gap-3">
             <Select value={newServiceType} onValueChange={(v) => setNewServiceType(v as NotificationService['type'])}>
               <SelectTrigger className="w-[200px]">
@@ -234,8 +248,12 @@ export function NotificationServicesDialog({ open, onOpenChange, services, onSav
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave}>Save Services</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</>
+            ) : 'Save Services'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

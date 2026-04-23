@@ -48,6 +48,7 @@ const router = Router();
 
 router.get('/', asyncHandler(async (_req, res) => {
   const { rows: [settings] } = await pool.query('SELECT * FROM settings WHERE id = 1');
+  const { rows: notificationServices } = await pool.query('SELECT * FROM notification_services ORDER BY name');
   const notifConfig = settings.notification_config || {};
   const haConfig = settings.home_assistant_config || {};
   const gitConfig = settings.git_integration_config || {};
@@ -66,7 +67,7 @@ router.get('/', asyncHandler(async (_req, res) => {
     backupsBasePath: settings.backups_base_path,
     notifications: {
       enabled: notifConfig.enabled ?? false,
-      services: [],
+      services: notificationServices.map(mapNotificationService),
       events: notifConfig.events || {},
       thresholds: notifConfig.thresholds || { memoryPercent: 80, cpuPercent: 80 },
     },
@@ -131,6 +132,18 @@ router.get('/', asyncHandler(async (_req, res) => {
     },
   });
 }));
+
+function mapNotificationService(row: any) {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    enabled: row.enabled,
+    config: row.config,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 
 router.put('/', validateBody(updateSettingsBody), asyncHandler(async (req, res) => {
   const b = req.body;

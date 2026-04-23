@@ -26,6 +26,7 @@ interface SettingsDialogProps {
 
 export function SettingsDialog({ open, onOpenChange, settings, onSave }: SettingsDialogProps) {
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings)
+  const [activeTab, setActiveTab] = useState('general')
   const [aiTesting, setAiTesting] = useState(false)
   const [aiTestResult, setAiTestResult] = useState<{ success: boolean; message: string } | null>(null)
   const [excludeDraft, setExcludeDraft] = useState('')
@@ -53,6 +54,7 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
       })
       setAiTestResult(null)
       setExcludeDraft('')
+      setActiveTab('general')
       // Restore actual saved theme when dialog reopens (in case previous session was cancelled)
       document.documentElement.setAttribute('data-theme', settings.theme || 'dark')
     }
@@ -98,8 +100,8 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleCancel(); else onOpenChange(true) }}>
-      <DialogContent className="w-[94vw] max-w-5xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="w-[98vw] sm:max-w-[98vw] xl:max-w-[1650px] h-[94vh] max-h-[94vh] p-0 overflow-hidden flex flex-col">
+        <DialogHeader className="px-5 pt-5 pb-3 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Settings className="w-6 h-6 text-primary" />
             Settings
@@ -109,30 +111,36 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="general" className="mt-4">
-          <TabsList className="grid w-full grid-cols-7 h-9">
-            <TabsTrigger value="general" className="text-xs px-1">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
+          <div className="px-4 py-2 border-b shrink-0">
+            <div className="overflow-x-auto">
+              <TabsList className="inline-flex h-10 w-max min-w-full">
+            <TabsTrigger value="general" className="text-xs px-3 whitespace-nowrap">
               General
             </TabsTrigger>
-            <TabsTrigger value="notifications" className="text-xs px-1">
+            <TabsTrigger value="notifications" className="text-xs px-3 whitespace-nowrap">
               Alerts
             </TabsTrigger>
-            <TabsTrigger value="integrations" className="text-xs px-1">
+            <TabsTrigger value="integrations" className="text-xs px-3 whitespace-nowrap">
               Integrations
             </TabsTrigger>
-            <TabsTrigger value="ai" className="text-xs px-1">
+            <TabsTrigger value="ai" className="text-xs px-3 whitespace-nowrap">
               AI
             </TabsTrigger>
-            <TabsTrigger value="helpers" className="text-xs px-1">
+            <TabsTrigger value="helpers" className="text-xs px-3 whitespace-nowrap">
               Helpers
             </TabsTrigger>
-            <TabsTrigger value="monitoring" className="text-xs px-1">
+            <TabsTrigger value="monitoring" className="text-xs px-3 whitespace-nowrap">
               Monitoring
             </TabsTrigger>
-            <TabsTrigger value="files" className="text-xs px-1">
+            <TabsTrigger value="files" className="text-xs px-3 whitespace-nowrap">
               Files
             </TabsTrigger>
           </TabsList>
+            </div>
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
 
           <TabsContent value="general" className="space-y-6 mt-6">
             <div className="space-y-4">
@@ -1056,9 +1064,10 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
               </div>
             </Card>
           </TabsContent>
+          </div>
         </Tabs>
 
-        <DialogFooter>
+        <DialogFooter className="px-5 py-3 border-t bg-background/95 shrink-0">
           <Button variant="outline" onClick={handleCancel}>Cancel</Button>
           <Button onClick={handleSave}>Save Settings</Button>
         </DialogFooter>

@@ -58,6 +58,7 @@ import { useStacks, useExternalStacks, useDeployStack, useStopStack, useRestartS
 import { useVolumes } from '@/hooks/useVolumes'
 import { useNetworks } from '@/hooks/useNetworks'
 import { useSettings, useSystemInfo, useUpdateSettings, usePruneSystem } from '@/hooks/useSettings'
+import { useNotificationServices } from '@/hooks/useServices'
 import { useIsMobile } from '@/hooks/use-mobile'
 import type { Stack, AppSettings } from '@/lib/types'
 import { clearStoredCredentials, getStoredCredentials } from '@/lib/api'
@@ -125,6 +126,7 @@ function App() {
   const volumesQuery = useVolumes()
   const networksQuery = useNetworks()
   const settingsQuery = useSettings()
+  const notificationServicesQuery = useNotificationServices()
   const systemInfoQuery = useSystemInfo()
   const aggregatedLogsQuery = useAggregatedLogs()
 
@@ -186,6 +188,7 @@ function App() {
   const volumes = volumesQuery.data ?? []
   const networks = networksQuery.data ?? []
   const settings = settingsQuery.data
+  const notificationServices = notificationServicesQuery.data ?? []
   const systemInfo = systemInfoQuery.data
   const aggregatedLogs = aggregatedLogsQuery.data ?? []
   const compactMode = mobileOverride ?? isViewportMobile
@@ -853,12 +856,53 @@ function App() {
       <NotificationServicesDialog
         open={notificationServicesOpen}
         onOpenChange={setNotificationServicesOpen}
-        services={currentSettings.notifications?.services || []}
-        onSave={(services) => {
-          updateSettings.mutate({
-            ...currentSettings,
-            notifications: { ...currentSettings.notifications, services }
-          })
+        services={notificationServices}
+        onSave={async (services) => {
+          const existingById = new Map(notificationServices.map((svc) => [svc.id, svc]))
+          const incomingPersistedIds = new Set(
+            services
+              .map((svc) => svc.id)
+              .filter((id) => !id.startsWith('service-')),
+          )
+
+          for (const svc of services) {
+            const payload = {
+              name: svc.name,
+              type: svc.type,
+              enabled: svc.enabled,
+              config: svc.config,
+            }
+
+            if (svc.id.startsWith('service-')) {
+              await api.createNotificationService(payload)
+              continue
+            }
+
+            const existing = existingById.get(svc.id)
+            if (!existing) {
+              await api.createNotificationService(payload)
+              continue
+            }
+
+            const changed =
+              existing.name !== svc.name ||
+              existing.type !== svc.type ||
+              existing.enabled !== svc.enabled ||
+              JSON.stringify(existing.config || {}) !== JSON.stringify(svc.config || {})
+
+            if (changed) {
+              await api.updateNotificationService(svc.id, payload)
+            }
+          }
+
+          for (const existing of notificationServices) {
+            if (!incomingPersistedIds.has(existing.id)) {
+              await api.deleteNotificationService(existing.id)
+            }
+          }
+
+          await notificationServicesQuery.refetch()
+          toast.success('Notification services saved')
         }}
       />
 
