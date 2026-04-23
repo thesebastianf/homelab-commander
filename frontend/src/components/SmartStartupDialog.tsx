@@ -297,29 +297,31 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
           </Card>
         )}
 
-        <ScrollArea className="flex-1 min-h-0 mt-2">
-          <div className="space-y-2 pr-4 pb-2">
-            {stacks.length === 0 && (
-              <p className="text-xs text-muted-foreground">No stacks found.</p>
-            )}
-            {stacks.map((stack) => (
-              <StackRow
-                key={stack.id}
-                stack={stack}
-                config={getConfig(stack.id)}
-                diagnostic={(() => {
-                  const cfg = getConfig(stack.id)
-                  return cfg?.triggerValue ? diagnosticsByAddress[cfg.triggerValue] : undefined
-                })()}
-                checkingAddress={checkingAddress}
-                onCheckNow={handleCheckNow}
-                onCreate={createConfig}
-                onUpdate={updateConfig}
-                onDelete={deleteConfig}
-              />
-            ))}
-          </div>
-        </ScrollArea>
+        <div className="flex-1 min-h-0 mt-2 overflow-hidden">
+          <ScrollArea className="h-full pr-1">
+            <div className="space-y-2 pr-3 pb-2">
+              {stacks.length === 0 && (
+                <p className="text-xs text-muted-foreground">No stacks found.</p>
+              )}
+              {stacks.map((stack) => (
+                <StackRow
+                  key={stack.id}
+                  stack={stack}
+                  config={getConfig(stack.id)}
+                  diagnostic={(() => {
+                    const cfg = getConfig(stack.id)
+                    return cfg?.triggerValue ? diagnosticsByAddress[cfg.triggerValue] : undefined
+                  })()}
+                  checkingAddress={checkingAddress}
+                  onCheckNow={handleCheckNow}
+                  onCreate={createConfig}
+                  onUpdate={updateConfig}
+                  onDelete={deleteConfig}
+                />
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   )

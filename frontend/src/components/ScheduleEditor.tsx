@@ -33,12 +33,19 @@ export function parseCustomCron(cron: string): { days: number[]; hour: number; m
   for (const part of dow.split(',')) {
     if (part.includes('-')) {
       const [from, to] = part.split('-').map(Number)
-      for (let d = from; d <= to; d++) days.push(d)
+      if (Number.isNaN(from) || Number.isNaN(to) || from < 0 || to > 7 || from > to) return null
+      for (let d = from; d <= to; d++) {
+        const normalized = d === 7 ? 0 : d
+        if (!days.includes(normalized)) days.push(normalized)
+      }
     } else {
       const d = parseInt(part, 10)
-      if (!isNaN(d)) days.push(d)
+      if (Number.isNaN(d) || d < 0 || d > 7) return null
+      const normalized = d === 7 ? 0 : d
+      if (!days.includes(normalized)) days.push(normalized)
     }
   }
+  if (days.length === 0) return null
   return { days, hour: h, minute }
 }
 

@@ -123,8 +123,8 @@ router.put('/:stackId/config', validateBody(backupConfigBody), asyncHandler(asyn
 | Schedule | \`${b.cronSchedule || 'not set'}\` — ${scheduleLabel} |
 | Retention | ${b.useAdvancedRetention ? 'Advanced (see below)' : `Keep last ${b.retentionDays ?? 7} backups`} |
 | Compression | Level ${b.compressionLevel ?? 6} / 9 |
-| Encrypted | ${b.encrypted ? '✓ Yes' : '✗ No'} |
-| Incremental | ${b.incremental ? '✓ Yes' : '✗ No'} |
+| Encrypted (metadata) | ${b.encrypted ? '✓ Enabled' : '✗ Disabled'} |
+| Incremental (metadata) | ${b.incremental ? '✓ Enabled' : '✗ Disabled'} |
 
 ## Contents
 
@@ -141,6 +141,11 @@ router.put('/:stackId/config', validateBody(backupConfigBody), asyncHandler(asyn
 \`\`\`
 
 Example: \`${stack.name}_stack_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-070000.tar.gz\`
+
+## Runtime Behavior Notes
+
+- Encryption and incremental options are currently stored for forward compatibility.
+- Current backup runs always generate full archives and do not apply encryption automatically.
 
 ## Retention Policy
 
@@ -169,6 +174,25 @@ router.post('/:stackId/run', asyncHandler(async (req, res) => {
   const stackId = String(req.params.stackId);
   await runBackup(stackId);
   res.json({ ok: true });
+}));
+
+router.post('/run-all', asyncHandler(async (_req, res) => {
+  const { rows: stacks } = await pool.query('SELECT id, name FROM stacks ORDER BY name');
+  const summary: {
+    started: Array<{ id: string; name: string }>;
+    failed: Array<{ id: string; name: string; error: string }>;
+  } = { started: [], failed: [] };
+
+  for (const stack of stacks) {
+    try {
+      await runBackup(String(stack.id));
+      summary.started.push({ id: String(stack.id), name: String(stack.name) });
+    } catch (err: any) {
+      summary.failed.push({ id: String(stack.id), name: String(stack.name), error: err?.message || 'unknown error' });
+    }
+  }
+
+  res.json(summary);
 }));
 
 function mapBackupConfig(row: any) {

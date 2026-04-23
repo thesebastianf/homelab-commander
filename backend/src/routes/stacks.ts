@@ -16,6 +16,7 @@ import { randomUUID } from 'crypto';
 import { getStackUpdateStatus, setStackUpdateStatus } from '../services/updates.js';
 import { listComposeProjects } from '../services/docker.js';
 import { logger } from '../logger.js';
+import { runBackup } from '../services/backups.js';
 
 const execFileAsync = promisify(execFile);
 const router = Router();
@@ -714,6 +715,58 @@ router.get('/:id/update-history', asyncHandler(async (req, res) => {
     details: row.details || {},
     createdAt: row.created_at,
   })));
+}));
+
+router.post('/actions/update-all', asyncHandler(async (_req, res) => {
+  const { rows: stacks } = await pool.query(
+    `SELECT s.*, bc.enabled AS backup_enabled
+     FROM stacks s
+     LEFT JOIN backup_configs bc ON bc.stack_id = s.id
+     ORDER BY s.name`
+  );
+
+  const summary: {
+    updated: Array<{ id: string; name: string }>;
+    skipped: Array<{ id: string; name: string; reason: string }>;
+    failed: Array<{ id: string; name: string; error: string }>;
+  } = { updated: [], skipped: [], failed: [] };
+
+  for (const stack of stacks) {
+    const id = String(stack.id);
+    const name = String(stack.name);
+
+    const existing = operationStore.get(id);
+    if (existing && !existing.done) {
+      summary.skipped.push({ id, name, reason: 'operation already running' });
+      continue;
+    }
+    if (stack.status !== 'running') {
+      summary.skipped.push({ id, name, reason: `status is ${stack.status}` });
+      continue;
+    }
+
+    try {
+      const shouldBackupFirst = !!stack.run_backup_before_update || !!stack.backup_enabled;
+      if (shouldBackupFirst) {
+        try {
+          await runBackup(id);
+        } catch (backupErr: any) {
+          summary.failed.push({ id, name, error: `backup failed: ${backupErr?.message || 'unknown error'}` });
+          continue;
+        }
+      }
+
+      const op: OperationState = { lines: [], done: false, startedAt: new Date(), action: 'bulk-update', stackName: name };
+      operationStore.set(id, op);
+      await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [id]);
+      await runUpdateOperation(id, stack, op);
+      summary.updated.push({ id, name });
+    } catch (err: any) {
+      summary.failed.push({ id, name, error: err?.message || 'unknown error' });
+    }
+  }
+
+  res.json(summary);
 }));
 
 // Create stack

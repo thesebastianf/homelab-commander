@@ -28,7 +28,7 @@ export async function sendNotification(
 
     for (const service of services) {
       try {
-        await dispatchToService(service, payload);
+        await sendNotificationToService(service, eventType, data);
       } catch (err) {
         logger.error({ err, service: service.name }, 'Notification dispatch failed');
       }
@@ -36,6 +36,15 @@ export async function sendNotification(
   } catch (err) {
     logger.error({ err }, 'sendNotification failed');
   }
+}
+
+export async function sendNotificationToService(
+  service: { type: string; config: Record<string, string>; name?: string },
+  eventType: string,
+  data: Record<string, unknown>
+): Promise<void> {
+  const payload = buildPayload(eventType, data);
+  await dispatchToService(service, payload);
 }
 
 function buildPayload(eventType: string, data: Record<string, unknown>): NotificationPayload {
@@ -91,12 +100,31 @@ async function sendTelegram(
   config: Record<string, string>,
   payload: NotificationPayload
 ): Promise<void> {
+  if (!config.botToken || !config.chatId) {
+    throw new Error('Telegram configuration requires botToken and chatId');
+  }
+
   const text = `*${payload.title}*\n\n${payload.message}`;
-  await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
+  const response = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: config.chatId, text, parse_mode: 'Markdown' }),
   });
+
+  const body = await response.text();
+  if (!response.ok) {
+    throw new Error(`Telegram API error (${response.status}): ${body || response.statusText}`);
+  }
+
+  // Telegram can return 200 with ok=false in body.
+  try {
+    const parsed = JSON.parse(body) as { ok?: boolean; description?: string };
+    if (parsed.ok === false) {
+      throw new Error(`Telegram API rejected message: ${parsed.description || 'unknown error'}`);
+    }
+  } catch {
+    // Non-JSON success body is acceptable.
+  }
 }
 
 async function sendDiscord(
@@ -105,24 +133,32 @@ async function sendDiscord(
 ): Promise<void> {
   const color = payload.level === 'error' ? 0xff0000
     : payload.level === 'warning' ? 0xffaa00 : 0x00ff00;
-  await fetch(config.webhookUrl, {
+  const response = await fetch(config.webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       embeds: [{ title: payload.title, description: payload.message, color, timestamp: payload.timestamp }],
     }),
   });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Discord webhook failed (${response.status}): ${body || response.statusText}`);
+  }
 }
 
 async function sendSlack(
   config: Record<string, string>,
   payload: NotificationPayload
 ): Promise<void> {
-  await fetch(config.webhookUrl, {
+  const response = await fetch(config.webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text: `${payload.title}\n${payload.message}` }),
   });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Slack webhook failed (${response.status}): ${body || response.statusText}`);
+  }
 }
 
 async function sendEmail(
@@ -148,11 +184,15 @@ async function sendWebhook(
   config: Record<string, string>,
   payload: NotificationPayload
 ): Promise<void> {
-  await fetch(config.url, {
+  const response = await fetch(config.url, {
     method: config.method || 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Webhook failed (${response.status}): ${body || response.statusText}`);
+  }
 }
 
 // Threshold monitoring

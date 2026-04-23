@@ -138,7 +138,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-6xl"
+        className="w-[96vw] sm:max-w-[96vw] lg:max-w-[1400px] xl:max-w-[1600px] max-h-[92vh] overflow-y-auto"
         onOpenAutoFocus={(e) => {
           e.preventDefault()
           focusRef.current?.focus()

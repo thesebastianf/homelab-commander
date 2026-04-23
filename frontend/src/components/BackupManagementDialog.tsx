@@ -220,12 +220,13 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2"><ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" /><Label className="text-xs">Encrypt Backup</Label></div>
-                  <Switch checked={cfg.encrypted ?? false} onCheckedChange={(v) => u({ encrypted: v })} />
+                  <Switch checked={cfg.encrypted ?? false} onCheckedChange={(v) => u({ encrypted: v })} disabled />
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2"><HardDrive className="w-3.5 h-3.5 text-muted-foreground" /><Label className="text-xs">Incremental Backup</Label></div>
-                  <Switch checked={cfg.incremental ?? false} onCheckedChange={(v) => u({ incremental: v })} />
+                  <Switch checked={cfg.incremental ?? false} onCheckedChange={(v) => u({ incremental: v })} disabled />
                 </div>
+                <p className="text-[11px] text-muted-foreground">Encryption and incremental mode are currently metadata flags only. Backups are created as full archives.</p>
               </div>
             </Card>
           </>

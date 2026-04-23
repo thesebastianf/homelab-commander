@@ -262,6 +262,10 @@ export async function updateStackImages(id: string): Promise<void> {
   await request(`/stacks/${id}/update`, { method: 'POST' });
 }
 
+export async function updateAllStacksNow(): Promise<{ updated: Array<{ id: string; name: string }>; skipped: Array<{ id: string; name: string; reason: string }>; failed: Array<{ id: string; name: string; error: string }> }> {
+  return request('/stacks/actions/update-all', { method: 'POST' });
+}
+
 export async function fetchStackUpdateHistory(id: string): Promise<Array<{ id: string; action: string; createdAt: string; details?: Record<string, unknown> }>> {
   return request(`/stacks/${id}/update-history`);
 }
@@ -320,6 +324,10 @@ export async function runBackup(stackId: string): Promise<void> {
   await request(`/backups/${stackId}/run`, { method: 'POST' });
 }
 
+export async function runBackupAllStacksNow(): Promise<{ started: Array<{ id: string; name: string }>; failed: Array<{ id: string; name: string; error: string }> }> {
+  return request('/backups/run-all', { method: 'POST' });
+}
+
 // ---- AI ----
 
 export async function generateComposeWithAi(data: { prompt: string; composeContent?: string; envContent?: string }): Promise<{ message: string; composeContent?: string; redactionMode: 'full-local' | 'redacted-remote' }> {
@@ -354,6 +362,10 @@ export async function deleteNotificationService(id: string): Promise<void> {
 
 export async function testNotificationService(id: string): Promise<void> {
   await request(`/notifications/${id}/test`, { method: 'POST' });
+}
+
+export async function testNotificationServiceConfig(service: Omit<NotificationService, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
+  await request('/notifications/test-config', { method: 'POST', body: JSON.stringify(service) });
 }
 
 // ---- Port Reservations ----

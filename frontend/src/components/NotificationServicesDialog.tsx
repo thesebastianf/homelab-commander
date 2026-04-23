@@ -27,10 +27,19 @@ export function NotificationServicesDialog({ open, onOpenChange, services, onSav
 
   const isSavedService = (id: string) => !id.startsWith('service-')
 
-  const handleTestService = async (id: string) => {
-    setTestingId(id)
+  const handleTestService = async (service: NotificationService) => {
+    setTestingId(service.id)
     try {
-      await api.testNotificationService(id)
+      if (isSavedService(service.id)) {
+        await api.testNotificationService(service.id)
+      } else {
+        await api.testNotificationServiceConfig({
+          name: service.name,
+          type: service.type,
+          enabled: service.enabled,
+          config: service.config,
+        })
+      }
       toast.success('Test notification sent successfully!')
     } catch (e: any) {
       toast.error(`Test failed: ${e.message}`)
@@ -166,28 +175,26 @@ export function NotificationServicesDialog({ open, onOpenChange, services, onSav
                         checked={service.enabled}
                         onCheckedChange={(checked) => handleUpdateService(service.id, { enabled: checked })}
                       />
-                      {isSavedService(service.id) && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleTestService(service.id)}
-                              disabled={testingId !== null}
-                              className="gap-1.5"
-                            >
-                              {testingId === service.id ? (
-                                <><Loader2 className="w-3.5 h-3.5 animate-spin" />Testing...</>
-                              ) : (
-                                <><FlaskConical className="w-3.5 h-3.5" />Test</>
-                              )}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="text-xs">Send a live test notification to verify this service configuration</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleTestService(service)}
+                            disabled={testingId !== null}
+                            className="gap-1.5"
+                          >
+                            {testingId === service.id ? (
+                              <><Loader2 className="w-3.5 h-3.5 animate-spin" />Testing...</>
+                            ) : (
+                              <><FlaskConical className="w-3.5 h-3.5" />Test</>
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs">{isSavedService(service.id) ? 'Send a live test notification to verify this saved service' : 'Test this draft configuration without saving first'}</p>
+                        </TooltipContent>
+                      </Tooltip>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button

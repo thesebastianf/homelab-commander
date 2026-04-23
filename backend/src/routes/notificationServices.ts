@@ -3,6 +3,7 @@ import { pool } from '../database.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { validateBody } from '../middleware/validate.js';
 import { notificationServiceBody } from '../validation/schemas.js';
+import { sendNotificationToService } from '../services/notifications.js';
 
 const router = Router();
 
@@ -42,8 +43,27 @@ router.post('/:id/test', asyncHandler(async (req, res) => {
   const { rows: [svc] } = await pool.query('SELECT * FROM notification_services WHERE id = $1', [req.params.id]);
   if (!svc) { res.status(404).json({ error: 'Not found' }); return; }
 
-  const { sendNotification } = await import('../services/notifications.js');
-  await sendNotification('containerStarted', { test: true, message: 'Test notification from Homelab Commander' });
+  await sendNotificationToService(svc, 'containerStarted', {
+    test: true,
+    message: 'Test notification from Homelab Commander',
+    service: svc.name,
+  });
+  res.json({ ok: true });
+}));
+
+router.post('/test-config', validateBody(notificationServiceBody), asyncHandler(async (req, res) => {
+  const svc = {
+    name: req.body.name,
+    type: req.body.type,
+    enabled: req.body.enabled,
+    config: req.body.config,
+  };
+
+  await sendNotificationToService(svc, 'containerStarted', {
+    test: true,
+    message: 'Test notification from Homelab Commander',
+    service: svc.name,
+  });
   res.json({ ok: true });
 }));
 

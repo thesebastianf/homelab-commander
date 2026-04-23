@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { toast } from 'sonner'
 import * as api from '@/lib/api'
 import type { AppSettings } from '@/lib/types'
+import { normalizeCronExpression, toHumanCronLabel } from '@/lib/cron'
 
 interface SettingsDialogProps {
   open: boolean
@@ -29,9 +30,27 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
   const [aiTestResult, setAiTestResult] = useState<{ success: boolean; message: string } | null>(null)
   const [excludeDraft, setExcludeDraft] = useState('')
 
+  const autoUpdatePresets = [
+    { value: '0 7 * * 6', label: 'Saturday 07:00' },
+    { value: '0 3 * * 0', label: 'Sunday 03:00' },
+    { value: '0 3 * * 1', label: 'Monday 03:00' },
+    { value: '0 2 * * *', label: 'Daily 02:00' },
+    { value: '0 4 * * 1,2,3,4,5', label: 'Weekdays 04:00' },
+    { value: '0 3 1 * *', label: '1st of each month 03:00' },
+    { value: '0 */6 * * *', label: 'Every 6 hours' },
+  ]
+
   useEffect(() => {
     if (open) {
-      setLocalSettings(settings)
+      const normalizedCron = normalizeCronExpression(settings.autoUpdateSchedule?.cron || '0 7 * * 6')
+      setLocalSettings({
+        ...settings,
+        autoUpdateSchedule: {
+          ...(settings.autoUpdateSchedule || { enabled: false }),
+          cron: normalizedCron,
+          label: toHumanCronLabel(normalizedCron),
+        },
+      })
       setAiTestResult(null)
       setExcludeDraft('')
       // Restore actual saved theme when dialog reopens (in case previous session was cancelled)
@@ -79,7 +98,7 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleCancel(); else onOpenChange(true) }}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="w-[94vw] max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="w-6 h-6 text-primary" />
@@ -91,7 +110,7 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
         </DialogHeader>
 
         <Tabs defaultValue="general" className="mt-4">
-          <TabsList className="grid w-full grid-cols-6 h-9">
+          <TabsList className="grid w-full grid-cols-7 h-9">
             <TabsTrigger value="general" className="text-xs px-1">
               General
             </TabsTrigger>
@@ -109,6 +128,9 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
             </TabsTrigger>
             <TabsTrigger value="monitoring" className="text-xs px-1">
               Monitoring
+            </TabsTrigger>
+            <TabsTrigger value="files" className="text-xs px-1">
+              Files
             </TabsTrigger>
           </TabsList>
 
@@ -231,18 +253,19 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                     <div className="space-y-3">
                       <div className="space-y-1.5">
                         <Label className="text-sm">Preset Schedule</Label>
+                        {(() => {
+                          const currentCron = normalizeCronExpression(localSettings.autoUpdateSchedule?.cron || '0 7 * * 6')
+                          const presetValues = new Set(autoUpdatePresets.map((p) => p.value))
+                          const selectedPreset = presetValues.has(currentCron) ? currentCron : '__custom__'
+                          return (
                         <Select
-                          value={localSettings.autoUpdateSchedule?.cron || '0 7 * * 6'}
+                          value={selectedPreset}
                           onValueChange={v => {
-                            const labels: Record<string, string> = {
-                              '0 7 * * 6': 'Saturdays at 07:00',
-                              '0 3 * * 0': 'Sundays at 03:00',
-                              '0 3 * * 1': 'Mondays at 03:00',
-                              '0 3 1 * *': '1st of each month at 03:00',
-                            }
+                            if (v === '__custom__') return
+                            const normalized = normalizeCronExpression(v)
                             setLocalSettings(prev => ({
                               ...prev,
-                              autoUpdateSchedule: { ...(prev.autoUpdateSchedule || { enabled: true }), cron: v, label: labels[v] || v },
+                              autoUpdateSchedule: { ...(prev.autoUpdateSchedule || { enabled: true }), cron: normalized, label: toHumanCronLabel(normalized) },
                             }))
                           }}
                         >
@@ -250,12 +273,14 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="0 7 * * 6">Saturdays at 07:00</SelectItem>
-                            <SelectItem value="0 3 * * 0">Sundays at 03:00</SelectItem>
-                            <SelectItem value="0 3 * * 1">Mondays at 03:00</SelectItem>
-                            <SelectItem value="0 3 1 * *">1st of month at 03:00</SelectItem>
+                            {autoUpdatePresets.map((preset) => (
+                              <SelectItem key={preset.value} value={preset.value}>{preset.label}</SelectItem>
+                            ))}
+                            <SelectItem value="__custom__">Custom</SelectItem>
                           </SelectContent>
                         </Select>
+                          )
+                        })()}
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-sm">Custom Cron Expression</Label>
@@ -263,13 +288,20 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                           value={localSettings.autoUpdateSchedule?.cron || '0 7 * * 6'}
                           onChange={e => setLocalSettings(prev => ({
                             ...prev,
-                            autoUpdateSchedule: { ...(prev.autoUpdateSchedule || { enabled: true, label: '' }), cron: e.target.value },
+                            autoUpdateSchedule: {
+                              ...(prev.autoUpdateSchedule || { enabled: true, label: '' }),
+                              cron: e.target.value,
+                              label: toHumanCronLabel(normalizeCronExpression(e.target.value)),
+                            },
                           }))}
                           className="font-mono text-sm"
                           placeholder="0 7 * * 6"
                         />
                         <p className="text-xs text-muted-foreground">
                           Standard cron: minute hour day-of-month month day-of-week
+                        </p>
+                        <p className="text-xs text-primary font-mono">
+                          {toHumanCronLabel(normalizeCronExpression(localSettings.autoUpdateSchedule?.cron || '0 7 * * 6'))}
                         </p>
                       </div>
                     </div>
@@ -970,52 +1002,57 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                   </div>
                 </div>
 
-                <div className="space-y-1.5 col-span-2">
-                  <Label className="text-sm font-medium">Stack File Exclude Patterns</Label>
-                  <p className="text-[11px] text-muted-foreground">Excluded patterns are hidden from Stack Editor Files list. Use glob-like entries such as *.png or *.zip.</p>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={excludeDraft}
-                      onChange={e => setExcludeDraft(e.target.value)}
-                      placeholder="*.png"
-                      className="h-8 font-mono text-xs"
-                    />
-                    <Button
+              </div>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="files" className="space-y-4 mt-6">
+            <Card className="p-4 space-y-3">
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">Stack File Exclude Patterns</Label>
+                <p className="text-[11px] text-muted-foreground">Excluded patterns are hidden from Stack Editor Files list. Use glob-like entries such as *.png or *.zip.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={excludeDraft}
+                  onChange={e => setExcludeDraft(e.target.value)}
+                  placeholder="*.png"
+                  className="h-8 font-mono text-xs"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8"
+                  onClick={() => {
+                    const v = excludeDraft.trim()
+                    if (!v) return
+                    const current = localSettings.stackFileExcludes || []
+                    if (current.includes(v)) { setExcludeDraft(''); return }
+                    setLocalSettings(prev => ({ ...prev, stackFileExcludes: [...(prev.stackFileExcludes || []), v] }))
+                    setExcludeDraft('')
+                  }}
+                >
+                  Add
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {(localSettings.stackFileExcludes || [
+                  '*.jpg', '*.jpeg', '*.png', '*.gif', '*.webp', '*.bmp', '*.ico', '*.svg', '*.avif', '*.tiff',
+                  '*.mp4', '*.mkv', '*.mov', '*.avi', '*.mp3', '*.wav', '*.flac', '*.zip', '*.tar', '*.gz', '*.7z', '*.pdf',
+                  '*.svc',
+                ]).map((pattern) => (
+                  <Badge key={pattern} variant="outline" className="font-mono text-[10px] gap-1">
+                    {pattern}
+                    <button
                       type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-8"
-                      onClick={() => {
-                        const v = excludeDraft.trim()
-                        if (!v) return
-                        const current = localSettings.stackFileExcludes || []
-                        if (current.includes(v)) { setExcludeDraft(''); return }
-                        setLocalSettings(prev => ({ ...prev, stackFileExcludes: [...(prev.stackFileExcludes || []), v] }))
-                        setExcludeDraft('')
-                      }}
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => setLocalSettings(prev => ({ ...prev, stackFileExcludes: (prev.stackFileExcludes || []).filter(p => p !== pattern) }))}
                     >
-                      Add
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(localSettings.stackFileExcludes || [
-                      '*.jpg', '*.jpeg', '*.png', '*.gif', '*.webp', '*.bmp', '*.ico', '*.svg', '*.avif', '*.tiff',
-                      '*.mp4', '*.mkv', '*.mov', '*.avi', '*.mp3', '*.wav', '*.flac', '*.zip', '*.tar', '*.gz', '*.7z', '*.pdf',
-                      '*.svc',
-                    ]).map((pattern) => (
-                      <Badge key={pattern} variant="outline" className="font-mono text-[10px] gap-1">
-                        {pattern}
-                        <button
-                          type="button"
-                          className="text-muted-foreground hover:text-destructive"
-                          onClick={() => setLocalSettings(prev => ({ ...prev, stackFileExcludes: (prev.stackFileExcludes || []).filter(p => p !== pattern) }))}
-                        >
-                          <XCircle className="w-3 h-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
+                      <XCircle className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                ))}
               </div>
             </Card>
           </TabsContent>

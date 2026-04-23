@@ -68,6 +68,7 @@ import { ComposeAiPanel } from '@/components/ComposeAiPanel'
 import { ContainerShellDialog } from '@/components/ContainerShellDialog'
 import { MobileStacksView } from '@/components/MobileStacksView'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { toHumanCronLabel } from '@/lib/cron'
 
 // -- FullBackupPanel - matches BackupManagementDialog options ----------------
 interface FullBackupPanelProps {
@@ -229,15 +230,16 @@ function FullBackupPanel({ config: cfg, onChange: u, onSave, isSaving, onRunNow,
                   <ShieldCheck className="w-3.5 h-3.5 text-muted-foreground" />
                   <Label className="text-xs">Encrypt Backup</Label>
                 </div>
-                <Switch checked={cfg.encrypted ?? false} onCheckedChange={v => u({ ...cfg, encrypted: v })} />
+                <Switch checked={cfg.encrypted ?? false} onCheckedChange={v => u({ ...cfg, encrypted: v })} disabled />
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <HardDrive className="w-3.5 h-3.5 text-muted-foreground" />
                   <Label className="text-xs">Incremental Backup</Label>
                 </div>
-                <Switch checked={cfg.incremental ?? false} onCheckedChange={v => u({ ...cfg, incremental: v })} />
+                <Switch checked={cfg.incremental ?? false} onCheckedChange={v => u({ ...cfg, incremental: v })} disabled />
               </div>
+              <p className="text-[11px] text-muted-foreground">Encryption and incremental mode are stored for future compatibility but are not executed by the backup engine yet.</p>
             </div>
           </Card>
         </>
@@ -637,6 +639,39 @@ export function StacksEditor({
     onError: (e: any) => toast.error(e.message || 'Update failed'),
   })
 
+  const updateAllStacksMutation = useMutation({
+    mutationFn: () => api.updateAllStacksNow(),
+    onSuccess: (result) => {
+      const updated = result.updated.length
+      const skipped = result.skipped.length
+      const failed = result.failed.length
+      if (failed > 0) {
+        toast.error(`Bulk update finished: ${updated} updated, ${skipped} skipped, ${failed} failed`)
+      } else {
+        toast.success(`Bulk update finished: ${updated} updated${skipped > 0 ? `, ${skipped} skipped` : ''}`)
+      }
+      qc.invalidateQueries({ queryKey: ['stacks'] })
+      qc.invalidateQueries({ queryKey: ['backupJobs'] })
+    },
+    onError: (e: any) => toast.error(e.message || 'Bulk update failed'),
+  })
+
+  const backupAllStacksMutation = useMutation({
+    mutationFn: () => api.runBackupAllStacksNow(),
+    onSuccess: (result) => {
+      const started = result.started.length
+      const failed = result.failed.length
+      if (failed > 0) {
+        toast.error(`Bulk backup finished: ${started} completed, ${failed} failed`)
+      } else {
+        toast.success(`Bulk backup finished: ${started} stacks backed up`)
+      }
+      qc.invalidateQueries({ queryKey: ['backupJobs'] })
+      qc.invalidateQueries({ queryKey: ['stacks'] })
+    },
+    onError: (e: any) => toast.error(e.message || 'Bulk backup failed'),
+  })
+
   const deployActionMutation = useMutation({
     mutationFn: (id: string) => api.deployStack(id),
     onMutate: () => { setIsOperating(true); setOperationDone(false); setCurrentOperation('Starting') },
@@ -702,16 +737,86 @@ export function StacksEditor({
     }
   }
 
-  const extractPorts = (yaml: string): number[] => {
-    const matches = yaml.match(/["']?(\d+)["']?\s*:\s*["']?(\d+)["']?/g) || []
-    return [...new Set(matches.map(m => parseInt(m.split(':')[0].replace(/['"]/g, ''))))]
+  const normalizePort = (value: unknown): number | null => {
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) return Math.trunc(value)
+    if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+      const parsed = Number(value.trim())
+      if (Number.isFinite(parsed) && parsed > 0) return parsed
+    }
+    return null
   }
 
-  const getPortConflicts = (ports: number[]): number[] => {
-    if (!selectedStack) return []
+  const extractPorts = (yaml: string): number[] => {
+    try {
+      const doc = YAML.load(yaml) as any
+      const services = doc?.services
+      if (!services || typeof services !== 'object') return []
+
+      const hostPorts = new Set<number>()
+      for (const svc of Object.values(services as Record<string, any>)) {
+        const rawPorts: unknown[] = Array.isArray((svc as any)?.ports) ? (svc as any).ports : []
+        for (const p of rawPorts) {
+          if (typeof p === 'number') {
+            hostPorts.add(p)
+            continue
+          }
+
+          if (typeof p === 'string') {
+            const stripped = p.split('/')[0]
+            const segments = stripped.split(':').map((s) => s.trim()).filter(Boolean)
+            if (segments.length === 1) {
+              const only = Number(segments[0])
+              if (Number.isFinite(only)) hostPorts.add(only)
+              continue
+            }
+            const host = Number(segments[segments.length - 2])
+            if (Number.isFinite(host)) hostPorts.add(host)
+            continue
+          }
+
+          if (p && typeof p === 'object') {
+            const published = Number((p as Record<string, unknown>).published)
+            if (Number.isFinite(published)) hostPorts.add(published)
+          }
+        }
+      }
+
+      return [...hostPorts].sort((a, b) => a - b)
+    } catch {
+      return []
+    }
+  }
+
+  const stackPortsCache = new Map<string, number[]>()
+
+  const getStackPortList = (stack: Stack): number[] => {
+    const cached = stackPortsCache.get(stack.id)
+    if (cached) return cached
+
+    const fromRow = Array.isArray(stack.ports)
+      ? stack.ports
+          .map((p) => normalizePort(p))
+          .filter((p): p is number => p !== null)
+      : []
+
+    const computed = fromRow.length > 0
+      ? fromRow
+      : extractPorts((stack as any).composeContent ?? (stack as any).compose ?? '')
+
+    const uniqueSorted = [...new Set(computed)].sort((a, b) => a - b)
+    stackPortsCache.set(stack.id, uniqueSorted)
+    return uniqueSorted
+  }
+
+  const getPortConflicts = (ports: number[], currentStackId?: string): number[] => {
     const portMap = new Map<number, string[]>()
-    stacks.forEach(s => (s.ports || []).forEach(p => { if (!portMap.has(p)) portMap.set(p, []); portMap.get(p)!.push(s.name) }))
-    return ports.filter(p => (portMap.get(p) || []).some(n => n !== selectedStack.name))
+    stacks
+      .filter((s) => s.id !== currentStackId)
+      .forEach((s) => getStackPortList(s).forEach((p) => {
+        if (!portMap.has(p)) portMap.set(p, [])
+        portMap.get(p)!.push(s.name)
+      }))
+    return ports.filter(p => (portMap.get(p) || []).length > 0)
   }
 
   const parseServices = (yaml: string): Array<{ name: string; ports: Array<{ host: number; container: number }>; image?: string }> => {
@@ -794,7 +899,7 @@ export function StacksEditor({
   }
 
   const ports = activeFile === 'compose' ? extractPorts(composeContent) : []
-  const portConflicts = getPortConflicts(ports)
+  const portConflicts = getPortConflicts(ports, selectedStack?.id)
   const compareVersionObj = versions.find((v: any) => v.version === compareVersion) ?? null
   const flatFiles = flattenFileTree(stackFiles as any[])
   const excludedPatterns = settings?.stackFileExcludes || [
@@ -811,7 +916,7 @@ export function StacksEditor({
   const stackPortConflictCounts = (() => {
     const owners = new Map<number, Set<string>>()
     for (const s of stacks) {
-      for (const p of s.ports || []) {
+      for (const p of getStackPortList(s)) {
         if (!owners.has(p)) owners.set(p, new Set<string>())
         owners.get(p)!.add(s.name)
       }
@@ -820,7 +925,7 @@ export function StacksEditor({
     const counts = new Map<string, number>()
     for (const s of stacks) {
       const conflicts = new Set<number>()
-      for (const p of s.ports || []) {
+      for (const p of getStackPortList(s)) {
         if ((owners.get(p)?.size || 0) > 1) conflicts.add(p)
       }
       counts.set(s.id, conflicts.size)
@@ -903,6 +1008,29 @@ export function StacksEditor({
             <Plus className="w-4 h-4" />
             New Stack
           </Button>
+
+          <div className="grid grid-cols-1 gap-1.5 shrink-0">
+            <Button
+              onClick={() => updateAllStacksMutation.mutate()}
+              disabled={updateAllStacksMutation.isPending || backupAllStacksMutation.isPending || isCreating}
+              variant="outline"
+              size="sm"
+              className="w-full justify-start gap-2"
+            >
+              {updateAllStacksMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              Update all Stacks (incl. Backup) Now
+            </Button>
+            <Button
+              onClick={() => backupAllStacksMutation.mutate()}
+              disabled={backupAllStacksMutation.isPending || updateAllStacksMutation.isPending || isCreating}
+              variant="outline"
+              size="sm"
+              className="w-full justify-start gap-2"
+            >
+              {backupAllStacksMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Archive className="w-3.5 h-3.5" />}
+              Backup all Stacks Now
+            </Button>
+          </div>
 
           <ScrollArea className="flex-1 min-h-0 rounded-lg border">
             <div className="p-2 space-y-1.5">
@@ -994,7 +1122,12 @@ export function StacksEditor({
                             )}
                           </div>
                         </div>
-                        <span className={`text-[10px] mt-0.5 ${stack.status === 'running' ? 'text-green-500' : stack.status === 'failed' ? 'text-destructive' : 'text-muted-foreground/40'}`}>&#9679;</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className={`text-[10px] mt-0.5 cursor-help ${stack.status === 'running' ? 'text-green-500' : stack.status === 'failed' ? 'text-destructive' : 'text-muted-foreground/40'}`}>&#9679;</span>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs">Status dot: green = running, red = failed, gray = stopped/deploying.</TooltipContent>
+                        </Tooltip>
                       </div>
                     </Card>
                   ))}
@@ -1038,7 +1171,12 @@ export function StacksEditor({
                             )}
                           </div>
                         </div>
-                        <span className={`text-[10px] mt-0.5 ${stack.status === 'running' ? 'text-green-500' : stack.status === 'failed' ? 'text-destructive' : 'text-muted-foreground/40'}`}>&#9679;</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className={`text-[10px] mt-0.5 cursor-help ${stack.status === 'running' ? 'text-green-500' : stack.status === 'failed' ? 'text-destructive' : 'text-muted-foreground/40'}`}>&#9679;</span>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs">Status dot: green = running, red = failed, gray = stopped/deploying.</TooltipContent>
+                        </Tooltip>
                       </div>
                       {stack.stackPath && (
                         <Button
@@ -1261,7 +1399,7 @@ export function StacksEditor({
                         <>
                           <p className="text-xs text-muted-foreground">Ports declared in your compose:</p>
                           {newPorts.map(port => {
-                            const conflict = stacks.find(s => (s.ports || []).includes(port))
+                            const conflict = stacks.find((s) => getStackPortList(s).includes(port))
                             return (
                               <div key={port} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${conflict ? 'border-destructive/60 bg-destructive/5' : 'border-border/40 bg-muted/20'}`}>
                                 <span className="font-mono text-sm font-semibold">:{port}</span>
@@ -1282,7 +1420,7 @@ export function StacksEditor({
                       {/* All ports in use */}
                       <p className="text-xs text-muted-foreground pt-1 pb-1">All ports in use across stacks:</p>
                       <div className="flex flex-wrap gap-1">
-                        {stacks.flatMap(s => (s.ports || []).map(p => ({ p, name: s.name }))).map(({ p, name }, i) => (
+                        {stacks.flatMap((s) => getStackPortList(s).map((p) => ({ p, name: s.name }))).map(({ p, name }, i) => (
                           <Tooltip key={i}>
                             <TooltipTrigger asChild>
                               <Badge variant={newPorts.includes(p) ? 'destructive' : 'outline'} className="font-mono text-xs cursor-default">:{p}</Badge>
@@ -1290,7 +1428,7 @@ export function StacksEditor({
                             <TooltipContent className="text-xs">{name}</TooltipContent>
                           </Tooltip>
                         ))}
-                        {stacks.every(s => !s.ports?.length) && <span className="text-xs text-muted-foreground italic">No ports in use across stacks</span>}
+                        {stacks.every((s) => getStackPortList(s).length === 0) && <span className="text-xs text-muted-foreground italic">No ports in use across stacks</span>}
                       </div>
 
                       {/* Best-practice port ranges reference */}
@@ -2086,7 +2224,7 @@ export function StacksEditor({
                           </div>
                           {settings.autoUpdateSchedule.enabled ? (
                             <div>
-                              <p className="text-sm font-mono">{settings.autoUpdateSchedule.label}</p>
+                              <p className="text-sm font-mono">{toHumanCronLabel(settings.autoUpdateSchedule.cron)}</p>
                               <p className="text-xs text-muted-foreground font-mono mt-0.5">{settings.autoUpdateSchedule.cron}</p>
                               {settings.globalUpdateFreeze && (
                                 <p className="text-xs text-destructive mt-1 flex items-center gap-1">
@@ -2144,30 +2282,51 @@ export function StacksEditor({
                   {/* PORT CONFLICTS (edit mode) */}
                   {rightPanel === 'conflicts' && (() => {
                     const editPorts = extractPorts(composeContent)
-                    const commonReservedPorts = [22, 53, 80, 81, 443, 3000, 3001, 5432, 6379, 8080, 8443, 9000, 9443]
+                    const compareStacks = stacks.filter((s) => s.id !== selectedStack.id)
                     return (
-                      <div className="flex-1 overflow-y-auto space-y-2">
+                      <div className="flex-1 overflow-y-auto space-y-3">
+                        {(() => {
+                          const SYSTEM_PORTS: Record<number, string> = {
+                            20: 'FTP data', 21: 'FTP control', 22: 'SSH', 23: 'Telnet',
+                            25: 'SMTP', 53: 'DNS', 67: 'DHCP', 68: 'DHCP', 80: 'HTTP',
+                            110: 'POP3', 123: 'NTP', 143: 'IMAP', 161: 'SNMP', 194: 'IRC',
+                            443: 'HTTPS', 445: 'SMB', 465: 'SMTPS', 587: 'SMTP submission',
+                            993: 'IMAPS', 995: 'POP3S',
+                            3306: 'MySQL', 5432: 'PostgreSQL', 6379: 'Redis', 27017: 'MongoDB',
+                          }
+                          const sysHits = editPorts.filter(p => SYSTEM_PORTS[p])
+                          if (sysHits.length === 0) return null
+                          return (
+                            <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/8 px-3 py-2 space-y-1">
+                              <p className="text-[10px] font-semibold text-yellow-400 uppercase tracking-wide flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3" /> Well-known port{sysHits.length > 1 ? 's' : ''} in use
+                              </p>
+                              {sysHits.map(p => (
+                                <p key={p} className="text-xs text-yellow-300 font-mono">
+                                  :{p} <span className="text-yellow-400/70">- {SYSTEM_PORTS[p]}</span>
+                                </p>
+                              ))}
+                              <p className="text-[10px] text-yellow-400/60 mt-1">These ports are typically reserved by the OS or standard services. Consider using ports above 1024.</p>
+                            </div>
+                          )
+                        })()}
+
                         {editPorts.length === 0 ? (
-                          <div className="flex items-center justify-center h-32">
+                          <div className="flex items-center justify-center h-24">
                             <p className="text-xs text-muted-foreground font-mono">No ports defined in compose yet</p>
                           </div>
                         ) : (
                           <>
-                            <p className="text-xs text-muted-foreground mb-2">Ports declared in your compose:</p>
+                            <p className="text-xs text-muted-foreground">Ports declared in your compose:</p>
                             {editPorts.map(port => {
-                              const conflicts = stacks.filter(s => s.id !== selectedStack.id && (s.ports || []).includes(port))
+                              const conflicts = compareStacks.filter((s) => getStackPortList(s).includes(port))
                               return (
-                                <div key={port} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${conflicts.length > 0 ? 'border-destructive/60 bg-destructive/5' : commonReservedPorts.includes(port) ? 'border-yellow-500/40 bg-yellow-500/5' : 'border-border/40 bg-muted/20'}`}>
+                                <div key={port} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${conflicts.length > 0 ? 'border-destructive/60 bg-destructive/5' : 'border-border/40 bg-muted/20'}`}>
                                   <span className="font-mono text-sm font-semibold">:{port}</span>
                                   {conflicts.length > 0 ? (
                                     <span className="text-xs text-destructive flex items-center gap-1">
                                       <AlertCircle className="w-3 h-3" />
                                       Used by <strong className="ml-0.5">{conflicts.map(c => c.name).join(', ')}</strong>
-                                    </span>
-                                  ) : commonReservedPorts.includes(port) ? (
-                                    <span className="text-xs text-yellow-500 flex items-center gap-1">
-                                      <AlertTriangle className="w-3 h-3" />
-                                      Commonly used port
                                     </span>
                                   ) : (
                                     <span className="text-xs text-green-500">&#10003; Available</span>
@@ -2177,9 +2336,10 @@ export function StacksEditor({
                             })}
                           </>
                         )}
-                        <p className="text-xs text-muted-foreground pt-3 pb-1">All ports in use across stacks:</p>
+
+                        <p className="text-xs text-muted-foreground pt-1 pb-1">All ports in use across other stacks:</p>
                         <div className="flex flex-wrap gap-1">
-                          {stacks.filter(s => s.id !== selectedStack.id).flatMap(s => (s.ports || []).map(p => ({ p, name: s.name }))).map(({ p, name }, i) => (
+                          {compareStacks.flatMap((s) => getStackPortList(s).map((p) => ({ p, name: s.name }))).map(({ p, name }, i) => (
                             <Tooltip key={i}>
                               <TooltipTrigger asChild>
                                 <Badge variant={editPorts.includes(p) ? 'destructive' : 'outline'} className="font-mono text-xs cursor-default">:{p}</Badge>
@@ -2187,14 +2347,25 @@ export function StacksEditor({
                               <TooltipContent className="text-xs">{name}</TooltipContent>
                             </Tooltip>
                           ))}
-                          {stacks.filter(s => s.id !== selectedStack.id).every(s => !s.ports?.length) && (
+                          {compareStacks.every((s) => getStackPortList(s).length === 0) && (
                             <span className="text-xs text-muted-foreground italic">No ports in use across other stacks</span>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground pt-3 pb-1">Commonly reserved ports to avoid when possible:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {commonReservedPorts.map((p) => (
-                            <Badge key={p} variant={editPorts.includes(p) ? 'destructive' : 'outline'} className="font-mono text-xs">:{p}</Badge>
+
+                        <p className="text-xs text-muted-foreground pt-1 pb-1">Recommended homelab ranges:</p>
+                        <div className="rounded-lg border border-border/40 bg-muted/10 px-3 py-2 space-y-1.5">
+                          {[
+                            { range: '1024-1999', label: 'General homelab / self-hosted services' },
+                            { range: '3000-3999', label: 'Web UIs and dashboards (Grafana 3000, THC 3210)' },
+                            { range: '5000-5999', label: 'Dev and build tools (Registry 5000)' },
+                            { range: '8000-8999', label: 'Proxies and web apps (nginx 8080, Traefik 8443)' },
+                            { range: '9000-9999', label: 'Monitoring (Portainer 9000, Prometheus 9090)' },
+                            { range: '10000-19999', label: 'Custom app ports' },
+                          ].map(({ range, label }) => (
+                            <div key={range} className="flex items-baseline gap-2">
+                              <span className="font-mono text-[10px] text-primary/80 shrink-0 w-20">{range}</span>
+                              <span className="text-[10px] text-muted-foreground">{label}</span>
+                            </div>
                           ))}
                         </div>
                       </div>

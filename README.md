@@ -71,23 +71,34 @@ http://localhost:3210/?mobile=0&tab=stacks
 ## Visual Tour
 
 ### Main Dashboard
-![Dashboard](SVGmocks/01-Dashboard.svg)
+![Main Dashboard](01_Dashboard.jpg)
 
-### Stack Editor: Compose
-![Stack Editor Compose](SVGmocks/11a-StackEditor-Compose.svg)
+### Stack Editor
+![Stacks Editor](02_Stacks_Editor.jpg)
 
-### Stack Editor: Environment and AI
-![Stack Editor Env AI](SVGmocks/11b-StackEditor-Env-AI.svg)
+### Backup Management
+![Backups](03_Backups.jpg)
 
-### Backup Workflows
-![Backup Stack Backups](SVGmocks/12a-Backup-StackBackups.svg)
-![Backup Settings](SVGmocks/12b-Backup-Settings.svg)
+### Port Conflict Detection
+![Port Conflicts](04_Port_Conflicts.jpg)
 
 ### Smart Startup
-![Smart Startup Dialog](SVGmocks/13-Smart-Startup-Dialog.svg)
+![Smart Startup](05_Smart_Startup.jpg)
 
-### Settings and Integrations
-![Settings Integrations](SVGmocks/07c-Settings-Integrations.svg)
+### Notifications
+![Notifications](06_Notifications.jpg)
+
+### Updates and Scheduling
+![Updates](07_Updates.jpg)
+
+### Integrations
+![Integrations](08_Integrations.jpg)
+
+### AI Assistant
+![AI Assist](09_AI_assist.jpg)
+
+### Compact / Small Screen UX
+![Small Screen UX](10_Small_Screen_UX.jpg)
 
 ## Production Quick Start
 
@@ -163,7 +174,7 @@ Switch channels by changing image lines in [docker-compose.yaml.example](docker-
 - Production compose example: docker-compose.yaml.example
 - Backend source: backend/src
 - Frontend source: frontend/src
-- UI mocks/screens: SVGmocks
+- UI screenshots: 01_Dashboard.jpg through 10_Small_Screen_UX.jpg
 
 ## Roadmap Direction
 

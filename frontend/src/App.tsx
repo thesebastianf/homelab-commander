@@ -49,7 +49,8 @@ import {
   Database,
   Container,
   Play,
-  StopCircle
+  StopCircle,
+  CircleHelp,
 } from 'lucide-react'
 import { useContainers, useStartContainer, useStopContainer, useRestartContainer, useRemoveContainer, useAggregatedLogs } from '@/hooks/useContainers'
 import { useImages } from '@/hooks/useImages'
@@ -157,6 +158,7 @@ function App() {
     return null
   })
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [manualOpen, setManualOpen] = useState(false)
   const [databaseExplorerOpen, setDatabaseExplorerOpen] = useState(false)
   const [maintenanceOpen, setMaintenanceOpen] = useState(false)
   const [notificationServicesOpen, setNotificationServicesOpen] = useState(false)
@@ -455,6 +457,10 @@ function App() {
                   <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
                     <Settings className="w-4 h-4" />
                     <span className="text-[10px] font-mono">Settings</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setManualOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
+                    <CircleHelp className="w-4 h-4" />
+                    <span className="text-[10px] font-mono">?</span>
                   </Button>
                 </div>
               </>
@@ -794,6 +800,50 @@ function App() {
           }
         }}
       />
+
+      <Dialog open={manualOpen} onOpenChange={setManualOpen}>
+        <DialogContent className="w-[94vw] sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Homelab Commander Manual</DialogTitle>
+            <DialogDescription>
+              Quick guide for core workflows, defaults, and important behavior.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 text-sm">
+            <div className="rounded-lg border p-3 space-y-1.5">
+              <h4 className="font-mono font-semibold">Getting Started</h4>
+              <p className="text-muted-foreground">Use Stacks to create, edit, deploy, stop, and inspect your compose projects. Dashboard shows health and warnings at a glance.</p>
+              <p className="text-muted-foreground">Use the top action row for Ports, Startup, Backup, Alerts, Cleanup, Database, and Settings.</p>
+            </div>
+
+            <div className="rounded-lg border p-3 space-y-1.5">
+              <h4 className="font-mono font-semibold">Auto-Update Defaults</h4>
+              <p className="text-muted-foreground">Default schedule is <span className="font-mono">0 7 * * 6</span> (Saturday 07:00).</p>
+              <p className="text-muted-foreground">Global Update Freeze always overrides scheduled and per-stack updates.</p>
+            </div>
+
+            <div className="rounded-lg border p-3 space-y-1.5">
+              <h4 className="font-mono font-semibold">Backup Defaults</h4>
+              <p className="text-muted-foreground">Default backup schedule is <span className="font-mono">0 22 * * 3</span> (Wednesday 22:00) with simple retention of last 7 backups.</p>
+              <p className="text-muted-foreground">Full stack folder and volumes are enabled by default; database dumps are optional per stack.</p>
+              <p className="text-muted-foreground">Encryption and incremental flags are stored for future compatibility and currently not executed by the backup engine.</p>
+            </div>
+
+            <div className="rounded-lg border p-3 space-y-1.5">
+              <h4 className="font-mono font-semibold">Port Conflict Checks</h4>
+              <p className="text-muted-foreground">During create/edit, THC compares declared host ports against all other stacks and highlights collisions.</p>
+              <p className="text-muted-foreground">Well-known system ports are flagged as warnings so you can avoid accidental collisions.</p>
+            </div>
+
+            <div className="rounded-lg border p-3 space-y-1.5">
+              <h4 className="font-mono font-semibold">Maintenance</h4>
+              <p className="text-muted-foreground">System Maintenance lets you prune unused images, volumes, networks, and stopped containers.</p>
+              <p className="text-muted-foreground">Full System Prune is irreversible. Running containers are not removed.</p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <MaintenanceDialog
         open={maintenanceOpen}
