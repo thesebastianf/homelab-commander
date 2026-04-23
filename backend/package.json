@@ -1,6 +1,7 @@
 {
   "name": "homelab-commander-backend",
   "version": "1.0.0",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -9,12 +10,12 @@
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "dockerode": "^4.0.4",
+    "dockerode": "^4.0.2",
     "express": "^5.1.0",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "node-cron": "^3.0.3",
-    "nodemailer": "^6.9.16",
+    "nodemailer": "^8.0.5",
     "pg": "^8.13.1",
     "pino": "^9.6.0",
     "pino-http": "^10.4.0",

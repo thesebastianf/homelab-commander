@@ -106,6 +106,125 @@ function composeProjectNameFromStack(stack: any): string {
     .slice(0, 63) || 'stack';
 }
 
+let cachedCurrentComposeProjectName: string | null | undefined;
+
+async function getCurrentComposeProjectName(): Promise<string | null> {
+  if (cachedCurrentComposeProjectName !== undefined) {
+    return cachedCurrentComposeProjectName;
+  }
+
+  const selfContainerId = String(process.env.HOSTNAME || '').trim();
+  if (!selfContainerId) {
+    cachedCurrentComposeProjectName = null;
+    return null;
+  }
+
+  try {
+    const { stdout } = await execFileAsync('docker', ['inspect', selfContainerId], { timeout: 10000 });
+    const parsed = JSON.parse(stdout);
+    const labels = parsed?.[0]?.Config?.Labels ?? {};
+    const project = typeof labels['com.docker.compose.project'] === 'string'
+      ? labels['com.docker.compose.project']
+      : null;
+    cachedCurrentComposeProjectName = project;
+    return project;
+  } catch {
+    cachedCurrentComposeProjectName = null;
+    return null;
+  }
+}
+
+async function isSelfManagedStack(stack: any): Promise<boolean> {
+  const currentProject = await getCurrentComposeProjectName();
+  if (!currentProject) return false;
+  return currentProject === composeProjectNameFromStack(stack);
+}
+
+async function sendStackOperationNotification(
+  action: string,
+  stack: any,
+  succeeded: boolean,
+  details?: Record<string, unknown>
+): Promise<void> {
+  const eventType = succeeded
+    ? (action === 'stop' || action === 'deactivate' ? 'containerStopped'
+      : action === 'update' || action === 'bulk-update' ? 'containerAutoUpdated'
+      : 'stackDeployed')
+    : 'stackFailed';
+
+  const title = succeeded
+    ? `Stack ${stack.name} ${action} succeeded`
+    : `Stack ${stack.name} ${action} failed`;
+
+  const body = succeeded
+    ? `Stack "${stack.name}" completed action "${action}" successfully.`
+    : `Stack "${stack.name}" failed during action "${action}".`;
+
+  try {
+    await sendNotification(eventType, {
+      title,
+      message: body,
+      stackName: stack.name,
+      details: { action, ...(details || {}) },
+    });
+  } catch (notificationErr: any) {
+    logger.warn(
+      { action, stackId: stack.id, stackName: stack.name, error: notificationErr?.message || String(notificationErr) },
+      'Failed to send stack operation notification'
+    );
+  }
+}
+
+async function startDetachedSelfUpdate(id: string, stack: any, op: OperationState): Promise<boolean> {
+  const { cwd, cleanup } = await resolveStackCwd(stack);
+
+  try {
+    const project = composeProjectNameFromStack(stack);
+    op.lines.push('Detected self stack update; handing off to helper container...');
+
+    const { stdout, stderr } = await execFileAsync(
+      'docker',
+      [
+        'run',
+        '-d',
+        '--rm',
+        '-v', '/var/run/docker.sock:/var/run/docker.sock',
+        '-v', `${cwd}:${cwd}`,
+        '-w', cwd,
+        'docker:cli',
+        'compose', '--project-name', project,
+        'up', '-d', '--pull', 'always',
+      ],
+      { timeout: 30000 },
+    );
+
+    if (stderr.trim()) {
+      stderr.split('\n').map((line) => line.trim()).filter(Boolean).forEach((line) => op.lines.push(`ℹ️ ${line}`));
+    }
+
+    const helperId = stdout.trim();
+    if (helperId) {
+      op.lines.push(`Helper container started: ${helperId.slice(0, 12)}`);
+    }
+
+    await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
+    setStackUpdateStatus(stack.name, false);
+    await auditLog('update', 'stack', id, { mode: 'detached-self-update' });
+    await sendStackOperationNotification('update', stack, true, { mode: 'detached-self-update' });
+    op.lines.push('✓ Detached self-update started. Services will restart shortly.');
+    return true;
+  } catch (err: any) {
+    logger.warn(
+      { action: 'update', stackId: id, stackName: stack.name, error: formatExecError(err) },
+      'Detached self-update handoff failed; falling back to in-process update'
+    );
+    op.lines.push('⚠️ Detached self-update handoff failed, trying direct update...');
+    return false;
+  } finally {
+    await cleanup?.();
+  }
+}
+
 function formatExecError(err: any): string {
   const parts: string[] = [];
   if (err?.message) parts.push(String(err.message));
@@ -386,9 +505,22 @@ async function finishActionOnFailure(
 }
 
 async function runUpdateOperation(id: string, stack: any, op: OperationState): Promise<void> {
-  const { cwd, cleanup } = await resolveStackCwd(stack);
+  let cwd = '';
+  let cleanup: (() => Promise<void>) | null = null;
   try {
     op.lines.push('Starting stack update...');
+
+    if (await isSelfManagedStack(stack)) {
+      const detachedStarted = await startDetachedSelfUpdate(id, stack, op);
+      if (detachedStarted) {
+        return;
+      }
+    }
+
+    const resolved = await resolveStackCwd(stack);
+    cwd = resolved.cwd;
+    cleanup = resolved.cleanup;
+
     const result = await execComposeCommand(stack, id, 'update', ['up', '-d', '--pull', 'always'], { cwd, timeout: 120000 });
     const outputLines = `${result.stdout}\n${result.stderr}`.split('\n').map((l) => l.trim()).filter(Boolean);
     outputLines.slice(-50).forEach((line) => op.lines.push(line));
@@ -396,11 +528,14 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState): P
     setStackUpdateStatus(stack.name, false);
     op.lines.push('✓ Update complete — containers restarted with latest images');
     await auditLog('update', 'stack', id);
+    await sendStackOperationNotification('update', stack, true);
   } catch (err: any) {
     logger.error({ action: 'update', stackId: id, stackName: stack.name, stackPath: stack.stack_path, cwd, error: formatExecError(err) }, 'Stack update operation failed');
     op.lines.push(`✗ Error: ${formatExecError(err)}`);
+    op.error = formatExecError(err);
     const reconciledStatus = await reconcileStackStatusFromRuntime(id, stack);
     await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [reconciledStatus, id]);
+    await sendStackOperationNotification('update', stack, false, { reconciledStatus });
     if (reconciledStatus === 'running') {
       op.lines.push('⚠ Update failed but existing containers are still running.');
     }
@@ -476,6 +611,7 @@ async function runStreamingStackOperation(
         await pool.query("UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2", [desiredStatus, stackId]);
         op.lines.push(`✅ Operation complete: ${op.action}`);
         await auditLog(auditAction, 'stack', stackId);
+        await sendStackOperationNotification(op.action, stack, true, { desiredStatus });
         return;
       } catch (err: any) {
         lastError = err;
@@ -500,6 +636,7 @@ async function runStreamingStackOperation(
     // Reconcile actual status
     const reconciledStatus = await reconcileStackStatusFromRuntime(stackId, stack);
     await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [reconciledStatus, stackId]);
+    await sendStackOperationNotification(op.action, stack, false, { desiredStatus, reconciledStatus });
 
     if (reconciledStatus === desiredStatus) {
       op.lines.push(`⚠️ Operation failed but desired state (${desiredStatus}) was reached`);

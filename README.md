@@ -9,64 +9,23 @@
   <img src="https://img.shields.io/badge/Status-Beta-orange" alt="Status Beta" />
   <img src="https://img.shields.io/badge/Stack-React%20%2B%20Node%20%2B%20PostgreSQL-blue" alt="Stack" />
   <img src="https://img.shields.io/badge/Runtime-Docker-2496ED" alt="Docker" />
-  <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License" />
+  <img src="https://img.shields.io/badge/License-Apache--2.0-green" alt="Apache 2.0 License" />
 </p>
 
-The Homelab Commander gives you one place to run your container infrastructure with confidence.
+The Homelab Commander gives you one place to run your Docker infrastructure with confidence.
 
-It combines day to day Docker operations, stack lifecycle tooling, backup automation, Smart Startup dependencies, update controls, and AI-assisted compose workflows into one fast dashboard built for operators who prefer direct control over abstraction.
+It combines day-to-day container operations, stack lifecycle tooling, backups, update workflows, Smart Startup dependencies, and AI-assisted compose workflows in a single dashboard.
 
-## Why People Use It
+## Highlights
 
-- Single pane control for containers, images, volumes, networks, and compose stacks
-- Real operational workflows: run, stop, restart, inspect, compare, back up, recover
-- Backup and retention strategy built into stack management
-- Smart Startup automation for dependency aware stack startup
-- Optional AI compose generation and review, with secret aware redaction rules
-- Git integration for stack repositories and change workflows
-- Notification and monitoring integrations for production style homelab operations
-
-## Core Features
-
-### Container and Stack Operations
-- Live Docker inventory with status and quick actions
-- Integrated compose stack editor with version history and compare tools
-- External compose project discovery
-- Pull and redeploy update flow for stack images
-
-### Backup and Recovery
-- Stack backup policies per project
-- Full stack folder backup support
-- Attached volume backup support
-- Database backup support for common stack databases
-- Configurable retention and manual run-now operations
-
-### Smart Startup
-- Trigger stack start when monitored devices become available
-- Adjustable check interval and start delay
-- Device availability tracking in UI
-
-### AI Compose Assistant
-- Generate compose files from plain-language requirements
-- Validate existing compose for errors and operational risks
-- Provider support for local and hosted models
-- Redaction-first handling for remote providers
-
-### Integrations and Operations
-- Notification services management
-- Home Assistant integration
-- Port registry and conflict visibility
-- Global update freeze and scheduled auto update window
-
-
-### Links
-Smartphone View Enforced:
-Compact Stacks:
-http://localhost:3210/?mobile=1&tab=stacks
-Compact Dashboard:
-http://localhost:3210/?mobile=1&tab=dashboard
-Full UI forced:
-http://localhost:3210/?mobile=0&tab=stacks
+- Docker inventory for containers, images, volumes, and networks
+- Stack lifecycle actions: deploy, stop, deactivate, restart, recreate, update
+- Stack editor with version history and diff/restore support
+- Built-in backup jobs with retention policies
+- Smart Startup dependency automation
+- Notification services (Telegram, Discord, Slack, email, webhook)
+- Optional AI compose assistant with secret-aware redaction logic
+- Port conflict visibility and reservation tooling
 
 ## Visual Tour
 
@@ -100,7 +59,11 @@ http://localhost:3210/?mobile=0&tab=stacks
 ### Compact / Small Screen UX
 ![Small Screen UX](10_Small_Screen_UX.jpg)
 
-## Production Quick Start
+## Compose Files And Startup (Current)
+
+- `docker-compose.yml`: current primary compose file in this repository
+- `.env.example`: template for all required and optional environment variables
+- `.env`: your local runtime configuration (never commit real secrets)
 
 ### 1. Clone
 
@@ -109,81 +72,75 @@ git clone https://github.com/thesebastianf/homelab-commander.git
 cd homelab-commander
 ```
 
-### 2. Create Production Files From Examples
+### 2. Create `.env`
 
 ```bash
 cp .env.example .env
-cp docker-compose.yaml.example docker-compose.yaml
 ```
 
-### 3. Configure Environment
+### 3. Configure Minimum Variables
 
-Edit .env and set at minimum:
-- POSTGRES_PASSWORD
-- AUTH_USER and AUTH_PASS (recommended)
-- Optional SEED values for first boot defaults
+Edit `.env` and set at minimum:
+
+- `POSTGRES_PASSWORD`
+- `STACKS_PATH` and `BACKUPS_PATH` as absolute host paths
+- `AUTH_USER` and `AUTH_PASS` for login protection
+- `CORS_ORIGIN` if you are serving UI/API from different origins
 
 ### 4. Start the Stack
 
 ```bash
-docker compose -f docker-compose.yaml up -d
+docker compose up -d --build
 ```
 
 Open the UI at:
+
 - http://localhost:3210
 
-### Image Channels
+### 5. Verify Health
 
-- Stable (main): `:latest`
-- Beta (beta branch): `:beta`
+```bash
+docker compose ps
+docker compose logs -f app
+```
 
-Switch channels by changing image lines in [docker-compose.yaml.example](docker-compose.yaml.example) before saving your `docker-compose.yaml`.
+## Development
 
-## Dev Machine Notes
+- Frontend dev server: `http://localhost:5173`
+- App URL in containerized mode: `http://localhost:3210`
+- Full dev stack: `docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build`
 
-- Local dev compose files are intentionally ignored by git:
-  - `docker-compose.yml`
-  - `docker-compose.dev.yml`
-- Keep these for local development workflows only.
+## Mobile/Compact View Links
 
-## GitHub Actions: Next Steps
+- Compact stacks: `http://localhost:3210/?mobile=1&tab=stacks`
+- Compact dashboard: `http://localhost:3210/?mobile=1&tab=dashboard`
+- Force desktop view: `http://localhost:3210/?mobile=0&tab=stacks`
 
-1. Push the workflow and root Dockerfile to GitHub.
-2. In repository settings, ensure GitHub Actions has permission to read/write packages.
-3. Push to `beta` to publish beta images (`:beta`, `:sha-...`).
-4. Push/merge to `main` to publish stable images (`:latest`, `:main`, `:sha-...`).
-5. Confirm published images in GHCR:
-  - `ghcr.io/thesebastianf/homelab-commander`
+## Release And Operations Notes
 
-## Service Layout
-
-- App: Node.js + Express + TypeScript serving React static build
-- Database: PostgreSQL 16
-
-## Security Notes
-
-- Use strong credentials in .env
-- Keep repository private if syncing sensitive stack files
-- Review AI provider configuration before enabling hosted providers
-- For remote AI providers, compose/env redaction is enforced by backend logic
+- Stack actions now publish notifications for success/failure events.
+- Self-update handling uses a detached helper container handoff to avoid the app going permanently offline while updating its own compose project.
+- Docker socket access is required for stack management and is a privileged trust boundary.
 
 ## Repository Highlights
 
-- Documentation: DOCUMENTATION.md
-- Architecture: ARCHITECTURE.md
-- Production compose example: docker-compose.yaml.example
-- Backend source: backend/src
-- Frontend source: frontend/src
-- UI screenshots: 01_Dashboard.jpg through 10_Small_Screen_UX.jpg
-
-## Roadmap Direction
-
-Current beta focus:
-- hardening Smart Startup and backup edge cases
-- quality of life improvements in stack editor workflows
-- richer observability and reporting
-- expanded AI-assisted ops with strict safety defaults
+- Backend source: `backend/src`
+- Frontend source: `frontend/src`
+- Database schema: `db/init.sql`
+- Production compose: `docker-compose.yml`
+- Optional examples: `docker-compose.yaml.example`, `docker-compose.yaml.homelab`
+- Extended docs: `gitignored/DOCUMENTATION.md`, `gitignored/ARCHITECTURE.md`
 
 ## License
 
-MIT
+Apache License 2.0. See [LICENSE](LICENSE).
+
+## 🛡️ Legal & Security
+
+- This project is released under Apache License 2.0. Keep copyright notices and include the full Apache-2.0 license text in redistributions.
+- The application requires access to `/var/run/docker.sock` to manage Docker resources. This grants high host-level control; only deploy in trusted environments.
+- Never expose this app directly to the public internet without authentication, TLS, and network controls.
+- Do not commit real secrets (`.env`, API keys, access tokens, webhook URLs) to Git. Use environment variables and secret management where possible.
+- Git integration can sync stack files including `.env`; use private repositories and avoid plaintext secret storage.
+- AI integrations should be treated as data egress boundaries. Validate provider settings and do not forward sensitive compose/env content to untrusted remote models.
+- This software is provided "AS IS", without warranties or conditions of any kind, as described in Apache-2.0.
