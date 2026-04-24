@@ -421,6 +421,38 @@ interface ComposeInvocationResult {
   stderr: string;
 }
 
+function buildComposeCommandEnv(): NodeJS.ProcessEnv {
+  const keepExact = new Set([
+    'PATH',
+    'HOME',
+    'USER',
+    'SHELL',
+    'TMPDIR',
+    'TEMP',
+    'TMP',
+    'DOCKER_HOST',
+    'DOCKER_CONTEXT',
+    'DOCKER_CONFIG',
+    'DOCKER_TLS_VERIFY',
+    'DOCKER_CERT_PATH',
+    'HTTP_PROXY',
+    'HTTPS_PROXY',
+    'NO_PROXY',
+    'http_proxy',
+    'https_proxy',
+    'no_proxy',
+  ]);
+
+  const env: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value == null) continue;
+    if (keepExact.has(key) || key.startsWith('COMPOSE_')) {
+      env[key] = value;
+    }
+  }
+  return env;
+}
+
 function getComposeInvocations(stack: any, command: string[], _cwd: string): Array<{ runtime: 'docker' | 'docker-compose'; args: string[] }> {
   const project = composeProjectNameFromStack(stack);
   // Native runtime: docker CLI with compose plugin (installed in Dockerfile)
@@ -497,6 +529,7 @@ async function execComposeCommand(
       const { stdout, stderr } = await execFileAsync(attempt.runtime, attempt.args, {
         cwd: options.cwd,
         timeout: options.timeout,
+        env: buildComposeCommandEnv(),
       });
 
       logger.info(
@@ -667,7 +700,11 @@ async function runStreamingStackOperation(
 
       try {
         await new Promise<void>((resolve, reject) => {
-          const proc = spawn(attempt.runtime, attempt.args, { cwd, timeout: 120000 });
+          const proc = spawn(attempt.runtime, attempt.args, {
+            cwd,
+            timeout: 120000,
+            env: buildComposeCommandEnv(),
+          });
 
           proc.stdout.on('data', (data: Buffer) => {
             data.toString('utf8').split('\n').filter(Boolean).forEach(line => {

@@ -14,6 +14,38 @@ import { runBackup } from './backups.js';
 const execFileAsync = promisify(execFile);
 const MIN_FREE_DISK_GB = 3;
 
+function buildComposeCommandEnv(): NodeJS.ProcessEnv {
+  const keepExact = new Set([
+    'PATH',
+    'HOME',
+    'USER',
+    'SHELL',
+    'TMPDIR',
+    'TEMP',
+    'TMP',
+    'DOCKER_HOST',
+    'DOCKER_CONTEXT',
+    'DOCKER_CONFIG',
+    'DOCKER_TLS_VERIFY',
+    'DOCKER_CERT_PATH',
+    'HTTP_PROXY',
+    'HTTPS_PROXY',
+    'NO_PROXY',
+    'http_proxy',
+    'https_proxy',
+    'no_proxy',
+  ]);
+
+  const env: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value == null) continue;
+    if (keepExact.has(key) || key.startsWith('COMPOSE_')) {
+      env[key] = value;
+    }
+  }
+  return env;
+}
+
 async function checkFreeDiskSpaceGB(): Promise<number> {
   try {
     const { stdout } = await execFileAsync('df', ['-BG', '/'], { timeout: 8000 });
@@ -158,7 +190,7 @@ function updateStackImages(stack: any): Promise<void> {
       const proc = spawn(
         'docker',
         ['compose', '-p', stack.name.toLowerCase(), 'up', '-d', '--pull', 'always'],
-        { cwd: tempDir }
+        { cwd: tempDir, env: buildComposeCommandEnv() }
       );
       const outputLines: string[] = [];
       const onData = (data: Buffer) => {

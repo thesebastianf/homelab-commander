@@ -6,6 +6,38 @@ import { sendNotification } from './notifications.js';
 
 const execFileAsync = promisify(execFile);
 
+function buildComposeCommandEnv(): NodeJS.ProcessEnv {
+  const keepExact = new Set([
+    'PATH',
+    'HOME',
+    'USER',
+    'SHELL',
+    'TMPDIR',
+    'TEMP',
+    'TMP',
+    'DOCKER_HOST',
+    'DOCKER_CONTEXT',
+    'DOCKER_CONFIG',
+    'DOCKER_TLS_VERIFY',
+    'DOCKER_CERT_PATH',
+    'HTTP_PROXY',
+    'HTTPS_PROXY',
+    'NO_PROXY',
+    'http_proxy',
+    'https_proxy',
+    'no_proxy',
+  ]);
+
+  const env: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value == null) continue;
+    if (keepExact.has(key) || key.startsWith('COMPOSE_')) {
+      env[key] = value;
+    }
+  }
+  return env;
+}
+
 /** In-memory device status cache (keyed by trigger_value / IP or hostname) */
 interface DeviceStatus {
   isOnline: boolean;
@@ -198,7 +230,7 @@ async function startStack(stackId: string, stackPath: string, triggeredBy: strin
     logger.info({ stackId, stackPath, triggeredBy }, 'Smart startup: starting stack');
     await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [stackId]);
     await execFileAsync('docker', ['compose', 'up', '-d'],
-      { cwd: stackPath, timeout: 120_000 }
+      { cwd: stackPath, timeout: 120_000, env: buildComposeCommandEnv() }
     );
     await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [stackId]);
     sendNotification('smartStartupStackStarted', { stackId, triggeredBy }).catch(() => {});
