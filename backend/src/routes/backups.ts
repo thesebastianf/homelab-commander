@@ -5,7 +5,7 @@ import { validateBody } from '../middleware/validate.js';
 import { backupConfigBody } from '../validation/schemas.js';
 import { runBackup, detectStackVolumeTargets, detectStackDatabaseNames } from '../services/backups.js';
 import { rescheduleBackup } from '../services/backupScheduler.js';
-import { writeFile } from 'fs/promises';
+import { writeFile, access } from 'fs/promises';
 import { join } from 'path';
 
 const router = Router();
@@ -66,7 +66,21 @@ router.get('/:stackId/databases', asyncHandler(async (req, res) => {
   }
 
   const databases = await detectStackDatabaseNames(String(stack.name));
-  res.json(databases.map((db) => ({ name: db.serviceName, type: db.type, containerName: db.containerName })));
+  const duplicateServiceNames = new Set(
+    databases
+      .map((db) => db.serviceName)
+      .filter((serviceName, index, arr) => arr.indexOf(serviceName) !== index)
+  );
+
+  res.json(databases.map((db) => ({
+    key: db.key,
+    name: db.serviceName,
+    type: db.type,
+    containerName: db.containerName,
+    warning: duplicateServiceNames.has(db.serviceName)
+      ? 'Multiple containers with the same service name were detected; selection uses an internal key to avoid mix-ups.'
+      : undefined,
+  })));
 }));
 
 // Debug: Show container labels and mounts for a stack
@@ -230,7 +244,24 @@ router.get('/:stackId/jobs', asyncHandler(async (req, res) => {
     'SELECT * FROM backup_jobs WHERE stack_id = $1 ORDER BY started_at DESC LIMIT 50',
     [req.params.stackId]
   );
-  res.json(rows.map(mapBackupJob));
+
+  // Reconcile: delete DB records for completed jobs whose backup files no longer exist on disk
+  const orphanIds: string[] = [];
+  for (const row of rows) {
+    if (row.status === 'completed' && row.backup_path) {
+      try {
+        await access(row.backup_path);
+      } catch {
+        orphanIds.push(String(row.id));
+      }
+    }
+  }
+  if (orphanIds.length > 0) {
+    await pool.query('DELETE FROM backup_jobs WHERE id = ANY($1::uuid[])', [orphanIds]);
+  }
+
+  const surviving = rows.filter((row) => !orphanIds.includes(String(row.id)));
+  res.json(surviving.map(mapBackupJob));
 }));
 
 // Run backup now

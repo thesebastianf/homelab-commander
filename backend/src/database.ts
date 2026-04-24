@@ -131,7 +131,7 @@ async function initSchema(client: pg.PoolClient): Promise<void> {
       include_stack_folder BOOLEAN DEFAULT TRUE,
       include_volumes BOOLEAN DEFAULT TRUE,
       include_databases BOOLEAN DEFAULT FALSE,
-      database_type TEXT DEFAULT 'none' CHECK (database_type IN ('postgresql','mysql','mongodb','redis','influxdb','none')),
+      database_type TEXT DEFAULT 'none' CHECK (database_type IN ('postgresql','mysql','mongodb','redis','influxdb','auto','none')),
       database_config JSONB DEFAULT '{}'::jsonb,
       compression_level INTEGER DEFAULT 6,
       encrypted BOOLEAN DEFAULT FALSE,
@@ -286,6 +286,34 @@ async function runMigrations(client: pg.PoolClient): Promise<void> {
           ALTER TABLE backup_configs
           ADD CONSTRAINT backup_configs_database_type_check
           CHECK (database_type IN ('postgresql','mysql','mongodb','redis','influxdb','none'));
+        END IF;
+      END
+    $$`,
+    // Add 'auto' to the database_type constraint for existing installs
+    `DO $$
+      DECLARE
+        c RECORD;
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conrelid = 'backup_configs'::regclass
+            AND contype = 'c'
+            AND pg_get_constraintdef(oid) ILIKE '%database_type%auto%'
+        ) THEN
+          FOR c IN
+            SELECT conname
+            FROM pg_constraint
+            WHERE conrelid = 'backup_configs'::regclass
+              AND contype = 'c'
+              AND pg_get_constraintdef(oid) ILIKE '%database_type%'
+          LOOP
+            EXECUTE format('ALTER TABLE backup_configs DROP CONSTRAINT IF EXISTS %I', c.conname);
+          END LOOP;
+
+          ALTER TABLE backup_configs
+          ADD CONSTRAINT backup_configs_database_type_check
+          CHECK (database_type IN ('postgresql','mysql','mongodb','redis','influxdb','auto','none'));
         END IF;
       END
     $$`,

@@ -3,7 +3,7 @@
 # Pull images from GitHub Container Registry (built by CI).
 
 services:
-  app:
+  thc-app:
     image: ghcr.io/thesebastianf/homelab-commander:latest
     # Beta channel:
     # image: ghcr.io/thesebastianf/homelab-commander:beta
@@ -18,7 +18,7 @@ services:
       - COMPOSE_RUNTIME_MODE=${COMPOSE_RUNTIME_MODE:-native}
       - STACKS_PATH=${STACKS_PATH:-/opt/homelab/stacks}
       - BACKUPS_PATH=${BACKUPS_PATH:-/opt/homelab/backups}
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-hlc}:${POSTGRES_PASSWORD:-hlc_secret_change_me}@db:5432/${POSTGRES_DB:-hlc}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-hlc}:${POSTGRES_PASSWORD:-hlc_secret_change_me}@thc-database:5432/${POSTGRES_DB:-hlc}
       - AUTH_USER=${AUTH_USER:-}
       - AUTH_PASS=${AUTH_PASS:-}
       - CORS_ORIGIN=${CORS_ORIGIN:-}
@@ -32,7 +32,7 @@ services:
       # GHCR / private registry auth — allows pulling private images during stack actions
       - /root/.docker/config.json:/root/.docker/config.json:ro
     depends_on:
-      db:
+      thc-database:
         condition: service_healthy
     restart: unless-stopped
     security_opt:
@@ -44,7 +44,7 @@ services:
       retries: 3
       start_period: 10s
 
-  db:
+  thc-database:
     image: postgres:16-alpine
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-hlc}

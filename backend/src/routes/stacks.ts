@@ -767,12 +767,50 @@ router.get('/', asyncHandler(async (_req, res) => {
   const { rows } = await pool.query(STACK_SELECT + 'ORDER BY s.name');
   const runtimeProjects = await listComposeProjects();
   const runtimeStatusByName = new Map(runtimeProjects.map((p) => [p.name.toLowerCase(), p.status]));
-  const stacks = rows.map((row: any) => {
+  const stacks = await Promise.all(rows.map(async (row: any) => {
     const mapped = mapStack(row);
     const runtimeStatus = runtimeStatusByName.get(String(mapped.name || '').toLowerCase());
-    return runtimeStatus ? { ...mapped, status: runtimeStatus } : mapped;
-  });
+    if (runtimeStatus) (mapped as any).status = runtimeStatus;
+    // Check if stack files are still accessible on disk
+    if (row.stack_path) {
+      const accessiblePath = await resolveAccessibleStackPath(row);
+      (mapped as any).filesLost = !accessiblePath;
+    }
+    return mapped;
+  }));
   res.json(stacks);
+}));
+
+// Scan stacks folder for compose directories not yet managed by THC
+router.get('/orphans', asyncHandler(async (_req, res) => {
+  const { rows } = await pool.query('SELECT name, stack_path FROM stacks');
+  const managedPaths = new Set(rows.map((row: any) => row.stack_path).filter(Boolean));
+  const managedNames = new Set(rows.map((row: any) => String(row.name).toLowerCase()));
+
+  const orphans: Array<{ name: string; stackPath: string; composeFile: string }> = [];
+  try {
+    const entries = await readdir(config.stacksPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const dirPath = join(config.stacksPath, entry.name);
+      if (managedPaths.has(dirPath)) continue;
+      if (managedNames.has(entry.name.toLowerCase())) continue;
+
+      let foundCompose: string | null = null;
+      for (const filename of COMPOSE_FILENAMES) {
+        try {
+          await access(join(dirPath, filename));
+          foundCompose = filename;
+          break;
+        } catch { /* try next */ }
+      }
+      if (foundCompose) {
+        orphans.push({ name: entry.name, stackPath: dirPath, composeFile: foundCompose });
+      }
+    }
+  } catch { /* stacks folder not accessible from container */ }
+
+  res.json(orphans);
 }));
 
 router.get('/external', asyncHandler(async (_req, res) => {
@@ -787,7 +825,13 @@ router.get('/external', asyncHandler(async (_req, res) => {
     return true;
   });
 
-  res.json(unmanagedProjects);
+  const result = await Promise.all(unmanagedProjects.map(async (project) => {
+    if (!project.stackPath) return { ...project, pathAccessible: false };
+    const accessiblePath = await resolveAccessibleStackPath({ stack_path: project.stackPath });
+    return { ...project, pathAccessible: !!accessiblePath };
+  }));
+
+  res.json(result);
 }));
 
 // Adopt an external stack — non-destructive: reads existing files, creates DB record.
@@ -806,10 +850,27 @@ router.post('/adopt', asyncHandler(async (req, res) => {
 
   // Read compose file via docker volume mount — the backend container cannot access host paths
   // directly, but the Docker daemon can mount them. We try three strategies:
+  //   0. Direct filesystem read if path is accessible from within the container (e.g. inside config.stacksPath)
   //   1. Mount each specific file from composeFiles labels (most reliable — exact paths)
   //   2. Mount the stackPath directory and scan for standard compose filenames
   let composeContent = '';
   let composeFile = '';
+  let directAccessPath: string | null = null;
+
+  // Strategy 0: direct read if path is accessible from container (path is inside mounted stacks volume)
+  directAccessPath = await resolveAccessibleStackPath({ stack_path: safePath });
+  if (directAccessPath) {
+    for (const filename of COMPOSE_FILENAMES) {
+      try {
+        const content = await readFile(join(directAccessPath, filename), 'utf8');
+        if (content.trim()) {
+          composeFile = filename;
+          composeContent = content;
+          break;
+        }
+      } catch { /* try next */ }
+    }
+  }
 
   // Strategy 1: mount the specific file path(s) reported by Docker Compose labels
   if (composeFiles?.length) {
@@ -855,13 +916,19 @@ router.post('/adopt', asyncHandler(async (req, res) => {
   }
 
   let envContent = '';
-  try {
-    const { stdout: envOut } = await execFileAsync(
-      'docker', ['run', '--rm', '-v', `${safePath}:/hlcread:ro`, 'alpine', 'cat', '/hlcread/.env'],
-      { timeout: 10000 }
-    );
-    envContent = envOut;
-  } catch { /* optional — .env may not exist */ }
+  // Strategy 0: direct read if accessible (reuse directAccessPath from compose detection)
+  if (directAccessPath) {
+    envContent = await readFile(join(directAccessPath, '.env'), 'utf8').catch(() => '');
+  }
+  if (!envContent) {
+    try {
+      const { stdout: envOut } = await execFileAsync(
+        'docker', ['run', '--rm', '-v', `${safePath}:/hlcread:ro`, 'alpine', 'cat', '/hlcread/.env'],
+        { timeout: 10000 }
+      );
+      envContent = envOut;
+    } catch { /* optional — .env may not exist */ }
+  }
 
   const { rows: dupe } = await pool.query(
     'SELECT id FROM stacks WHERE lower(name) = lower($1) OR stack_path = $2',

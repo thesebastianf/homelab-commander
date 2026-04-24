@@ -55,6 +55,7 @@ export interface Stack {
   versions?: StackVersion[]
   ports?: number[]
   // External change detection (populated by GET /api/stacks/:id)
+  filesLost?: boolean
   hasExternalChanges?: boolean
   diskComposeContent?: string | null
   diskEnvContent?: string | null
@@ -71,6 +72,12 @@ export interface Stack {
     triggerType?: string
     devices?: { name: string; ip: string; online: boolean }[]
   }
+}
+
+export interface OrphanStack {
+  name: string
+  stackPath: string
+  composeFile: string
 }
 
 export interface StackVersion {
@@ -301,9 +308,11 @@ export interface BackupVolumeOption {
 }
 
 export interface BackupDatabaseOption {
+  key: string
   name: string
   type: 'postgresql' | 'mysql' | 'mongodb' | 'redis' | 'influxdb'
   containerName: string
+  warning?: string
 }
 
 export interface BackupJob {

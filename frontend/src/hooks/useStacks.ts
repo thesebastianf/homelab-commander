@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '../lib/api';
-import type { Stack } from '../lib/types';
+import type { Stack, OrphanStack } from '../lib/types';
 
 export function useStacks() {
   return useQuery({
@@ -15,6 +15,14 @@ export function useExternalStacks() {
     queryKey: ['externalStacks'],
     queryFn: api.fetchExternalStacks,
     refetchInterval: 15000,
+  });
+}
+
+export function useOrphanStacks() {
+  return useQuery<OrphanStack[]>({
+    queryKey: ['orphanStacks'],
+    queryFn: api.fetchOrphanStacks,
+    refetchInterval: 30000,
   });
 }
 

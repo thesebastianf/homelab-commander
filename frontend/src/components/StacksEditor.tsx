@@ -59,7 +59,7 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react'
-import type { Stack, BackupConfig } from '@/lib/types'
+import type { Stack, BackupConfig, OrphanStack } from '@/lib/types'
 import { toast } from 'sonner'
 import * as api from '@/lib/api'
 import { useSettings } from '@/hooks/useSettings'
@@ -118,15 +118,16 @@ function FullBackupPanel({ config: cfg, onChange: u, stackId, onSave, isSaving, 
     })
   }
 
-  const setDatabaseSelection = (name: string, checked: boolean) => {
+  const setDatabaseSelection = (key: string, checked: boolean) => {
+    const toDbKey = (entry: { key?: string; name: string }) => entry.key || entry.name
     const baseline = usingAllDatabases
-      ? backupDatabases.map((entry) => entry.name)
+      ? backupDatabases.map((entry) => toDbKey(entry))
       : [...selectedDatabaseNames]
     const next = new Set(baseline)
     if (checked) {
-      next.add(name)
+      next.add(key)
     } else {
-      next.delete(name)
+      next.delete(key)
     }
     u({
       ...cfg,
@@ -139,9 +140,10 @@ function FullBackupPanel({ config: cfg, onChange: u, stackId, onSave, isSaving, 
   }
 
   // Detect new databases added after config was created
-  const allDetectedDbNames = new Set(backupDatabases.map((db) => db.name))
+  const allDetectedDbNames = new Set(backupDatabases.map((db) => db.key || db.name))
   const configuredDbNames = new Set(selectedDatabaseNames)
   const newDatabaseCount = [...allDetectedDbNames].filter((name) => !configuredDbNames.has(name)).length
+  const dbWarnings = backupDatabases.filter((entry) => !!entry.warning)
 
   // Detect new volumes added after config was created
   const allDetectedVolNames = new Set(backupVolumes.map((vol) => vol.name))
@@ -317,7 +319,7 @@ function FullBackupPanel({ config: cfg, onChange: u, stackId, onSave, isSaving, 
                         ...cfg,
                         databaseConfig: {
                           ...cfg.databaseConfig,
-                          databaseNames: v ? undefined : backupDatabases.map((entry) => entry.name),
+                          databaseNames: v ? undefined : backupDatabases.map((entry) => entry.key || entry.name),
                         },
                       })}
                     />
@@ -326,10 +328,10 @@ function FullBackupPanel({ config: cfg, onChange: u, stackId, onSave, isSaving, 
                   {!usingAllDatabases && backupDatabases.length > 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {backupDatabases.map((entry) => (
-                        <label key={entry.name} className="flex items-center gap-2 cursor-pointer text-xs">
+                        <label key={entry.key || entry.name} className="flex items-center gap-2 cursor-pointer text-xs">
                           <Checkbox
-                            checked={selectedDatabaseNames.includes(entry.name)}
-                            onCheckedChange={checked => setDatabaseSelection(entry.name, !!checked)}
+                            checked={selectedDatabaseNames.includes(entry.key || entry.name)}
+                            onCheckedChange={checked => setDatabaseSelection(entry.key || entry.name, !!checked)}
                           />
                           <span className="font-mono truncate">{entry.name}</span>
                           <Badge className="text-[10px] bg-muted text-muted-foreground py-0 px-1 ml-auto shrink-0">
@@ -339,8 +341,15 @@ function FullBackupPanel({ config: cfg, onChange: u, stackId, onSave, isSaving, 
                       ))}
                     </div>
                   )}
+                  {dbWarnings.length > 0 && (
+                    <div className="pt-1 text-[11px] text-amber-400">
+                      {dbWarnings.map((entry) => (
+                        <div key={`warn-${entry.key || entry.name}`}>{entry.warning}</div>
+                      ))}
+                    </div>
+                  )}
                   {stackId && backupDatabases.length === 0 && (
-                    <p className="text-[11px] text-muted-foreground">No databases detected in this stack.</p>
+                    <p className="text-[11px] text-amber-400">No compose-labeled databases detected in this stack. THC blocks loose container-name matching to prevent cross-stack backups.</p>
                   )}
                 </div>
                 <div className="pt-2 space-y-1 border-t border-muted">
@@ -505,6 +514,7 @@ function useStackLogs(
 interface StacksEditorProps {
   stacks: Stack[]
   externalStacks?: Stack[]
+  orphanStacks?: OrphanStack[]
   containers: { id: string; name: string; stackId?: string; ports?: string[] }[]
   forcedMobileMode?: boolean
   onExitForcedMobileMode?: () => void
@@ -520,6 +530,7 @@ type SortedStackGroup = 'running' | 'stopped' | 'failed'
 export function StacksEditor({
   stacks,
   externalStacks = [],
+  orphanStacks = [],
   forcedMobileMode,
   onExitForcedMobileMode,
   onDeployStack,
@@ -983,6 +994,49 @@ export function StacksEditor({
     return ports.filter(p => (portMap.get(p) || []).length > 0)
   }
 
+  const extractServiceNames = (yaml: string): string[] => {
+    try {
+      const doc = YAML.load(yaml) as any
+      const services = doc?.services
+      if (!services || typeof services !== 'object') return []
+      return Object.keys(services)
+        .map((name) => String(name || '').trim())
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b))
+    } catch {
+      return []
+    }
+  }
+
+  const stackServiceNamesCache = new Map<string, string[]>()
+
+  const getStackServiceNameList = (stack: Stack): string[] => {
+    const cached = stackServiceNamesCache.get(stack.id)
+    if (cached) return cached
+    const parsed = extractServiceNames((stack as any).composeContent ?? (stack as any).compose ?? '')
+    stackServiceNamesCache.set(stack.id, parsed)
+    return parsed
+  }
+
+  const getServiceNameConflicts = (serviceNames: string[], currentStackId?: string): Map<string, string[]> => {
+    const owners = new Map<string, string[]>()
+    stacks
+      .filter((s) => s.id !== currentStackId)
+      .forEach((s) => {
+        for (const serviceName of getStackServiceNameList(s)) {
+          if (!owners.has(serviceName)) owners.set(serviceName, [])
+          owners.get(serviceName)!.push(s.name)
+        }
+      })
+
+    const conflicts = new Map<string, string[]>()
+    for (const serviceName of serviceNames) {
+      const clashOwners = owners.get(serviceName) || []
+      if (clashOwners.length > 0) conflicts.set(serviceName, clashOwners)
+    }
+    return conflicts
+  }
+
   const parseServices = (yaml: string): Array<{ name: string; ports: Array<{ host: number; container: number }>; image?: string }> => {
     try {
       const doc = YAML.load(yaml) as any
@@ -1093,6 +1147,9 @@ export function StacksEditor({
   const filteredExternalStacks = externalStacks
     .filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name))
+  const filteredOrphanStacks = orphanStacks
+    .filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   const editorValue = activeFile === 'compose' ? composeContent : activeFile === 'env' ? envContent : customFileContent
   const handleEditorChange = (val: string) => {
@@ -1103,6 +1160,8 @@ export function StacksEditor({
 
   const ports = activeFile === 'compose' ? extractPorts(composeContent) : []
   const portConflicts = getPortConflicts(ports, selectedStack?.id)
+  const activeServiceNames = activeFile === 'compose' ? extractServiceNames(composeContent) : []
+  const serviceNameConflicts = getServiceNameConflicts(activeServiceNames, selectedStack?.id)
   const compareVersionObj = versions.find((v: any) => v.version === compareVersion) ?? null
   const flatFiles = flattenFileTree(stackFiles as any[])
   const excludedPatterns = settings?.stackFileExcludes || [
@@ -1136,6 +1195,26 @@ export function StacksEditor({
     return counts
   })()
 
+  const stackServiceNameConflictCounts = (() => {
+    const owners = new Map<string, Set<string>>()
+    for (const s of stacks) {
+      for (const serviceName of getStackServiceNameList(s)) {
+        if (!owners.has(serviceName)) owners.set(serviceName, new Set<string>())
+        owners.get(serviceName)!.add(s.name)
+      }
+    }
+
+    const counts = new Map<string, number>()
+    for (const s of stacks) {
+      const conflicts = new Set<string>()
+      for (const serviceName of getStackServiceNameList(s)) {
+        if ((owners.get(serviceName)?.size || 0) > 1) conflicts.add(serviceName)
+      }
+      counts.set(s.id, conflicts.size)
+    }
+    return counts
+  })()
+
   const serviceContainerByName = new Map(
     (stackContainers as Array<{ id: string; name: string; status: string; image: string; serviceName?: string }>)
       .filter(c => !!c.serviceName)
@@ -1161,6 +1240,8 @@ export function StacksEditor({
   }
   // Create mode derived
   const newPorts = isCreating ? extractPorts(composeContent) : []
+  const newServiceNames = isCreating ? extractServiceNames(composeContent) : []
+  const newServiceConflicts = isCreating ? getServiceNameConflicts(newServiceNames) : new Map<string, string[]>()
   const refStackCompose = refStackId ? (stacks.find(s => s.id === refStackId) as any)?.composeContent ?? (stacks.find(s => s.id === refStackId) as any)?.compose ?? '' : ''
 
   // Keyboard shortcut: Ctrl+S to save
@@ -1237,7 +1318,7 @@ export function StacksEditor({
 
           <ScrollArea className="flex-1 min-h-0 rounded-lg border">
             <div className="p-2 space-y-1.5">
-              {filteredStacks.length === 0 && filteredExternalStacks.length === 0 ? (
+              {filteredStacks.length === 0 && filteredExternalStacks.length === 0 && filteredOrphanStacks.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground text-xs">
                   <p>No stacks found</p>
                 </div>
@@ -1323,6 +1404,26 @@ export function StacksEditor({
                                 <TooltipContent className="text-xs">This stack has host port conflicts with other stacks</TooltipContent>
                               </Tooltip>
                             )}
+                            {(stackServiceNameConflictCounts.get(stack.id) || 0) > 0 && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-[10px] text-amber-500 flex items-center gap-0.5 cursor-default">
+                                    <AlertTriangle className="w-2.5 h-2.5" />svc:{stackServiceNameConflictCounts.get(stack.id)}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs">This stack reuses service names found in other stacks</TooltipContent>
+                              </Tooltip>
+                            )}
+                            {stack.filesLost && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-[10px] text-destructive font-semibold flex items-center gap-0.5 cursor-default">
+                                    <AlertTriangle className="w-2.5 h-2.5" />LOST
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs">Stack files not found on disk. The compose file may have been deleted from the host.</TooltipContent>
+                              </Tooltip>
+                            )}
                           </div>
                         </div>
                         <Tooltip>
@@ -1382,17 +1483,67 @@ export function StacksEditor({
                         </Tooltip>
                       </div>
                       {stack.stackPath && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full mt-2 h-6 text-[10px] gap-1 border-primary/40 text-primary hover:bg-primary/10"
-                          disabled={adoptMutation.isPending}
-                          onClick={() => adoptMutation.mutate({ name: stack.name, stackPath: stack.stackPath!, composeFiles: stack.composeFiles })}
-                        >
-                          <Rocket className="w-3 h-3" />
-                          {adoptMutation.isPending ? 'Adopting...' : 'Adopt into THC'}
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full mt-2 h-6 text-[10px] gap-1 border-primary/40 text-primary hover:bg-primary/10 disabled:opacity-50"
+                                disabled={adoptMutation.isPending || (stack as any).pathAccessible === false}
+                                onClick={() => adoptMutation.mutate({ name: stack.name, stackPath: stack.stackPath!, composeFiles: stack.composeFiles })}
+                              >
+                                <Rocket className="w-3 h-3" />
+                                {adoptMutation.isPending ? 'Adopting...' : 'Adopt into THC'}
+                              </Button>
+                            </span>
+                          </TooltipTrigger>
+                          {(stack as any).pathAccessible === false && (
+                            <TooltipContent className="text-xs">Stack path no longer accessible on host — cannot adopt</TooltipContent>
+                          )}
+                        </Tooltip>
                       )}
+                    </Card>
+                  ))}
+                </>
+              )}
+
+              {filteredOrphanStacks.length > 0 && (
+                <>
+                  <p className="px-1 pt-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/70">Found on Disk (Unadopted)</p>
+                  {filteredOrphanStacks.map(orphan => (
+                    <Card key={orphan.stackPath} className="p-3 border-dashed border-amber-500/40 bg-amber-500/5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <p className="font-mono text-sm truncate font-semibold">{orphan.name}</p>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="text-[10px] text-amber-500 flex items-center gap-0.5 cursor-default shrink-0">
+                                  <FolderOpen className="w-2.5 h-2.5" />disk
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs">Found in stacks folder but not yet managed by THC. Click "Adopt" to import it.</TooltipContent>
+                            </Tooltip>
+                          </div>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <p className="text-[10px] text-muted-foreground font-mono truncate max-w-[160px] mt-0.5 cursor-default">{orphan.stackPath}</p>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs font-mono">{orphan.stackPath}/{orphan.composeFile}</TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full mt-2 h-6 text-[10px] gap-1 border-amber-500/50 text-amber-500 hover:bg-amber-500/10"
+                        disabled={adoptMutation.isPending}
+                        onClick={() => adoptMutation.mutate({ name: orphan.name, stackPath: orphan.stackPath, composeFiles: undefined })}
+                      >
+                        <Rocket className="w-3 h-3" />
+                        {adoptMutation.isPending ? 'Adopting...' : 'Adopt into THC'}
+                      </Button>
                     </Card>
                   ))}
                 </>
@@ -1496,10 +1647,10 @@ export function StacksEditor({
                           className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${createRightPanel === 'conflicts' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
                         >
                           <AlertCircle className="w-3 h-3" />
-                          Port Conflicts
+                          Conflicts
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent className="text-xs">See host-port collisions against existing stacks</TooltipContent>
+                      <TooltipContent className="text-xs">See host-port and service-name collisions against existing stacks</TooltipContent>
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1618,6 +1769,32 @@ export function StacksEditor({
                             )
                           })}
                         </>
+
+                        <p className="text-xs text-muted-foreground pt-1 pb-1">Service name conflicts across stacks:</p>
+                        {newServiceNames.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic">No services defined in compose yet</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {newServiceNames.map((serviceName) => {
+                              const clashes = newServiceConflicts.get(serviceName) || []
+                              return (
+                                <div key={serviceName} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${clashes.length > 0 ? 'border-amber-500/60 bg-amber-500/5' : 'border-border/40 bg-muted/20'}`}>
+                                  <span className="font-mono text-xs font-semibold">{serviceName}</span>
+                                  {clashes.length > 0 ? (
+                                    <span className="text-xs text-amber-400 flex items-center gap-1">
+                                      <AlertTriangle className="w-3 h-3" />
+                                      Reused by <strong className="ml-0.5">{clashes.join(', ')}</strong>
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-green-500">Unique</span>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        <p className="text-[10px] text-muted-foreground">Reusing service names across stacks can cause confusion in tooling, logs, and helper integrations even when ports do not clash.</p>
                       )}
 
                       {/* All ports in use */}
@@ -2265,7 +2442,7 @@ export function StacksEditor({
                           Conflicts
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent className="text-xs">Check port conflicts against other stacks</TooltipContent>
+                      <TooltipContent className="text-xs">Check port and service-name conflicts against other stacks</TooltipContent>
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -2591,6 +2768,32 @@ export function StacksEditor({
                             })}
                           </>
                         )}
+
+                        <p className="text-xs text-muted-foreground pt-1 pb-1">Service name conflicts across other stacks:</p>
+                        {activeServiceNames.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic">No services defined in compose yet</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {activeServiceNames.map((serviceName) => {
+                              const clashes = serviceNameConflicts.get(serviceName) || []
+                              return (
+                                <div key={serviceName} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${clashes.length > 0 ? 'border-amber-500/60 bg-amber-500/5' : 'border-border/40 bg-muted/20'}`}>
+                                  <span className="font-mono text-xs font-semibold">{serviceName}</span>
+                                  {clashes.length > 0 ? (
+                                    <span className="text-xs text-amber-400 flex items-center gap-1">
+                                      <AlertTriangle className="w-3 h-3" />
+                                      Reused by <strong className="ml-0.5">{clashes.join(', ')}</strong>
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-green-500">Unique</span>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        <p className="text-[10px] text-muted-foreground">Service-name reuse is valid in Docker, but unique names across stacks reduce operator mistakes and improve diagnostics clarity.</p>
 
                         <p className="text-xs text-muted-foreground pt-1 pb-1">All ports in use across other stacks:</p>
                         <div className="flex flex-wrap gap-1">

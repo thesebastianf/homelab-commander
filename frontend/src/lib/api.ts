@@ -202,6 +202,10 @@ export async function fetchExternalStacks(): Promise<Stack[]> {
   return request('/stacks/external');
 }
 
+export async function fetchOrphanStacks(): Promise<import('./types').OrphanStack[]> {
+  return request('/stacks/orphans');
+}
+
 export async function adoptStack(name: string, stackPath: string, composeFiles?: string[]): Promise<Stack> {
   return request('/stacks/adopt', { method: 'POST', body: JSON.stringify({ name, stackPath, composeFiles }) });
 }

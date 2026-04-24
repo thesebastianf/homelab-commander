@@ -56,12 +56,12 @@ import {
 } from 'lucide-react'
 import { useContainers, useStartContainer, useStopContainer, useRestartContainer, useRemoveContainer, useAggregatedLogs } from '@/hooks/useContainers'
 import { useImages } from '@/hooks/useImages'
-import { useStacks, useExternalStacks, useDeployStack, useStopStack, useRestartStack, useUpdateStack, useDeactivateStack, useRecreateStack } from '@/hooks/useStacks'
+import { useStacks, useExternalStacks, useOrphanStacks, useDeployStack, useStopStack, useRestartStack, useUpdateStack, useDeactivateStack, useRecreateStack } from '@/hooks/useStacks'
 import { useVolumes } from '@/hooks/useVolumes'
 import { useNetworks, useRemoveNetwork } from '@/hooks/useNetworks'
 import { useSettings, useSystemInfo, useUpdateSettings, usePruneSystem } from '@/hooks/useSettings'
 import { useIsMobile } from '@/hooks/use-mobile'
-import type { Stack, AppSettings } from '@/lib/types'
+import type { Stack, AppSettings, OrphanStack } from '@/lib/types'
 import { clearStoredCredentials, getStoredCredentials } from '@/lib/api'
 import * as api from '@/lib/api'
 import { toast } from 'sonner'
@@ -124,6 +124,7 @@ function App() {
   const imagesQuery = useImages()
   const stacksQuery = useStacks()
   const externalStacksQuery = useExternalStacks()
+  const orphanStacksQuery = useOrphanStacks()
   const volumesQuery = useVolumes()
   const networksQuery = useNetworks()
   const settingsQuery = useSettings()
@@ -187,6 +188,7 @@ function App() {
   const images = imagesQuery.data ?? []
   const stacks = stacksQuery.data ?? []
   const externalStacks = externalStacksQuery.data ?? []
+  const orphanStacks: OrphanStack[] = orphanStacksQuery.data ?? []
   const volumes = volumesQuery.data ?? []
   const networks = networksQuery.data ?? []
   const settings = settingsQuery.data
@@ -718,6 +720,7 @@ function App() {
             <StacksEditor
               stacks={stacks}
               externalStacks={externalStacks}
+              orphanStacks={orphanStacks}
               containers={containers}
               forcedMobileMode={compactMode}
               onExitForcedMobileMode={() => setMobileOverride(false)}

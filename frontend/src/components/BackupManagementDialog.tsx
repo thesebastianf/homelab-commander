@@ -112,8 +112,9 @@ function StackBackupItem({ stack }: { stack: Stack }) {
   }
 
   const setDatabaseSelection = (name: string, checked: boolean) => {
+    const toDbKey = (entry: { key?: string; name: string }) => entry.key || entry.name
     const baseline = usingAllDatabases
-      ? backupDatabases.map((entry) => entry.name)
+      ? backupDatabases.map((entry) => toDbKey(entry))
       : [...selectedDatabaseNames]
     const next = new Set(baseline)
     if (checked) {
@@ -131,10 +132,11 @@ function StackBackupItem({ stack }: { stack: Stack }) {
   }
 
   // Detect new databases added after config was created
-  const allDetectedDbNames = new Set(backupDatabases.map((db) => db.name))
+  const allDetectedDbNames = new Set(backupDatabases.map((db) => db.key || db.name))
   const configuredDbNames = new Set(selectedDatabaseNames)
   const newDatabaseCount = [...allDetectedDbNames].filter((name) => !configuredDbNames.has(name)).length
   const removedDatabaseNames = [...configuredDbNames].filter((name) => !allDetectedDbNames.has(name))
+  const dbWarnings = backupDatabases.filter((entry) => !!entry.warning)
 
   // Detect new volumes added after config was created
   const allDetectedVolNames = new Set(backupVolumes.map((vol) => vol.name))
@@ -339,7 +341,7 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                         onCheckedChange={(v) => u({
                           databaseConfig: {
                             ...cfg.databaseConfig,
-                            databaseNames: v ? undefined : backupDatabases.map((entry) => entry.name),
+                            databaseNames: v ? undefined : backupDatabases.map((entry) => entry.key || entry.name),
                           },
                         })}
                       />
@@ -348,10 +350,10 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                     {!usingAllDatabases && backupDatabases.length > 0 && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                         {backupDatabases.map((entry) => (
-                          <label key={entry.name} className="flex items-center gap-2 cursor-pointer text-xs">
+                          <label key={entry.key || entry.name} className="flex items-center gap-2 cursor-pointer text-xs">
                             <Checkbox
-                              checked={selectedDatabaseNames.includes(entry.name)}
-                              onCheckedChange={(checked) => setDatabaseSelection(entry.name, !!checked)}
+                              checked={selectedDatabaseNames.includes(entry.key || entry.name)}
+                              onCheckedChange={(checked) => setDatabaseSelection(entry.key || entry.name, !!checked)}
                             />
                             <span className="font-mono truncate">{entry.name}</span>
                             <Badge className="text-[10px] bg-muted text-muted-foreground py-0 px-1 ml-auto shrink-0">
@@ -361,8 +363,15 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                         ))}
                       </div>
                     )}
+                    {dbWarnings.length > 0 && (
+                      <div className="pt-1 text-[11px] text-amber-400">
+                        {dbWarnings.map((entry) => (
+                          <div key={`warn-${entry.key || entry.name}`}>{entry.warning}</div>
+                        ))}
+                      </div>
+                    )}
                     {backupDatabases.length === 0 && (
-                      <p className="text-[11px] text-muted-foreground">No databases detected in this stack.</p>
+                      <p className="text-[11px] text-amber-400">No compose-labeled databases detected in this stack. THC now blocks loose container-name matching to prevent cross-stack backups.</p>
                     )}
                     {removedDatabaseNames.length > 0 && (
                       <div className="pt-1 text-[11px] text-amber-400">

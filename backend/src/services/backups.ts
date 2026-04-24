@@ -36,16 +36,6 @@ interface StackContainerInfo {
   mounts: Array<{ type: string; name?: string; source?: string; destination?: string }>;
 }
 
-function normalizeLooseName(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-function looksLikeStackContainer(containerName: string, stackName: string): boolean {
-  const normalizedContainer = normalizeLooseName(containerName);
-  const normalizedStack = normalizeLooseName(stackName);
-  return normalizedContainer.startsWith(normalizedStack) && normalizedContainer.length > normalizedStack.length;
-}
-
 async function listLikelyStackContainers(stackName: string): Promise<StackContainerInfo[]> {
   const containers = await docker.listContainers({ all: true });
   const exact = containers.filter((container) => {
@@ -68,21 +58,20 @@ async function listLikelyStackContainers(stackName: string): Promise<StackContai
     }));
   }
 
-  const normalizedStack = normalizeLooseName(stackName);
+  const normalizedStack = stackName.toLowerCase().replace(/[^a-z0-9]/g, '');
   const normalizedProject = containers.filter((container) => {
     const project = container.Labels?.['com.docker.compose.project'];
     if (!project) return false;
-    return normalizeLooseName(project) === normalizedStack;
+    return project.toLowerCase().replace(/[^a-z0-9]/g, '') === normalizedStack;
   });
 
-  const byNameFallback = normalizedProject.length > 0
-    ? normalizedProject
-    : containers.filter((container) => {
-      const name = container.Names?.[0]?.replace(/^\//, '') || '';
-      return looksLikeStackContainer(name, stackName);
-    });
+  if (normalizedProject.length > 0) {
+    logger.warn({ stackName, matched: normalizedProject.length }, 'Using normalized compose project match for backup target detection');
+  } else {
+    logger.warn({ stackName }, 'No compose-labeled containers matched stack; refusing loose name fallback for backup safety');
+  }
 
-  return byNameFallback.map((container) => ({
+  return normalizedProject.map((container) => ({
     id: container.Id,
     name: container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12),
     image: container.Image || '',
@@ -140,7 +129,7 @@ export async function runBackup(stackId: string): Promise<void> {
   if (!stack) throw new Error(`Stack ${stackId} not found`);
 
   const { rows: [backupConfigRow] } = await pool.query(
-    'SELECT * FROM backup_configs WHERE stack_id = $1', [stackId]
+  'SELECT * FROM backup_configs WHERE stack_id = $1', [stackId]
   );
   const backupConfig = backupConfigRow || {
     include_stack_folder: true,
@@ -346,7 +335,7 @@ async function resolveSelectedDatabaseNames(stackName: string, backupConfig: any
 
   const selected = new Set(requested.map((entry: string) => String(entry)));
   return detected
-    .filter((db) => selected.has(db.serviceName))
+    .filter((db) => selected.has(db.key) || selected.has(db.serviceName))
     .map(db => db.serviceName);
 }
 
@@ -419,6 +408,7 @@ export async function detectStackVolumeTargets(stackName: string): Promise<Backu
 }
 
 export interface DatabaseInfo {
+  key: string;
   serviceName: string;
   type: 'postgresql' | 'mysql' | 'mongodb' | 'redis' | 'influxdb';
   containerName: string;
@@ -446,6 +436,7 @@ export async function detectStackDatabaseNames(stackName: string): Promise<Datab
     if (!seen.has(serviceName)) {
       seen.add(serviceName);
       databases.push({
+        key: `${serviceName}:${container.id}`,
         serviceName,
         type,
         containerName: container.name || container.id.slice(0, 12),
