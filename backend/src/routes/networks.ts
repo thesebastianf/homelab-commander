@@ -10,19 +10,20 @@ const router = Router();
 
 router.get('/', asyncHandler(async (_req, res) => {
   const networks = await dockerService.listNetworks();
-  
+
   // Get list of managed networks from database
   const { rows: managed } = await pool.query(
-    'SELECT docker_network_id FROM managed_networks'
+    'SELECT docker_network_id, docker_network_name FROM managed_networks'
   );
   const managedIds = new Set(managed.map((row) => row.docker_network_id));
-  
+  const managedNames = new Set(managed.map((row) => row.docker_network_name));
+
   // Add isManuallyCreated flag to each network
   const enriched = networks.map((network) => ({
     ...network,
-    isManuallyCreated: managedIds.has(network.id),
+    isManuallyCreated: managedIds.has(network.id) || managedNames.has(network.name),
   }));
-  
+
   res.json(enriched);
 }));
 
@@ -42,13 +43,19 @@ router.post('/', validateBody(createNetworkBody), asyncHandler(async (req, res) 
 
 router.delete('/:id', asyncHandler(async (req, res) => {
   const id = String(req.params.id);
-  
+
+  const info = await dockerService.inspectNetwork(id);
+  const attachedContainers = Object.values(info?.Containers || {}).filter(Boolean);
+  if (attachedContainers.length > 0) {
+    return res.status(409).json({ error: 'Cannot remove a network while containers are attached' });
+  }
+
   // Remove from managed networks if it was tracked
   await pool.query(
-    'DELETE FROM managed_networks WHERE docker_network_id = $1',
-    [id]
+    'DELETE FROM managed_networks WHERE docker_network_id = $1 OR docker_network_name = $2',
+    [id, String(info?.Name || '')]
   );
-  
+
   await dockerService.removeNetwork(id);
   await auditLog('remove', 'network', id);
   res.json({ ok: true });

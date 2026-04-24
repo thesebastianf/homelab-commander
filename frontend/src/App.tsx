@@ -58,7 +58,7 @@ import { useContainers, useStartContainer, useStopContainer, useRestartContainer
 import { useImages } from '@/hooks/useImages'
 import { useStacks, useExternalStacks, useDeployStack, useStopStack, useRestartStack, useUpdateStack, useDeactivateStack, useRecreateStack } from '@/hooks/useStacks'
 import { useVolumes } from '@/hooks/useVolumes'
-import { useNetworks } from '@/hooks/useNetworks'
+import { useNetworks, useRemoveNetwork } from '@/hooks/useNetworks'
 import { useSettings, useSystemInfo, useUpdateSettings, usePruneSystem } from '@/hooks/useSettings'
 import { useIsMobile } from '@/hooks/use-mobile'
 import type { Stack, AppSettings } from '@/lib/types'
@@ -141,6 +141,7 @@ function App() {
   const deactivateStack = useDeactivateStack()
   const recreateStack = useRecreateStack()
   const updateStack = useUpdateStack()
+  const removeNetwork = useRemoveNetwork()
   const updateSettings = useUpdateSettings()
   const pruneSystem = usePruneSystem()
 
@@ -352,11 +353,30 @@ function App() {
 
   const containersWithUpdates = containers.filter(c => c.updateAvailable).length
   const autoUpdateEnabled = currentSettings.autoUpdate
+  const visibleNetworks = networks.filter(network => {
+    const name = String(network.name || '').trim().toLowerCase()
+    return name.length > 0 && name !== 'none'
+  })
+  const centralNetworks = visibleNetworks.filter(network => network.isManuallyCreated)
+  const systemNetworks = visibleNetworks.filter(network => ['bridge', 'host', 'ingress'].includes(String(network.name).toLowerCase()))
+  const stackNetworks = visibleNetworks.filter(network => !network.isManuallyCreated && !['bridge', 'host', 'ingress'].includes(String(network.name).toLowerCase()))
 
   const filteredContainers = containers.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.image.toLowerCase().includes(searchQuery.toLowerCase())
   )
+
+  const handleRemoveNetwork = (id: string) => {
+    const network = networks.find(n => n.id === id)
+    removeNetwork.mutate(id, {
+      onSuccess: () => {
+        toast.success(`Removed network ${network?.name ?? id}`)
+      },
+      onError: (error: Error) => {
+        toast.error(error.message || 'Failed to remove network')
+      },
+    })
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -757,7 +777,7 @@ function App() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-semibold font-mono">Docker Networks</h2>
-                <p className="text-sm text-muted-foreground mt-1">Container network configuration and connectivity</p>
+                <p className="text-sm text-muted-foreground mt-1">Central shared networks, stack-created networks, and Docker system networks</p>
               </div>
               <Button
                 variant="default"
@@ -770,20 +790,64 @@ function App() {
               </Button>
             </div>
             <div className="grid gap-4">
-              {networks.length === 0 ? (
+              {visibleNetworks.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <Network className="w-8 h-8 mx-auto mb-2 opacity-50" />
                   <p>No networks found</p>
                 </div>
               ) : (
-                networks.map(network => (
-                  <NetworkCard
-                    key={network.id}
-                    network={network}
-                    onRemove={() => toast.success(`Removed network ${network.name}`)}
-                    onInspect={() => handleNetworkInspect(network.id)}
-                  />
-                ))
+                <>
+                  {centralNetworks.length > 0 && (
+                    <div className="space-y-2">
+                      <div>
+                        <h3 className="font-mono text-sm font-semibold">Central Networks</h3>
+                        <p className="text-xs text-muted-foreground">Manually created shared networks intended for reuse across stacks.</p>
+                      </div>
+                      {centralNetworks.map(network => (
+                        <NetworkCard
+                          key={network.id}
+                          network={network}
+                          onRemove={handleRemoveNetwork}
+                          onInspect={() => handleNetworkInspect(network.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {stackNetworks.length > 0 && (
+                    <div className="space-y-2">
+                      <div>
+                        <h3 className="font-mono text-sm font-semibold">Stack Networks</h3>
+                        <p className="text-xs text-muted-foreground">Networks discovered from compose projects and running stacks.</p>
+                      </div>
+                      {stackNetworks.map(network => (
+                        <NetworkCard
+                          key={network.id}
+                          network={network}
+                          onRemove={handleRemoveNetwork}
+                          onInspect={() => handleNetworkInspect(network.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {systemNetworks.length > 0 && (
+                    <div className="space-y-2">
+                      <div>
+                        <h3 className="font-mono text-sm font-semibold">System Networks</h3>
+                        <p className="text-xs text-muted-foreground">Docker-managed internal networks. These are shown for visibility and are not intended for manual cleanup here.</p>
+                      </div>
+                      {systemNetworks.map(network => (
+                        <NetworkCard
+                          key={network.id}
+                          network={network}
+                          onRemove={handleRemoveNetwork}
+                          onInspect={() => handleNetworkInspect(network.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </TabsContent>

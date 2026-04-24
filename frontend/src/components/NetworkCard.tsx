@@ -18,12 +18,13 @@ export function NetworkCard({ network, onRemove, onInspect }: NetworkCardProps) 
   const isInUse = network.containers.length > 0
   const isSystemNetwork = ['bridge', 'host', 'none'].includes(network.name)
   const isManuallyCreated = network.isManuallyCreated === true
+  const classification = isSystemNetwork ? 'system' : isManuallyCreated ? 'central' : 'stack'
 
   return (
     <>
     <Card className={`p-4 hover:shadow-lg transition-all duration-200 ${
       isManuallyCreated 
-        ? 'border-accent/50 bg-accent/5' 
+        ? 'border-accent ring-1 ring-accent/40 bg-accent/10 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.02)]'
         : ''
     }`}>
       <div className="flex items-start justify-between gap-3">
@@ -39,7 +40,7 @@ export function NetworkCard({ network, onRemove, onInspect }: NetworkCardProps) 
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <h3 className="font-mono font-semibold text-sm">{network.name}</h3>
               {isManuallyCreated && (
-                <Badge variant="default" className="font-mono text-xs bg-accent text-accent-foreground">
+                <Badge variant="default" className="font-mono text-xs bg-accent text-accent-foreground uppercase tracking-wide">
                   central
                 </Badge>
               )}
@@ -48,6 +49,13 @@ export function NetworkCard({ network, onRemove, onInspect }: NetworkCardProps) 
               )}
               <Badge variant="outline" className="font-mono text-xs">{network.driver}</Badge>
             </div>
+            <p className="text-[11px] text-muted-foreground mb-1.5">
+              {classification === 'central'
+                ? 'Manually created shared network'
+                : classification === 'system'
+                  ? 'Docker internal system network'
+                  : 'Discovered from compose or stack runtime'}
+            </p>
             {(network.subnet || network.gateway) && (
               <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
                 {network.subnet && <span>subnet: {network.subnet}</span>}
@@ -105,7 +113,7 @@ export function NetworkCard({ network, onRemove, onInspect }: NetworkCardProps) 
               </TooltipTrigger>
               <TooltipContent>
                 <p className="font-mono text-xs">docker network rm {network.name}</p>
-                {isInUse && <p className="text-xs text-muted-foreground mt-0.5">Cannot remove: network is in use</p>}
+                {isInUse && <p className="text-xs text-muted-foreground mt-0.5">Cannot remove: containers are currently attached</p>}
               </TooltipContent>
             </Tooltip>
           )}

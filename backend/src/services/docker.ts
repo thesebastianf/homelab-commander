@@ -249,15 +249,17 @@ export async function listNetworks() {
     }
   }));
 
-  return details.map((net: any) => ({
-    id: String(net.Id || '').slice(0, 12),
-    name: net.Name || '',
-    driver: net.Driver || '',
-    scope: net.Scope || '',
-    containers: Object.values(net.Containers || {}).map((c: any) => c.Name || '').filter(Boolean),
-    subnet: net?.IPAM?.Config?.[0]?.Subnet || '',
-    gateway: net?.IPAM?.Config?.[0]?.Gateway || '',
-  }));
+  return details
+    .map((net: any) => ({
+      id: String(net.Id || ''),
+      name: typeof net.Name === 'string' ? net.Name : '',
+      driver: net.Driver === 'null' ? 'internal' : (net.Driver || ''),
+      scope: net.Scope || '',
+      containers: Object.values(net.Containers || {}).map((c: any) => c.Name || '').filter(Boolean),
+      subnet: net?.IPAM?.Config?.[0]?.Subnet || '',
+      gateway: net?.IPAM?.Config?.[0]?.Gateway || '',
+    }))
+    .filter((net) => net.name.trim().length > 0);
 }
 
 export async function createNetwork(name: string, driver = 'bridge'): Promise<string> {

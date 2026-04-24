@@ -566,14 +566,20 @@ export function StacksEditor({
   const { data: settings } = useSettings()
   const { data: networks = [] } = useNetworks()
 
-  const centralNetworkHelpers = networks
-    .filter((network) => !['bridge', 'host', 'none', 'ingress'].includes(String(network.name).toLowerCase()))
+  const reusableNetworkHelpers = networks
+    .filter((network) => {
+      const name = String(network.name || '').trim().toLowerCase()
+      return name.length > 0 && !['bridge', 'host', 'none', 'ingress'].includes(name)
+    })
     .map((network) => ({
       id: `network-${network.id}`,
       label: `${network.name} external network`,
       value: `networks:\n  ${network.name}:\n    external: true\n    name: ${network.name}`,
       meta: [network.driver, network.subnet].filter(Boolean).join(' • '),
+      isManuallyCreated: network.isManuallyCreated === true,
     }))
+  const manualNetworkHelpers = reusableNetworkHelpers.filter((network) => network.isManuallyCreated)
+  const discoveredNetworkHelpers = reusableNetworkHelpers.filter((network) => !network.isManuallyCreated)
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const { data: versions = [] } = useQuery({
@@ -1699,12 +1705,35 @@ export function StacksEditor({
                       )}
 
                       <div className="pt-3 space-y-2">
-                        <p className="text-xs text-muted-foreground mb-1">Central Docker networks. Create them once in Networks, then reference them here as external compose networks.</p>
-                        {centralNetworkHelpers.length === 0 ? (
-                          <p className="text-xs text-muted-foreground italic px-1">No reusable central networks found.</p>
+                        <p className="text-xs text-muted-foreground mb-1">Manually created networks from Networks. Create them once, then reference them here as external compose networks.</p>
+                        {manualNetworkHelpers.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic px-1">No manually managed networks found.</p>
                         ) : (
-                          centralNetworkHelpers.map((h) => (
+                          manualNetworkHelpers.map((h) => (
                             <div key={h.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border/40 bg-muted/20">
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold">{h.label}</p>
+                                <p className="font-mono text-xs text-muted-foreground truncate">{h.value}</p>
+                                {h.meta && <p className="text-[10px] text-muted-foreground/70">{h.meta}</p>}
+                              </div>
+                              <button
+                                onClick={() => { navigator.clipboard.writeText(h.value); toast.success('Copied network helper') }}
+                                className="text-muted-foreground hover:text-foreground shrink-0"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <div className="pt-3 space-y-2">
+                        <p className="text-xs text-muted-foreground mb-1">Networks discovered from stacks. These are not manually managed, but can still be reused as external networks if they remain available.</p>
+                        {discoveredNetworkHelpers.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic px-1">No stack-created reusable networks found.</p>
+                        ) : (
+                          discoveredNetworkHelpers.map((h) => (
+                            <div key={h.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border/40 bg-muted/10">
                               <div className="min-w-0">
                                 <p className="text-xs font-semibold">{h.label}</p>
                                 <p className="font-mono text-xs text-muted-foreground truncate">{h.value}</p>
@@ -2645,12 +2674,35 @@ export function StacksEditor({
                       )}
 
                       <div className="pt-3 space-y-2">
-                        <p className="text-xs text-muted-foreground mb-1">Central Docker networks. Create them once in Networks, then reference them in this stack as external networks.</p>
-                        {centralNetworkHelpers.length === 0 ? (
-                          <p className="text-xs text-muted-foreground italic px-1">No reusable central networks found.</p>
+                        <p className="text-xs text-muted-foreground mb-1">Manually created networks from Networks. Create them once, then reference them in this stack as external networks.</p>
+                        {manualNetworkHelpers.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic px-1">No manually managed networks found.</p>
                         ) : (
-                          centralNetworkHelpers.map((h) => (
+                          manualNetworkHelpers.map((h) => (
                             <div key={h.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border/40 bg-muted/20">
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold">{h.label}</p>
+                                <p className="font-mono text-xs text-muted-foreground truncate">{h.value}</p>
+                                {h.meta && <p className="text-[10px] text-muted-foreground/70">{h.meta}</p>}
+                              </div>
+                              <button
+                                onClick={() => { navigator.clipboard.writeText(h.value); toast.success('Copied network helper') }}
+                                className="text-muted-foreground hover:text-foreground shrink-0"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <div className="pt-3 space-y-2">
+                        <p className="text-xs text-muted-foreground mb-1">Networks discovered from stacks. These are not manually managed, but can still be reused as external networks if they remain available.</p>
+                        {discoveredNetworkHelpers.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic px-1">No stack-created reusable networks found.</p>
+                        ) : (
+                          discoveredNetworkHelpers.map((h) => (
+                            <div key={h.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border/40 bg-muted/10">
                               <div className="min-w-0">
                                 <p className="text-xs font-semibold">{h.label}</p>
                                 <p className="font-mono text-xs text-muted-foreground truncate">{h.value}</p>
