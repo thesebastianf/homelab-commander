@@ -562,7 +562,9 @@ export function StacksEditor({
   const [isOperating, setIsOperating] = useState(false)
   const [operationDone, setOperationDone] = useState(false)
   const [currentOperation, setCurrentOperation] = useState('')
+  const [operationError, setOperationError] = useState<string | null>(null)
   const logsViewportRef = useRef<HTMLDivElement>(null)
+  const operationTerminalRef = useRef<HTMLDivElement>(null)
   // Create mode right panel
   const [createRightPanel, setCreateRightPanel] = useState<'conflicts' | 'reference' | 'helpers' | 'backup' | 'autoupdate' | 'ai'>('conflicts')
   const [refStackId, setRefStackId] = useState<string | null>(null)
@@ -687,6 +689,19 @@ export function StacksEditor({
     if (operation?.done) {
       setIsOperating(false)
       setOperationDone(true)
+      setOperationError(operation.error || null)
+      // Derive a readable label from the backend action
+      const actionLabels: Record<string, string> = {
+        deploy: 'Started', stop: 'Stopped', deactivate: 'Deactivated',
+        restart: 'Restarted', recreate: 'Recreated', update: 'Updated',
+        'bulk-update': 'Updated',
+      }
+      if (operation.action) {
+        setCurrentOperation(operation.error
+          ? `${operation.action.charAt(0).toUpperCase() + operation.action.slice(1)} failed`
+          : (actionLabels[operation.action] || `${operation.action} complete`)
+        )
+      }
       qc.invalidateQueries({ queryKey: ['stacks'] })
       qc.invalidateQueries({ queryKey: ['stackContainers', selectedStack?.id] })
     }
@@ -712,6 +727,12 @@ export function StacksEditor({
     logsViewportRef.current.scrollTop = logsViewportRef.current.scrollHeight
   }, [logLines.length])
 
+  // Auto-scroll operation terminal when new lines arrive
+  useEffect(() => {
+    if (!operationTerminalRef.current) return
+    operationTerminalRef.current.scrollTop = operationTerminalRef.current.scrollHeight
+  }, [operation?.lines?.length])
+
   // Sync stack content when selection changes
   useEffect(() => {
     if (selectedStack) {
@@ -723,6 +744,7 @@ export function StacksEditor({
       setYamlError(null)
       setIsOperating(false)
       setOperationDone(false)
+      setOperationError(null)
       setExternalChangeDismissed(false)
     }
   }, [selectedStack?.id])
@@ -808,8 +830,8 @@ export function StacksEditor({
     onSuccess: () => {
       setIsOperating(true)
       setOperationDone(false)
+      setOperationError(null)
       setCurrentOperation('Updating images')
-      toast.info('Update started - pulling new images...')
     },
     onError: (e: any) => toast.error(e.message || 'Update failed'),
   })
@@ -849,31 +871,31 @@ export function StacksEditor({
 
   const deployActionMutation = useMutation({
     mutationFn: (id: string) => api.deployStack(id),
-    onMutate: () => { setIsOperating(true); setOperationDone(false); setCurrentOperation('Starting') },
+    onMutate: () => { setIsOperating(true); setOperationDone(false); setOperationError(null); setCurrentOperation('Starting') },
     onError: (e: any) => { setIsOperating(false); toast.error(e.message || 'Failed to start stack') },
   })
 
   const stopActionMutation = useMutation({
     mutationFn: (id: string) => api.stopStack(id),
-    onMutate: () => { setIsOperating(true); setOperationDone(false); setCurrentOperation('Stopping') },
+    onMutate: () => { setIsOperating(true); setOperationDone(false); setOperationError(null); setCurrentOperation('Stopping') },
     onError: (e: any) => { setIsOperating(false); toast.error(e.message || 'Failed to stop stack') },
   })
 
   const restartActionMutation = useMutation({
     mutationFn: (id: string) => api.restartStack(id),
-    onMutate: () => { setIsOperating(true); setOperationDone(false); setCurrentOperation('Restarting') },
+    onMutate: () => { setIsOperating(true); setOperationDone(false); setOperationError(null); setCurrentOperation('Restarting') },
     onError: (e: any) => { setIsOperating(false); toast.error(e.message || 'Failed to restart stack') },
   })
 
   const deactivateActionMutation = useMutation({
     mutationFn: (id: string) => api.deactivateStack(id),
-    onMutate: () => { setIsOperating(true); setOperationDone(false); setCurrentOperation('Deactivating') },
+    onMutate: () => { setIsOperating(true); setOperationDone(false); setOperationError(null); setCurrentOperation('Deactivating') },
     onError: (e: any) => { setIsOperating(false); toast.error(e.message || 'Failed to deactivate stack') },
   })
 
   const recreateActionMutation = useMutation({
     mutationFn: (id: string) => api.recreateStack(id),
-    onMutate: () => { setIsOperating(true); setOperationDone(false); setCurrentOperation('Recreating') },
+    onMutate: () => { setIsOperating(true); setOperationDone(false); setOperationError(null); setCurrentOperation('Recreating') },
     onError: (e: any) => { setIsOperating(false); toast.error(e.message || 'Failed to recreate stack') },
   })
 
@@ -2077,28 +2099,32 @@ export function StacksEditor({
                   <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/30 shrink-0">
                     <div className="flex items-center gap-2">
                       <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-xs font-mono text-muted-foreground">
-                        {isOperating ? `${currentOperation}...` : `${currentOperation} complete`}
+                      <span className={`text-xs font-mono ${operationDone && operationError ? 'text-red-400' : 'text-muted-foreground'}`}>
+                        {isOperating ? `${currentOperation}...` : currentOperation}
                       </span>
                       {isOperating && <Loader2 className="w-3 h-3 animate-spin text-blue-400" />}
-                      {operationDone && !isOperating && <CheckCircle2 className="w-3 h-3 text-green-500" />}
+                      {operationDone && !isOperating && !operationError && <CheckCircle2 className="w-3 h-3 text-green-500" />}
+                      {operationDone && !isOperating && operationError && <XCircle className="w-3 h-3 text-red-500" />}
                     </div>
                     <button
-                      onClick={() => { setIsOperating(false); setOperationDone(false) }}
+                      onClick={() => { setIsOperating(false); setOperationDone(false); setOperationError(null) }}
                       className="text-muted-foreground hover:text-foreground transition-colors"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <div className="overflow-y-auto flex-1 min-h-0 p-2">
+                  <div ref={operationTerminalRef} className="overflow-y-auto flex-1 min-h-0 p-2">
                     <div className="font-mono text-xs space-y-0.5 whitespace-pre-wrap break-all">
                       {opLines.map((line, i) => (
                         <div key={i} className={
-                          line.startsWith('✅') || line.includes('Started') || line.includes('Running') || line.includes('[+] Running') ? 'text-green-400' :
-                          line.startsWith('❌') || line.startsWith('🔴') || line.includes('Error') || line.includes('error') || line.includes('failed') ? 'text-red-400' :
-                          line.startsWith('🟡') || line.includes('warn') || line.includes('Warning') ? 'text-yellow-400' :
+                          line.startsWith('✅') || line.includes('successfully') ? 'text-green-400' :
+                          line.startsWith('[+]') ? 'text-cyan-400 font-semibold' :
+                          line.startsWith('❌') || line.startsWith('🔴') || line.includes('failed') ? 'text-red-400' :
+                          line.startsWith('⚠') || line.includes('warn') || line.includes('Warning') ? 'text-yellow-400' :
                           line.startsWith('ℹ️') || line.includes('Pulling') || line.includes('Pulled') ? 'text-blue-400' :
-                          line.includes('✓') ? 'text-green-400' :
+                          line.startsWith('•') ? 'text-foreground/80' :
+                          line.includes('✓') || line.includes('Started') || line.includes('Healthy') || line.includes('Created') || line.includes('Removed') ? 'text-green-400' :
+                          line.includes('Stopped') ? 'text-amber-400' :
                           'text-foreground/70'
                         }>
                           {line}

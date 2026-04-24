@@ -319,6 +319,7 @@ interface OperationState {
   action: string;
   stackName: string;
   trigger?: string;
+  reconciledStatus?: string;
   lineIndexByKey?: Record<string, number>;
   progressState?: {
     pull: Record<string, string>;
@@ -363,7 +364,41 @@ function compactComposeOutput(op: OperationState, rawLine: string): void {
   if (!line) return;
   const progress = ensureProgressState(op);
 
-  let match = line.match(/^([a-f0-9]{6,64}|[^\s]+)\s+(Pulling fs layer|Waiting|Verifying Checksum|Download complete|Pull complete|Already exists)(?:\s+(.*))?$/i);
+  // Docker Compose v2 progress header: "[+] Running 3/3", "[+] Stopping 2/2", "[+] Pulling 2/2"
+  let match = line.match(/^\[?\+\]?\s+(Running|Stopping|Pulling|Building|Creating|Removing)\s+(\d+\/\d+)\s*$/i);
+  if (match) {
+    upsertOperationLine(op, 'compose-header', `[+] ${match[1]} ${match[2]}`);
+    return;
+  }
+
+  // Docker Compose v2 container status: "✔ Container myapp-web-1  Started  1.2s"
+  match = line.match(/^[✔✓]\s+Container\s+(.+?)\s+(Started|Stopped|Healthy|Created|Removed|Running|Recreated|Waiting)\s+[\d.]+s\s*$/i);
+  if (match) {
+    const [, containerName, phase] = match;
+    progress.containers[containerName.trim()] = phase;
+    upsertOperationLine(op, 'container-summary', buildCompactSummary('• Containers', progress.containers, { limit: 3, doneToken: /healthy|started|running|stopped|removed|recreated/i }));
+    return;
+  }
+
+  // Docker Compose v2 network status: "✔ Network myapp_default  Created  0.0s"
+  match = line.match(/^[✔✓]\s+Network\s+(.+?)\s+(Created|Removed|Error)\s+[\d.]+s\s*$/i);
+  if (match) {
+    const [, networkName, phase] = match;
+    progress.networks[networkName.trim()] = phase;
+    upsertOperationLine(op, 'network-summary', buildCompactSummary('• Networks', progress.networks, { limit: 2, doneToken: /created|removed/i }));
+    return;
+  }
+
+  // Docker Compose v2 pull status: "✔ folio-demo-app Pulled  0.7s"
+  match = line.match(/^[✔✓]\s+(.+?)\s+Pulled\s+[\d.]+s\s*$/i);
+  if (match) {
+    progress.images[match[1].trim()] = 'Pulled';
+    upsertOperationLine(op, 'image-summary', buildCompactSummary('• Images ready', progress.images, { limit: 2, doneToken: /pulled/i }));
+    return;
+  }
+
+  // Legacy layer-level pull progress
+  match = line.match(/^([a-f0-9]{6,64}|[^\s]+)\s+(Pulling fs layer|Waiting|Verifying Checksum|Download complete|Pull complete|Already exists)(?:\s+(.*))?$/i);
   if (match) {
     const [, layerId, state, suffix] = match;
     progress.pull[layerId] = `${state}${suffix ? ` ${suffix}` : ''}`;
@@ -386,6 +421,7 @@ function compactComposeOutput(op: OperationState, rawLine: string): void {
     return;
   }
 
+  // Legacy Container/Network lines (Compose v1 format)
   match = line.match(/^Container\s+(.+?)\s+(Recreate|Recreated|Creating|Created|Starting|Started|Waiting|Healthy|Stopping|Stopped|Removing|Removed|Running)$/i);
   if (match) {
     const [, containerName, phase] = match;
@@ -595,10 +631,11 @@ async function reconcileStackStatusFromRuntime(id: string, stack: any): Promise<
     );
     const states = String(stdout || '').split('\n').map(s => s.trim()).filter(Boolean);
     if (states.length === 0) {
-      // If no compose containers exist anymore, treat as stopped unless DB already says running.
-      return stack.status === 'running' ? 'failed' : 'stopped';
+      // No containers exist — this is normal after 'down', treat as stopped
+      return 'stopped';
     }
     if (states.some((s) => s === 'running')) return 'running';
+    // All containers exist but none running — stopped (not failed)
     return 'stopped';
   } catch (err: any) {
     logger.warn({ stackId: id, stackName: stack.name, project, error: formatExecError(err) }, 'Failed to reconcile stack status from runtime');
@@ -640,8 +677,9 @@ async function finishActionOnFailure(
 async function runUpdateOperation(id: string, stack: any, op: OperationState, trigger = 'manual'): Promise<void> {
   let cwd = '';
   let cleanup: (() => Promise<void>) | null = null;
+  const wasRunning = stack.status === 'running';
   try {
-    op.lines.push('Starting stack update...');
+    op.lines.push(`[+] Updating stack ${stack.name}...`);
 
     if (await isSelfManagedStack(stack)) {
       const detachedStarted = await startDetachedSelfUpdate(id, stack, op);
@@ -654,19 +692,34 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState, tr
     cwd = resolved.cwd;
     cleanup = resolved.cleanup;
 
-    const result = await execComposeCommand(stack, id, 'update', ['up', '-d', '--pull', 'always'], { cwd, timeout: 120000 });
-    const outputLines = `${result.stdout}\n${result.stderr}`.split('\n').map((l) => l.trim()).filter(Boolean);
-    outputLines.forEach((line) => compactComposeOutput(op, line));
-    await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
-    setStackUpdateStatus(stack.name, false);
-    op.lines.push('✓ Update complete — containers restarted with latest images');
+    // Like Dockge: if stack is not running, only pull images — don't start
+    if (!wasRunning) {
+      op.lines.push('Stack is not running — pulling images only (will not auto-start)');
+      const result = await execComposeCommand(stack, id, 'update', ['pull'], { cwd, timeout: 120000 });
+      const outputLines = `${result.stdout}\n${result.stderr}`.split('\n').map((l) => l.trim()).filter(Boolean);
+      outputLines.forEach((line) => compactComposeOutput(op, line));
+      setStackUpdateStatus(stack.name, false);
+      // Restore original status (stopped), not 'running'
+      await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [stack.status === 'deploying' ? 'stopped' : stack.status, id]);
+      op.reconciledStatus = 'stopped';
+      op.lines.push('✅ Images pulled successfully (stack remains stopped)');
+    } else {
+      const result = await execComposeCommand(stack, id, 'update', ['up', '-d', '--pull', 'always'], { cwd, timeout: 120000 });
+      const outputLines = `${result.stdout}\n${result.stderr}`.split('\n').map((l) => l.trim()).filter(Boolean);
+      outputLines.forEach((line) => compactComposeOutput(op, line));
+      await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
+      setStackUpdateStatus(stack.name, false);
+      op.reconciledStatus = 'running';
+      op.lines.push('✅ Update complete — containers restarted with latest images');
+    }
     await auditLog('update', 'stack', id, { trigger, source: trigger === 'schedule' ? 'auto-update' : 'user' });
     await sendStackOperationNotification('update', stack, true, { trigger });
   } catch (err: any) {
     logger.error({ action: 'update', stackId: id, stackName: stack.name, stackPath: stack.stack_path, cwd, error: formatExecError(err) }, 'Stack update operation failed');
-    op.lines.push(`✗ Error: ${formatExecError(err)}`);
+    op.lines.push(`❌ Error: ${formatExecError(err)}`);
     op.error = formatExecError(err);
     const reconciledStatus = await reconcileStackStatusFromRuntime(id, stack);
+    op.reconciledStatus = reconciledStatus;
     await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [reconciledStatus, id]);
     await sendStackOperationNotification('update', stack, false, { reconciledStatus, trigger });
     if (reconciledStatus === 'running') {
@@ -679,6 +732,16 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState, tr
   }
 }
 
+// Action-specific labels for Dockge-style output
+const ACTION_LABELS: Record<string, { verb: string; doneVerb: string; headerPrefix: string }> = {
+  deploy:     { verb: 'Starting',     doneVerb: 'Started',     headerPrefix: '[+] Starting' },
+  stop:       { verb: 'Stopping',     doneVerb: 'Stopped',     headerPrefix: '[+] Stopping' },
+  deactivate: { verb: 'Deactivating', doneVerb: 'Deactivated', headerPrefix: '[+] Removing' },
+  restart:    { verb: 'Restarting',    doneVerb: 'Restarted',   headerPrefix: '[+] Restarting' },
+  recreate:   { verb: 'Recreating',   doneVerb: 'Recreated',   headerPrefix: '[+] Recreating' },
+  update:     { verb: 'Updating',     doneVerb: 'Updated',     headerPrefix: '[+] Updating' },
+};
+
 /** Execute a compose command with real-time streaming output to OperationState */
 async function runStreamingStackOperation(
   stackId: string,
@@ -690,6 +753,8 @@ async function runStreamingStackOperation(
   trigger = 'manual'
 ): Promise<void> {
   const { cwd, cleanup } = await resolveStackCwd(stack);
+  const labels = ACTION_LABELS[op.action] || { verb: op.action, doneVerb: op.action, headerPrefix: `[+] ${op.action}` };
+  op.lines.push(`${labels.headerPrefix} ${stack.name}...`);
   try {
     const attempts = getComposeInvocations(stack, composeCommand, cwd);
     let lastError: any = null;
@@ -731,12 +796,15 @@ async function runStreamingStackOperation(
           });
         });
 
-        // Success on this attempt
-        logger.info({ stackId, stackName: stack.name, action: op.action, attemptIndex: attemptIdx }, 'Stack operation succeeded');
-        await pool.query("UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2", [desiredStatus, stackId]);
-        op.lines.push(`✅ Operation complete: ${op.action}`);
+        // Success — reconcile actual status from Docker to be 100% correct
+        const reconciledStatus = await reconcileStackStatusFromRuntime(stackId, stack);
+        const finalStatus = reconciledStatus || desiredStatus;
+        op.reconciledStatus = finalStatus;
+        logger.info({ stackId, stackName: stack.name, action: op.action, attemptIndex: attemptIdx, reconciledStatus: finalStatus }, 'Stack operation succeeded');
+        await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [finalStatus, stackId]);
+        op.lines.push(`✅ ${labels.doneVerb} successfully`);
         await auditLog(auditAction, 'stack', stackId, { trigger, source: trigger === 'schedule' ? 'auto-update' : 'user' });
-        await sendStackOperationNotification(op.action, stack, true, { desiredStatus, trigger });
+        await sendStackOperationNotification(op.action, stack, true, { desiredStatus: finalStatus, trigger });
         return;
       } catch (err: any) {
         lastError = err;
@@ -755,16 +823,22 @@ async function runStreamingStackOperation(
   } catch (err: any) {
     logger.error({ stackId, stackName: stack.name, action: op.action, error: formatExecError(err) }, 'Stack operation failed completely');
     const parsed = parseComposeError(err);
-    op.lines.push(`❌ Error: ${parsed.friendlyMessage}`);
-    op.error = parsed.friendlyMessage;
 
-    // Reconcile actual status
+    // Reconcile actual status — maybe the action still worked despite exit code
     const reconciledStatus = await reconcileStackStatusFromRuntime(stackId, stack);
+    op.reconciledStatus = reconciledStatus;
     await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [reconciledStatus, stackId]);
-    await sendStackOperationNotification(op.action, stack, false, { desiredStatus, reconciledStatus, trigger });
 
     if (reconciledStatus === desiredStatus) {
-      op.lines.push(`⚠️ Operation failed but desired state (${desiredStatus}) was reached`);
+      // Docker command returned non-zero but the desired state was reached — treat as success
+      logger.info({ stackId, stackName: stack.name, action: op.action, reconciledStatus }, 'Stack operation command failed but desired state reached — treating as success');
+      op.lines.push(`✅ ${labels.doneVerb} successfully`);
+      await auditLog(auditAction, 'stack', stackId, { trigger, source: trigger === 'schedule' ? 'auto-update' : 'user', recoveredFromError: true });
+      await sendStackOperationNotification(op.action, stack, true, { desiredStatus, reconciledStatus, trigger });
+    } else {
+      op.lines.push(`❌ ${labels.verb} failed: ${parsed.friendlyMessage}`);
+      op.error = parsed.friendlyMessage;
+      await sendStackOperationNotification(op.action, stack, false, { desiredStatus, reconciledStatus, trigger });
     }
   } finally {
     op.done = true;
@@ -1092,10 +1166,6 @@ router.post('/actions/update-all', asyncHandler(async (_req, res) => {
     const existing = operationStore.get(id);
     if (existing && !existing.done) {
       summary.skipped.push({ id, name, reason: 'operation already running' });
-      continue;
-    }
-    if (stack.status !== 'running') {
-      summary.skipped.push({ id, name, reason: `status is ${stack.status}` });
       continue;
     }
 
@@ -1641,10 +1711,17 @@ router.get('/:id/operation', asyncHandler(async (req, res) => {
   const op = operationStore.get(id);
   if (!op) {
     const { rows: [stack] } = await pool.query('SELECT status FROM stacks WHERE id = $1', [id]);
-    res.json({ running: false, lines: [], done: stack ? stack.status !== 'deploying' : true });
+    res.json({ running: false, lines: [], done: stack ? stack.status !== 'deploying' : true, action: null, error: null, reconciledStatus: stack?.status || null });
     return;
   }
-  res.json({ running: !op.done, lines: op.lines, done: op.done });
+  res.json({
+    running: !op.done,
+    lines: op.lines,
+    done: op.done,
+    action: op.action,
+    error: op.error || null,
+    reconciledStatus: op.reconciledStatus || null,
+  });
 }));
 
 // ---- Update stack images (pull + redeploy) ----
