@@ -111,6 +111,7 @@ export interface Network {
   containers: string[]
   subnet?: string
   gateway?: string
+  isManuallyCreated?: boolean
 }
 
 export interface SystemInfo {

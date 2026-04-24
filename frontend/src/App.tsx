@@ -23,6 +23,7 @@ import { StacksEditor } from '@/components/StacksEditor'
 import { BackupManagementDialog } from '@/components/BackupManagementDialog'
 import { SmartStartupDialog } from '@/components/SmartStartupDialog'
 import { PortRegistryDialog } from '@/components/PortRegistryDialog'
+import { CreateNetworkDialog } from '@/components/CreateNetworkDialog'
 import { DatabaseExplorer } from '@/components/DatabaseExplorer'
 import { ContainerShellDialog } from '@/components/ContainerShellDialog'
 import { ClockWidget } from '@/components/ClockWidget'
@@ -51,6 +52,7 @@ import {
   Play,
   StopCircle,
   CircleHelp,
+  Plus,
 } from 'lucide-react'
 import { useContainers, useStartContainer, useStopContainer, useRestartContainer, useRemoveContainer, useAggregatedLogs } from '@/hooks/useContainers'
 import { useImages } from '@/hooks/useImages'
@@ -165,6 +167,7 @@ function App() {
   const [backupManagementOpen, setBackupManagementOpen] = useState(false)
   const [smartStartupOpen, setSmartStartupOpen] = useState(false)
   const [portRegistryOpen, setPortRegistryOpen] = useState(false)
+  const [createNetworkOpen, setCreateNetworkOpen] = useState(false)
 
   // Inspect / logs dialog state
   const [inspectVolumeName, setInspectVolumeName] = useState<string | null>(null)
@@ -756,16 +759,32 @@ function App() {
                 <h2 className="text-xl font-semibold font-mono">Docker Networks</h2>
                 <p className="text-sm text-muted-foreground mt-1">Container network configuration and connectivity</p>
               </div>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setCreateNetworkOpen(true)}
+                className="gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Create Network
+              </Button>
             </div>
             <div className="grid gap-4">
-              {networks.map(network => (
-                <NetworkCard
-                  key={network.id}
-                  network={network}
-                  onRemove={() => toast.success(`Removed network ${network.name}`)}
-                  onInspect={() => handleNetworkInspect(network.id)}
-                />
-              ))}
+              {networks.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Network className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p>No networks found</p>
+                </div>
+              ) : (
+                networks.map(network => (
+                  <NetworkCard
+                    key={network.id}
+                    network={network}
+                    onRemove={() => toast.success(`Removed network ${network.name}`)}
+                    onInspect={() => handleNetworkInspect(network.id)}
+                  />
+                ))
+              )}
             </div>
           </TabsContent>
 
@@ -872,6 +891,11 @@ function App() {
         onOpenChange={setPortRegistryOpen}
         containers={containers}
         stacks={stacks}
+      />
+
+      <CreateNetworkDialog
+        open={createNetworkOpen}
+        onOpenChange={setCreateNetworkOpen}
       />
 
       {/* Container Logs Dialog */}

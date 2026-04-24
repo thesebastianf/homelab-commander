@@ -260,9 +260,10 @@ export async function listNetworks() {
   }));
 }
 
-export async function createNetwork(name: string, driver = 'bridge') {
+export async function createNetwork(name: string, driver = 'bridge'): Promise<string> {
   const net = await docker.createNetwork({ Name: name, Driver: driver });
-  return net;
+  const info = await net.inspect();
+  return info.Id;
 }
 
 export async function removeNetwork(id: string) {

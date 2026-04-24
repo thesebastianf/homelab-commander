@@ -174,6 +174,7 @@ async function startDetachedSelfUpdate(id: string, stack: any, op: OperationStat
 
   try {
     const project = composeProjectNameFromStack(stack);
+    const composeFile = await findComposeFile(cwd);
     op.lines.push('Detected self stack update; handing off to helper container...');
 
     // Get current container ID (self)
@@ -187,8 +188,8 @@ async function startDetachedSelfUpdate(id: string, stack: any, op: OperationStat
     const updateCommand = [
       'sh', '-c',
       `sleep 5 && ` +
-      `docker compose --project-name ${project} -f ${cwd}/docker-compose.yml pull --quiet && ` +
-      `docker compose --project-name ${project} -f ${cwd}/docker-compose.yml up -d --force-recreate && ` +
+      `docker compose --project-name ${project} -f ${cwd}/${composeFile} pull && ` +
+      `docker compose --project-name ${project} -f ${cwd}/${composeFile} up -d --pull always --force-recreate && ` +
       `docker stop ${currentContainerId}`
     ];
 
@@ -209,11 +210,8 @@ async function startDetachedSelfUpdate(id: string, stack: any, op: OperationStat
     child.unref();
 
     op.lines.push('Helper update process spawned (detached)');
-    await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
-    setStackUpdateStatus(stack.name, false);
-    await auditLog('update', 'stack', id, { trigger: 'manual', mode: 'detached-self-update' });
-    await sendStackOperationNotification('update', stack, true, { trigger: 'manual', mode: 'detached-self-update' });
-    op.lines.push('✓ Detached self-update started. Services will restart shortly.');
+    op.lines.push('• Self-update handoff started. THC will restart itself shortly.');
+    op.lines.push('• Success notification is not sent from the old instance anymore, because it cannot verify the detached helper result after shutdown.');
 
     // Exit gracefully after a short delay to allow response to be sent
     setTimeout(() => {
@@ -321,8 +319,100 @@ interface OperationState {
   action: string;
   stackName: string;
   trigger?: string;
+  lineIndexByKey?: Record<string, number>;
+  progressState?: {
+    pull: Record<string, string>;
+    containers: Record<string, string>;
+    images: Record<string, string>;
+    networks: Record<string, string>;
+  };
 }
 const operationStore = new Map<string, OperationState>();
+
+function upsertOperationLine(op: OperationState, key: string, text: string): void {
+  op.lineIndexByKey ||= {};
+  const existingIndex = op.lineIndexByKey[key];
+  if (existingIndex === undefined) {
+    op.lineIndexByKey[key] = op.lines.length;
+    op.lines.push(text);
+    return;
+  }
+  op.lines[existingIndex] = text;
+}
+
+function ensureProgressState(op: OperationState): NonNullable<OperationState['progressState']> {
+  op.progressState ||= { pull: {}, containers: {}, images: {}, networks: {} };
+  return op.progressState;
+}
+
+function buildCompactSummary(title: string, states: Record<string, string>, options?: { limit?: number; doneToken?: RegExp }): string {
+  const entries = Object.entries(states);
+  if (entries.length === 0) return title;
+
+  const limit = options?.limit ?? 3;
+  const active = entries.filter(([, value]) => !(options?.doneToken?.test(value) ?? false));
+  const shown = (active.length > 0 ? active : entries).slice(-limit);
+  const doneCount = options?.doneToken ? entries.filter(([, value]) => options.doneToken!.test(value)).length : 0;
+  const preview = shown.map(([key, value]) => `${key} ${value}`).join(' • ');
+  const suffix = doneCount > 0 ? ` • ${doneCount}/${entries.length} complete` : '';
+  return `${title}: ${preview}${suffix}`;
+}
+
+function compactComposeOutput(op: OperationState, rawLine: string): void {
+  const line = rawLine.trim();
+  if (!line) return;
+  const progress = ensureProgressState(op);
+
+  let match = line.match(/^([a-f0-9]{6,64}|[^\s]+)\s+(Pulling fs layer|Waiting|Verifying Checksum|Download complete|Pull complete|Already exists)(?:\s+(.*))?$/i);
+  if (match) {
+    const [, layerId, state, suffix] = match;
+    progress.pull[layerId] = `${state}${suffix ? ` ${suffix}` : ''}`;
+    upsertOperationLine(op, 'pull-summary', buildCompactSummary('• Pulling images', progress.pull, { limit: 2, doneToken: /download complete|pull complete|already exists/i }));
+    return;
+  }
+
+  match = line.match(/^([a-f0-9]{6,64}|[^\s]+)\s+(Downloading|Extracting)\s+(.+)$/i);
+  if (match) {
+    const [, layerId, phase, progress] = match;
+    ensureProgressState(op).pull[layerId] = `${phase} ${progress}`;
+    upsertOperationLine(op, 'pull-summary', buildCompactSummary('• Pulling images', ensureProgressState(op).pull, { limit: 2, doneToken: /download complete|pull complete|already exists/i }));
+    return;
+  }
+
+  match = line.match(/^Image\s+(.+?)\s+Pulled$/i);
+  if (match) {
+    progress.images[match[1]] = 'Pulled';
+    upsertOperationLine(op, 'image-summary', buildCompactSummary('• Images ready', progress.images, { limit: 2, doneToken: /pulled/i }));
+    return;
+  }
+
+  match = line.match(/^Container\s+(.+?)\s+(Recreate|Recreated|Creating|Created|Starting|Started|Waiting|Healthy|Stopping|Stopped|Removing|Removed|Running)$/i);
+  if (match) {
+    const [, containerName, phase] = match;
+    progress.containers[containerName] = phase;
+    upsertOperationLine(op, 'container-summary', buildCompactSummary('• Containers', progress.containers, { limit: 3, doneToken: /healthy|started|running|stopped|removed|recreated/i }));
+    return;
+  }
+
+  match = line.match(/^Network\s+(.+?)\s+(Creating|Created|Removing|Removed|Error)\s*(.*)$/i);
+  if (match) {
+    const [, networkName, phase, extra] = match;
+    progress.networks[networkName] = `${phase}${extra ? ` ${extra}` : ''}`;
+    upsertOperationLine(op, 'network-summary', buildCompactSummary(phase.toLowerCase() === 'error' ? '❌ Networks' : '• Networks', progress.networks, { limit: 2, doneToken: /created|removed/i }));
+    return;
+  }
+
+  if (/error|failed/i.test(line)) {
+    op.lines.push(`❌ ${line}`);
+    return;
+  }
+  if (/warn|obsolete|deprecated/i.test(line)) {
+    op.lines.push(`⚠ ${line}`);
+    return;
+  }
+
+  op.lines.push(line);
+}
 
 interface ComposeInvocationResult {
   runtime: 'docker' | 'docker-compose';
@@ -533,7 +623,7 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState, tr
 
     const result = await execComposeCommand(stack, id, 'update', ['up', '-d', '--pull', 'always'], { cwd, timeout: 120000 });
     const outputLines = `${result.stdout}\n${result.stderr}`.split('\n').map((l) => l.trim()).filter(Boolean);
-    outputLines.slice(-50).forEach((line) => op.lines.push(line));
+    outputLines.forEach((line) => compactComposeOutput(op, line));
     await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
     setStackUpdateStatus(stack.name, false);
     op.lines.push('✓ Update complete — containers restarted with latest images');
@@ -581,26 +671,13 @@ async function runStreamingStackOperation(
 
           proc.stdout.on('data', (data: Buffer) => {
             data.toString('utf8').split('\n').filter(Boolean).forEach(line => {
-              const trimmed = line.trim();
-              if (trimmed) {
-                // Color-code output: errors in red, warnings in yellow
-                if (trimmed.toLowerCase().includes('error') || trimmed.toLowerCase().includes('failed')) {
-                  op.lines.push(`🔴 ${trimmed}`);
-                } else if (trimmed.toLowerCase().includes('warn') || trimmed.toLowerCase().includes('deprecated') || trimmed.toLowerCase().includes('obsolete')) {
-                  op.lines.push(`🟡 ${trimmed}`);
-                } else {
-                  op.lines.push(`ℹ️ ${trimmed}`);
-                }
-              }
+              compactComposeOutput(op, line);
             });
           });
 
           proc.stderr.on('data', (data: Buffer) => {
             data.toString('utf8').split('\n').filter(Boolean).forEach(line => {
-              const trimmed = line.trim();
-              if (trimmed) {
-                op.lines.push(`🔴 ${trimmed}`);
-              }
+              compactComposeOutput(op, line);
             });
           });
 
@@ -1458,7 +1535,11 @@ router.get('/:id/containers', asyncHandler(async (req, res) => {
 router.get('/:id/operation', asyncHandler(async (req, res) => {
   const id = String(req.params.id);
   const op = operationStore.get(id);
-  if (!op) { res.json({ running: false, lines: [], done: false }); return; }
+  if (!op) {
+    const { rows: [stack] } = await pool.query('SELECT status FROM stacks WHERE id = $1', [id]);
+    res.json({ running: false, lines: [], done: stack ? stack.status !== 'deploying' : true });
+    return;
+  }
   res.json({ running: !op.done, lines: op.lines, done: op.done });
 }));
 

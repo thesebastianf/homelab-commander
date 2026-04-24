@@ -17,18 +17,32 @@ export function NetworkCard({ network, onRemove, onInspect }: NetworkCardProps) 
   const [confirmOpen, setConfirmOpen] = useState(false)
   const isInUse = network.containers.length > 0
   const isSystemNetwork = ['bridge', 'host', 'none'].includes(network.name)
+  const isManuallyCreated = network.isManuallyCreated === true
 
   return (
     <>
-    <Card className="p-4 hover:shadow-lg transition-all duration-200">
+    <Card className={`p-4 hover:shadow-lg transition-all duration-200 ${
+      isManuallyCreated 
+        ? 'border-accent/50 bg-accent/5' 
+        : ''
+    }`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 flex-1 min-w-0">
-          <div className="p-2 rounded-lg bg-accent/10 text-accent shrink-0">
+          <div className={`p-2 rounded-lg shrink-0 ${
+            isManuallyCreated
+              ? 'bg-accent/20 text-accent'
+              : 'bg-accent/10 text-accent'
+          }`}>
             <NetworkIcon className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <h3 className="font-mono font-semibold text-sm">{network.name}</h3>
+              {isManuallyCreated && (
+                <Badge variant="default" className="font-mono text-xs bg-accent text-accent-foreground">
+                  central
+                </Badge>
+              )}
               {isSystemNetwork && (
                 <Badge variant="outline" className="font-mono text-xs">system</Badge>
               )}
@@ -106,6 +120,11 @@ export function NetworkCard({ network, onRemove, onInspect }: NetworkCardProps) 
           <AlertDialogTitle>Remove Network?</AlertDialogTitle>
           <AlertDialogDescription>
             This will permanently delete the network <span className="font-mono font-semibold">{network.name}</span>.
+            {isManuallyCreated && (
+              <p className="mt-2 text-accent">
+                This is a central network. Stacks using <span className="font-mono">external: true</span> will lose connectivity if they still reference it.
+              </p>
+            )}
             Containers connected to this network will lose their connection. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>

@@ -63,6 +63,7 @@ import type { Stack, BackupConfig } from '@/lib/types'
 import { toast } from 'sonner'
 import * as api from '@/lib/api'
 import { useSettings } from '@/hooks/useSettings'
+import { useNetworks } from '@/hooks/useNetworks'
 import { ScheduleEditor } from '@/components/ScheduleEditor'
 import { ComposeAiPanel } from '@/components/ComposeAiPanel'
 import { ContainerShellDialog } from '@/components/ContainerShellDialog'
@@ -563,6 +564,16 @@ export function StacksEditor({
   const effectiveMobileMode = forcedMobileMode ?? (isMobile || mobileModeEnabled)
   const qc = useQueryClient()
   const { data: settings } = useSettings()
+  const { data: networks = [] } = useNetworks()
+
+  const centralNetworkHelpers = networks
+    .filter((network) => !['bridge', 'host', 'none', 'ingress'].includes(String(network.name).toLowerCase()))
+    .map((network) => ({
+      id: `network-${network.id}`,
+      label: `${network.name} external network`,
+      value: `networks:\n  ${network.name}:\n    external: true\n    name: ${network.name}`,
+      meta: [network.driver, network.subnet].filter(Boolean).join(' • '),
+    }))
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const { data: versions = [] } = useQuery({
@@ -1686,6 +1697,29 @@ export function StacksEditor({
                           </div>
                         ))
                       )}
+
+                      <div className="pt-3 space-y-2">
+                        <p className="text-xs text-muted-foreground mb-1">Central Docker networks. Create them once in Networks, then reference them here as external compose networks.</p>
+                        {centralNetworkHelpers.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic px-1">No reusable central networks found.</p>
+                        ) : (
+                          centralNetworkHelpers.map((h) => (
+                            <div key={h.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border/40 bg-muted/20">
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold">{h.label}</p>
+                                <p className="font-mono text-xs text-muted-foreground truncate">{h.value}</p>
+                                {h.meta && <p className="text-[10px] text-muted-foreground/70">{h.meta}</p>}
+                              </div>
+                              <button
+                                onClick={() => { navigator.clipboard.writeText(h.value); toast.success('Copied network helper') }}
+                                className="text-muted-foreground hover:text-foreground shrink-0"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -2609,6 +2643,29 @@ export function StacksEditor({
                           </div>
                         ))
                       )}
+
+                      <div className="pt-3 space-y-2">
+                        <p className="text-xs text-muted-foreground mb-1">Central Docker networks. Create them once in Networks, then reference them in this stack as external networks.</p>
+                        {centralNetworkHelpers.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic px-1">No reusable central networks found.</p>
+                        ) : (
+                          centralNetworkHelpers.map((h) => (
+                            <div key={h.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border/40 bg-muted/20">
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold">{h.label}</p>
+                                <p className="font-mono text-xs text-muted-foreground truncate">{h.value}</p>
+                                {h.meta && <p className="text-[10px] text-muted-foreground/70">{h.meta}</p>}
+                              </div>
+                              <button
+                                onClick={() => { navigator.clipboard.writeText(h.value); toast.success('Copied network helper') }}
+                                className="text-muted-foreground hover:text-foreground shrink-0"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
                   )}
 
