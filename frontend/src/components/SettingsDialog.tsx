@@ -8,14 +8,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Settings, FolderOpen, Bell, Link, Snowflake, CloudDownload, Github, AlertTriangle, FlaskConical, Loader2, CheckCircle, XCircle, Clipboard, Plus, Trash2 } from 'lucide-react'
+import { Settings, FolderOpen, Bell, Link, Snowflake, CloudDownload, Github, AlertTriangle, FlaskConical, Loader2, CheckCircle, XCircle, Clipboard, Plus, Trash2, Send, Mail, Globe } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { toast } from 'sonner'
 import * as api from '@/lib/api'
-import type { AppSettings } from '@/lib/types'
+import type { AppSettings, NotificationService } from '@/lib/types'
 import { normalizeCronExpression, toHumanCronLabel } from '@/lib/cron'
+import {
+  useNotificationServices,
+  useCreateNotificationService,
+  useUpdateNotificationService,
+  useDeleteNotificationService,
+} from '@/hooks/useServices'
 
 interface SettingsDialogProps {
   open: boolean
@@ -30,6 +36,80 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
   const [aiTesting, setAiTesting] = useState(false)
   const [aiTestResult, setAiTestResult] = useState<{ success: boolean; message: string } | null>(null)
   const [excludeDraft, setExcludeDraft] = useState('')
+
+  // ── Notification provider management (immediate CRUD, not deferred like main settings) ─
+  const notifServicesQuery = useNotificationServices()
+  const createSvcMutation = useCreateNotificationService()
+  const updateSvcMutation = useUpdateNotificationService()
+  const deleteSvcMutation = useDeleteNotificationService()
+  const [addingSvc, setAddingSvc] = useState(false)
+  const [newSvcType, setNewSvcType] = useState<NotificationService['type']>('telegram')
+  const [newSvcName, setNewSvcName] = useState('')
+  const [newSvcEnabled, setNewSvcEnabled] = useState(true)
+  const [newSvcConfig, setNewSvcConfig] = useState<Record<string, string>>({})
+  const [editingSvcId, setEditingSvcId] = useState<string | null>(null)
+  const [editingSvcName, setEditingSvcName] = useState('')
+  const [editingSvcEnabled, setEditingSvcEnabled] = useState(true)
+  const [editingSvcConfig, setEditingSvcConfig] = useState<Record<string, string>>({})
+  const [svcTestingId, setSvcTestingId] = useState<string | null>(null)
+
+  const getConfigFields = (type: NotificationService['type']) => {
+    switch (type) {
+      case 'telegram': return [{ key: 'botToken', label: 'Bot Token', inputType: 'password' }, { key: 'chatId', label: 'Chat ID', inputType: 'text' }]
+      case 'discord': return [{ key: 'webhookUrl', label: 'Webhook URL', inputType: 'password' }]
+      case 'slack': return [{ key: 'webhookUrl', label: 'Webhook URL', inputType: 'password' }]
+      case 'email': return [
+        { key: 'smtpHost', label: 'SMTP Host', inputType: 'text' },
+        { key: 'smtpPort', label: 'SMTP Port', inputType: 'text' },
+        { key: 'username', label: 'Username', inputType: 'text' },
+        { key: 'password', label: 'Password', inputType: 'password' },
+        { key: 'from', label: 'From', inputType: 'text' },
+        { key: 'to', label: 'To', inputType: 'text' },
+      ]
+      case 'webhook': return [{ key: 'url', label: 'Webhook URL', inputType: 'text' }, { key: 'method', label: 'Method (GET/POST)', inputType: 'text' }]
+    }
+  }
+
+  const getServiceIcon = (type: NotificationService['type']) => {
+    if (type === 'telegram') return <Send className="w-4 h-4 text-muted-foreground" />
+    if (type === 'email') return <Mail className="w-4 h-4 text-muted-foreground" />
+    return <Globe className="w-4 h-4 text-muted-foreground" />
+  }
+
+  const handleSaveNewSvc = async () => {
+    if (!newSvcName.trim()) return
+    try {
+      await createSvcMutation.mutateAsync({ name: newSvcName.trim(), type: newSvcType, enabled: newSvcEnabled, config: newSvcConfig })
+      setAddingSvc(false)
+      setNewSvcName('')
+      setNewSvcConfig({})
+      toast.success('Notification provider added')
+    } catch (e: any) {
+      toast.error(`Failed to add provider: ${e.message}`)
+    }
+  }
+
+  const handleSaveEditSvc = async (service: NotificationService) => {
+    try {
+      await updateSvcMutation.mutateAsync({ id: service.id, name: editingSvcName, type: service.type, enabled: editingSvcEnabled, config: editingSvcConfig })
+      setEditingSvcId(null)
+      toast.success('Provider updated')
+    } catch (e: any) {
+      toast.error(`Failed to update provider: ${e.message}`)
+    }
+  }
+
+  const handleTestSvc = async (service: NotificationService) => {
+    setSvcTestingId(service.id)
+    try {
+      await api.testNotificationService(service.id)
+      toast.success('Test notification sent!')
+    } catch (e: any) {
+      toast.error(`Test failed: ${e.message}`)
+    } finally {
+      setSvcTestingId(null)
+    }
+  }
 
   const autoUpdatePresets = [
     { value: '0 7 * * 6', label: 'Saturday 07:00' },
@@ -418,6 +498,141 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                     max="100"
                   />
                 </div>
+              </div>
+
+              <Separator />
+
+              {/* ── Notification Providers ──────────────────────────────────────── */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-base">Notification Providers</Label>
+                    <p className="text-sm text-muted-foreground">Channels that receive event notifications</p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => { setAddingSvc(true); setNewSvcName(''); setNewSvcConfig({}); setNewSvcEnabled(true) }}>
+                    <Plus className="w-4 h-4 mr-1" /> Add Provider
+                  </Button>
+                </div>
+
+                {addingSvc && (
+                  <Card className="p-4 border-primary/40 space-y-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Select value={newSvcType} onValueChange={(v) => { setNewSvcType(v as NotificationService['type']); setNewSvcConfig({}) }}>
+                        <SelectTrigger className="w-40 h-8 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="telegram">Telegram</SelectItem>
+                          <SelectItem value="discord">Discord</SelectItem>
+                          <SelectItem value="slack">Slack</SelectItem>
+                          <SelectItem value="email">Email</SelectItem>
+                          <SelectItem value="webhook">Webhook</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input placeholder="Provider name" value={newSvcName} onChange={e => setNewSvcName(e.target.value)} className="flex-1 h-8 text-sm min-w-[140px]" />
+                      <div className="flex items-center gap-1.5">
+                        <Label className="text-xs text-muted-foreground">Enabled</Label>
+                        <Switch checked={newSvcEnabled} onCheckedChange={setNewSvcEnabled} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {getConfigFields(newSvcType).map(field => (
+                        <div key={field.key} className="space-y-1">
+                          <Label className="text-xs">{field.label}</Label>
+                          <Input
+                            type={field.inputType}
+                            value={newSvcConfig[field.key] || ''}
+                            onChange={e => setNewSvcConfig(prev => ({ ...prev, [field.key]: e.target.value }))}
+                            className="h-7 text-xs font-mono"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" disabled={!newSvcName.trim() || createSvcMutation.isPending} onClick={handleSaveNewSvc}>
+                        {createSvcMutation.isPending && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+                        Save Provider
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setAddingSvc(false)}>Cancel</Button>
+                    </div>
+                  </Card>
+                )}
+
+                {notifServicesQuery.isLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Loading providers...
+                  </div>
+                ) : (notifServicesQuery.data?.length ?? 0) === 0 && !addingSvc ? (
+                  <Card className="p-4 text-center text-sm text-muted-foreground">
+                    No providers configured. Add one above to receive alerts.
+                  </Card>
+                ) : (
+                  <div className="space-y-2">
+                    {(notifServicesQuery.data || []).map(service => (
+                      <Card key={service.id} className="p-3">
+                        {editingSvcId === service.id ? (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <Input value={editingSvcName} onChange={e => setEditingSvcName(e.target.value)} className="flex-1 h-8 text-sm font-semibold" />
+                              <Badge variant="outline" className="capitalize text-xs shrink-0">{service.type}</Badge>
+                              <div className="flex items-center gap-1">
+                                <Label className="text-xs text-muted-foreground">Enabled</Label>
+                                <Switch checked={editingSvcEnabled} onCheckedChange={setEditingSvcEnabled} />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {getConfigFields(service.type).map(field => (
+                                <div key={field.key} className="space-y-1">
+                                  <Label className="text-xs">{field.label}</Label>
+                                  <Input
+                                    type={field.inputType}
+                                    value={editingSvcConfig[field.key] || ''}
+                                    onChange={e => setEditingSvcConfig(prev => ({ ...prev, [field.key]: e.target.value }))}
+                                    className="h-7 text-xs font-mono"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" disabled={updateSvcMutation.isPending} onClick={() => handleSaveEditSvc(service)}>
+                                {updateSvcMutation.isPending && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+                                Save
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => setEditingSvcId(null)}>Cancel</Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {getServiceIcon(service.type)}
+                              <span className="font-medium text-sm truncate">{service.name}</span>
+                              <Badge variant="outline" className="text-[10px] capitalize shrink-0">{service.type}</Badge>
+                              {!service.enabled && <Badge variant="secondary" className="text-[10px]">Disabled</Badge>}
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Switch
+                                checked={service.enabled}
+                                onCheckedChange={checked => updateSvcMutation.mutate({ id: service.id, name: service.name, type: service.type, enabled: checked, config: service.config })}
+                              />
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button size="icon" variant="ghost" className="w-7 h-7" disabled={svcTestingId === service.id} onClick={() => handleTestSvc(service)}>
+                                    {svcTestingId === service.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FlaskConical className="w-3.5 h-3.5" />}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent><p className="text-xs">Send test notification</p></TooltipContent>
+                              </Tooltip>
+                              <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => { setEditingSvcId(service.id); setEditingSvcName(service.name); setEditingSvcEnabled(service.enabled); setEditingSvcConfig({ ...service.config }) }}>
+                                <Settings className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className="w-7 h-7 text-destructive hover:text-destructive" onClick={() => deleteSvcMutation.mutate(service.id)}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </TabsContent>

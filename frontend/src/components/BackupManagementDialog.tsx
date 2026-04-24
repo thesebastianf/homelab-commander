@@ -134,11 +134,13 @@ function StackBackupItem({ stack }: { stack: Stack }) {
   const allDetectedDbNames = new Set(backupDatabases.map((db) => db.name))
   const configuredDbNames = new Set(selectedDatabaseNames)
   const newDatabaseCount = [...allDetectedDbNames].filter((name) => !configuredDbNames.has(name)).length
+  const removedDatabaseNames = [...configuredDbNames].filter((name) => !allDetectedDbNames.has(name))
 
   // Detect new volumes added after config was created
   const allDetectedVolNames = new Set(backupVolumes.map((vol) => vol.name))
   const configuredVolNames = new Set(selectedVolumeNames)
   const newVolumeCount = [...allDetectedVolNames].filter((name) => !configuredVolNames.has(name)).length
+  const removedVolumeNames = [...configuredVolNames].filter((name) => !allDetectedVolNames.has(name))
 
   return (
     <AccordionItem value={stack.id} className="border rounded-lg px-4 !border-b">
@@ -241,11 +243,18 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                   <div className="ml-5 mt-1 p-2 bg-muted/50 rounded space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-xs font-semibold">Select Volumes</Label>
-                      {newVolumeCount > 0 && (
-                        <Badge className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30">
-                          +{newVolumeCount} new
-                        </Badge>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {newVolumeCount > 0 && (
+                          <Badge className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30">
+                            +{newVolumeCount} new
+                          </Badge>
+                        )}
+                        {removedVolumeNames.length > 0 && (
+                          <Badge className="text-[10px] bg-amber-500/20 text-amber-400 border-amber-500/30">
+                            -{removedVolumeNames.length} removed
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Checkbox
@@ -267,13 +276,23 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                               checked={selectedVolumeNames.includes(entry.name)}
                               onCheckedChange={(checked) => setVolumeSelection(entry.name, !!checked)}
                             />
-                            <span className="font-mono truncate">{entry.name}</span>
+                            <span className="font-mono truncate">{entry.displayName || entry.name}</span>
+                            {entry.kind && (
+                              <Badge className="text-[10px] bg-muted text-muted-foreground py-0 px-1 ml-auto shrink-0">
+                                {entry.kind}
+                              </Badge>
+                            )}
                           </label>
                         ))}
                       </div>
                     )}
                     {backupVolumes.length === 0 && (
-                      <p className="text-[11px] text-muted-foreground">No named volumes attached to this stack were detected.</p>
+                      <p className="text-[11px] text-muted-foreground">No named volumes or bind-mount paths were detected for this stack.</p>
+                    )}
+                    {removedVolumeNames.length > 0 && (
+                      <div className="pt-1 text-[11px] text-amber-400">
+                        Previously selected but no longer detected: {removedVolumeNames.join(', ')}
+                      </div>
                     )}
                   </div>
                 )}
@@ -301,11 +320,18 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <Label className="text-xs font-semibold">Select Databases</Label>
-                      {newDatabaseCount > 0 && (
-                        <Badge className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30">
-                          +{newDatabaseCount} new
-                        </Badge>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {newDatabaseCount > 0 && (
+                          <Badge className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30">
+                            +{newDatabaseCount} new
+                          </Badge>
+                        )}
+                        {removedDatabaseNames.length > 0 && (
+                          <Badge className="text-[10px] bg-amber-500/20 text-amber-400 border-amber-500/30">
+                            -{removedDatabaseNames.length} removed
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Checkbox
@@ -337,6 +363,11 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                     )}
                     {backupDatabases.length === 0 && (
                       <p className="text-[11px] text-muted-foreground">No databases detected in this stack.</p>
+                    )}
+                    {removedDatabaseNames.length > 0 && (
+                      <div className="pt-1 text-[11px] text-amber-400">
+                        Previously selected but no longer detected: {removedDatabaseNames.join(', ')}
+                      </div>
                     )}
                   </div>
                   <div className="pt-2 space-y-1 border-t border-muted">

@@ -3,11 +3,34 @@ import { spawn } from 'child_process';
 import { join } from 'path';
 import { mkdtemp, writeFile, rm } from 'fs/promises';
 import { tmpdir } from 'os';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { pool } from '../database.js';
 import { logger } from '../logger.js';
 import { sendNotification } from './notifications.js';
 import { auditLog } from '../lib/audit.js';
 import { runBackup } from './backups.js';
+
+const execFileAsync = promisify(execFile);
+const MIN_FREE_DISK_GB = 3;
+
+async function checkFreeDiskSpaceGB(): Promise<number> {
+  try {
+    const { stdout } = await execFileAsync('df', ['-BG', '/'], { timeout: 8000 });
+    const lines = stdout.trim().split('\n');
+    for (const line of lines.slice(1)) {
+      const parts = line.trim().split(/\s+/);
+      // Format: Filesystem  1G-blocks  Used  Available  Use%  Mounted
+      if (parts.length >= 4) {
+        const available = parseInt(parts[3].replace(/G$/, ''), 10);
+        if (Number.isFinite(available)) return available;
+      }
+    }
+    return Infinity;
+  } catch {
+    return Infinity; // can't determine — allow update to proceed
+  }
+}
 
 let scheduledTask: cron.ScheduledTask | null = null;
 
@@ -54,6 +77,19 @@ async function runScheduledUpdates(): Promise<void> {
       return;
     }
 
+    // ── Disk space pre-check ───────────────────────────────────────────
+    const freeGB = await checkFreeDiskSpaceGB();
+    if (freeGB < MIN_FREE_DISK_GB) {
+      logger.error({ freeGB, thresholdGB: MIN_FREE_DISK_GB }, 'Auto-update aborted: insufficient disk space');
+      await sendNotification('diskSpaceLow', {
+        freeGB,
+        thresholdGB: MIN_FREE_DISK_GB,
+        action: 'auto-update skipped',
+        message: `Only ${freeGB} GB free on /. Docker image pulls could fill the disk and corrupt databases. Free up space first (docker image prune -a).`,
+      }).catch(() => { /* best-effort */ });
+      return;
+    }
+
     const { rows: stacks } = await pool.query(
       "SELECT * FROM stacks WHERE auto_update = true AND status = 'running'"
     );
@@ -63,7 +99,7 @@ async function runScheduledUpdates(): Promise<void> {
       return;
     }
 
-    logger.info({ count: stacks.length }, 'Starting scheduled auto-update run');
+    logger.info({ count: stacks.length, freeGB }, 'Starting scheduled auto-update run');
 
     for (const stack of stacks) {
       logger.info({ stackName: stack.name }, 'Auto-updating stack');
@@ -124,8 +160,10 @@ function updateStackImages(stack: any): Promise<void> {
         ['compose', '-p', stack.name.toLowerCase(), 'up', '-d', '--pull', 'always'],
         { cwd: tempDir }
       );
+      const outputLines: string[] = [];
       const onData = (data: Buffer) => {
         data.toString('utf8').split('\n').filter(Boolean).forEach(line => {
+          outputLines.push(line);
           logger.debug({ stackName: stack.name, line }, 'docker compose output');
         });
       };
@@ -133,7 +171,12 @@ function updateStackImages(stack: any): Promise<void> {
       proc.stderr.on('data', onData);
       proc.on('close', (code) => {
         if (tempDir) rm(tempDir, { recursive: true, force: true }).catch(() => {});
-        code === 0 ? resolve() : reject(new Error(`docker compose exited with code ${code}`));
+        if (code === 0) {
+          resolve();
+        } else {
+          const tail = outputLines.slice(-30).join('\n');
+          reject(new Error(`docker compose exited with code ${code}${tail ? '\n' + tail : ''}`));
+        }
       });
       proc.on('error', (err: NodeJS.ErrnoException) => {
         if (tempDir) rm(tempDir, { recursive: true, force: true }).catch(() => {});

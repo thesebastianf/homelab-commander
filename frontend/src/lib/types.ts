@@ -242,6 +242,19 @@ export interface NotificationService {
   updatedAt?: string
 }
 
+export interface NotificationLogEntry {
+  id: string | number
+  eventType: string
+  channel: string
+  details: {
+    title?: string
+    message?: string
+    level?: 'info' | 'warning' | 'error'
+    serviceType?: string
+  }
+  createdAt: string
+}
+
 export interface BackupConfig {
   enabled: boolean
   cronSchedule: string
@@ -275,6 +288,21 @@ export interface BackupConfig {
     keepMonthly: number
     keepYearly: number
   }
+}
+
+export interface BackupVolumeOption {
+  key: string
+  name: string
+  displayName?: string
+  kind?: 'volume' | 'bind'
+  source?: string
+  containerName?: string
+}
+
+export interface BackupDatabaseOption {
+  name: string
+  type: 'postgresql' | 'mysql' | 'mongodb' | 'redis' | 'influxdb'
+  containerName: string
 }
 
 export interface BackupJob {

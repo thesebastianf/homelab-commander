@@ -18,7 +18,7 @@ import { NetworkCard } from '@/components/NetworkCard'
 import { AggregatedLogs } from '@/components/AggregatedLogs'
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { MaintenanceDialog } from '@/components/MaintenanceDialog'
-import { NotificationServicesDialog } from '@/components/NotificationServicesDialog'
+import { NotificationLogDialog } from '@/components/NotificationLogDialog'
 import { StacksEditor } from '@/components/StacksEditor'
 import { BackupManagementDialog } from '@/components/BackupManagementDialog'
 import { SmartStartupDialog } from '@/components/SmartStartupDialog'
@@ -58,7 +58,6 @@ import { useStacks, useExternalStacks, useDeployStack, useStopStack, useRestartS
 import { useVolumes } from '@/hooks/useVolumes'
 import { useNetworks } from '@/hooks/useNetworks'
 import { useSettings, useSystemInfo, useUpdateSettings, usePruneSystem } from '@/hooks/useSettings'
-import { useNotificationServices } from '@/hooks/useServices'
 import { useIsMobile } from '@/hooks/use-mobile'
 import type { Stack, AppSettings } from '@/lib/types'
 import { clearStoredCredentials, getStoredCredentials } from '@/lib/api'
@@ -126,7 +125,6 @@ function App() {
   const volumesQuery = useVolumes()
   const networksQuery = useNetworks()
   const settingsQuery = useSettings()
-  const notificationServicesQuery = useNotificationServices()
   const systemInfoQuery = useSystemInfo()
   const aggregatedLogsQuery = useAggregatedLogs()
 
@@ -163,7 +161,7 @@ function App() {
   const [manualOpen, setManualOpen] = useState(false)
   const [databaseExplorerOpen, setDatabaseExplorerOpen] = useState(false)
   const [maintenanceOpen, setMaintenanceOpen] = useState(false)
-  const [notificationServicesOpen, setNotificationServicesOpen] = useState(false)
+  const [notificationLogOpen, setNotificationLogOpen] = useState(false)
   const [backupManagementOpen, setBackupManagementOpen] = useState(false)
   const [smartStartupOpen, setSmartStartupOpen] = useState(false)
   const [portRegistryOpen, setPortRegistryOpen] = useState(false)
@@ -188,7 +186,6 @@ function App() {
   const volumes = volumesQuery.data ?? []
   const networks = networksQuery.data ?? []
   const settings = settingsQuery.data
-  const notificationServices = notificationServicesQuery.data ?? []
   const systemInfo = systemInfoQuery.data
   const aggregatedLogs = aggregatedLogsQuery.data ?? []
   const compactMode = mobileOverride ?? isViewportMobile
@@ -445,7 +442,7 @@ function App() {
                     <Save className="w-4 h-4" />
                     <span className="text-[10px] font-mono">Backup</span>
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setNotificationServicesOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
+                  <Button variant="ghost" size="sm" onClick={() => setNotificationLogOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
                     <Bell className="w-4 h-4" />
                     <span className="text-[10px] font-mono">Alerts</span>
                   </Button>
@@ -853,57 +850,9 @@ function App() {
         onOpenChange={setMaintenanceOpen}
       />
 
-      <NotificationServicesDialog
-        open={notificationServicesOpen}
-        onOpenChange={setNotificationServicesOpen}
-        services={notificationServices}
-        onSave={async (services) => {
-          const existingById = new Map(notificationServices.map((svc) => [svc.id, svc]))
-          const incomingPersistedIds = new Set(
-            services
-              .map((svc) => svc.id)
-              .filter((id) => !id.startsWith('service-')),
-          )
-
-          for (const svc of services) {
-            const payload = {
-              name: svc.name,
-              type: svc.type,
-              enabled: svc.enabled,
-              config: svc.config,
-            }
-
-            if (svc.id.startsWith('service-')) {
-              await api.createNotificationService(payload)
-              continue
-            }
-
-            const existing = existingById.get(svc.id)
-            if (!existing) {
-              await api.createNotificationService(payload)
-              continue
-            }
-
-            const changed =
-              existing.name !== svc.name ||
-              existing.type !== svc.type ||
-              existing.enabled !== svc.enabled ||
-              JSON.stringify(existing.config || {}) !== JSON.stringify(svc.config || {})
-
-            if (changed) {
-              await api.updateNotificationService(svc.id, payload)
-            }
-          }
-
-          for (const existing of notificationServices) {
-            if (!incomingPersistedIds.has(existing.id)) {
-              await api.deleteNotificationService(existing.id)
-            }
-          }
-
-          await notificationServicesQuery.refetch()
-          toast.success('Notification services saved')
-        }}
+      <NotificationLogDialog
+        open={notificationLogOpen}
+        onOpenChange={setNotificationLogOpen}
       />
 
       <BackupManagementDialog

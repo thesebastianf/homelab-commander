@@ -67,6 +67,25 @@ router.post('/test-config', validateBody(notificationServiceBody), asyncHandler(
   res.json({ ok: true });
 }));
 
+router.get('/log', asyncHandler(async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 200, 500);
+  const { rows } = await pool.query(
+    `SELECT id, resource_type AS event_type, resource_id AS channel, details, created_at
+     FROM audit_log
+     WHERE action = 'notification'
+     ORDER BY created_at DESC
+     LIMIT $1`,
+    [limit]
+  );
+  res.json(rows.map(r => ({
+    id: r.id,
+    eventType: r.event_type,
+    channel: r.channel,
+    details: r.details,
+    createdAt: r.created_at,
+  })));
+}));
+
 function mapService(row: any) {
   return {
     id: row.id,

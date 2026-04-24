@@ -131,7 +131,7 @@ async function initSchema(client: pg.PoolClient): Promise<void> {
       include_stack_folder BOOLEAN DEFAULT TRUE,
       include_volumes BOOLEAN DEFAULT TRUE,
       include_databases BOOLEAN DEFAULT FALSE,
-      database_type TEXT DEFAULT 'none' CHECK (database_type IN ('postgresql','mysql','mongodb','redis','none')),
+      database_type TEXT DEFAULT 'none' CHECK (database_type IN ('postgresql','mysql','mongodb','redis','influxdb','none')),
       database_config JSONB DEFAULT '{}'::jsonb,
       compression_level INTEGER DEFAULT 6,
       encrypted BOOLEAN DEFAULT FALSE,
@@ -252,6 +252,33 @@ async function runMigrations(client: pg.PoolClient): Promise<void> {
     `ALTER TABLE backup_configs ADD COLUMN IF NOT EXISTS incremental BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE backup_configs ADD COLUMN IF NOT EXISTS use_advanced_retention BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE backup_configs ADD COLUMN IF NOT EXISTS retention_policy JSONB DEFAULT '{"daily":7,"weekly":4,"monthly":6,"yearly":1}'::jsonb`,
+    `DO $$
+      DECLARE
+        c RECORD;
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conrelid = 'backup_configs'::regclass
+            AND contype = 'c'
+            AND pg_get_constraintdef(oid) ILIKE '%database_type%influxdb%'
+        ) THEN
+          FOR c IN
+            SELECT conname
+            FROM pg_constraint
+            WHERE conrelid = 'backup_configs'::regclass
+              AND contype = 'c'
+              AND pg_get_constraintdef(oid) ILIKE '%database_type%'
+          LOOP
+            EXECUTE format('ALTER TABLE backup_configs DROP CONSTRAINT IF EXISTS %I', c.conname);
+          END LOOP;
+
+          ALTER TABLE backup_configs
+          ADD CONSTRAINT backup_configs_database_type_check
+          CHECK (database_type IN ('postgresql','mysql','mongodb','redis','influxdb','none'));
+        END IF;
+      END
+    $$`,
     `ALTER TABLE smart_startup_configs ADD COLUMN IF NOT EXISTS monitor_interval INTEGER DEFAULT 30`,
     `ALTER TABLE smart_startup_configs ADD COLUMN IF NOT EXISTS device_online BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE smart_startup_configs ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMPTZ`,

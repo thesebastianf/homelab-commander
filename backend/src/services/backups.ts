@@ -19,6 +19,122 @@ interface DatabaseTarget {
   databaseName?: string;
 }
 
+export interface BackupVolumeTarget {
+  key: string;
+  name: string;
+  kind: 'volume' | 'bind';
+  source: string;
+  containerName: string;
+}
+
+interface StackContainerInfo {
+  id: string;
+  name: string;
+  image: string;
+  project?: string;
+  service?: string;
+  mounts: Array<{ type: string; name?: string; source?: string; destination?: string }>;
+}
+
+function normalizeLooseName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function looksLikeStackContainer(containerName: string, stackName: string): boolean {
+  const normalizedContainer = normalizeLooseName(containerName);
+  const normalizedStack = normalizeLooseName(stackName);
+  return normalizedContainer.startsWith(normalizedStack) && normalizedContainer.length > normalizedStack.length;
+}
+
+async function listLikelyStackContainers(stackName: string): Promise<StackContainerInfo[]> {
+  const containers = await docker.listContainers({ all: true });
+  const exact = containers.filter((container) => {
+    const project = container.Labels?.['com.docker.compose.project'];
+    return Boolean(project && project.toLowerCase() === stackName.toLowerCase());
+  });
+  if (exact.length > 0) {
+    return exact.map((container) => ({
+      id: container.Id,
+      name: container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12),
+      image: container.Image || '',
+      project: container.Labels?.['com.docker.compose.project'],
+      service: container.Labels?.['com.docker.compose.service'],
+      mounts: (container.Mounts || []).map((mount) => ({
+        type: String(mount.Type || ''),
+        name: mount.Name,
+        source: mount.Source,
+        destination: mount.Destination,
+      })),
+    }));
+  }
+
+  const normalizedStack = normalizeLooseName(stackName);
+  const normalizedProject = containers.filter((container) => {
+    const project = container.Labels?.['com.docker.compose.project'];
+    if (!project) return false;
+    return normalizeLooseName(project) === normalizedStack;
+  });
+
+  const byNameFallback = normalizedProject.length > 0
+    ? normalizedProject
+    : containers.filter((container) => {
+      const name = container.Names?.[0]?.replace(/^\//, '') || '';
+      return looksLikeStackContainer(name, stackName);
+    });
+
+  return byNameFallback.map((container) => ({
+    id: container.Id,
+    name: container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12),
+    image: container.Image || '',
+    project: container.Labels?.['com.docker.compose.project'],
+    service: container.Labels?.['com.docker.compose.service'],
+    mounts: (container.Mounts || []).map((mount) => ({
+      type: String(mount.Type || ''),
+      name: mount.Name,
+      source: mount.Source,
+      destination: mount.Destination,
+    })),
+  }));
+}
+
+function sanitizePathToName(input: string): string {
+  const cleaned = input.replace(/^\/+/, '').replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/_+/g, '_');
+  return cleaned || 'item';
+}
+
+async function verifyBackupArchive(archivePath: string, opts: { requireStackFolder: boolean; expectedVolumeTargets: number; expectedDatabaseDumps: number }): Promise<{ ok: boolean; checks: Record<string, unknown> }> {
+  const checks: Record<string, unknown> = {
+    archiveListReadable: false,
+    hasStackFolder: false,
+    volumeEntries: 0,
+    databaseEntries: 0,
+  };
+
+  const { stdout } = await execFileAsync('tar', ['-tzf', archivePath], { timeout: 120000, maxBuffer: 64 * 1024 * 1024 });
+  checks.archiveListReadable = true;
+
+  const entries = String(stdout)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  checks.hasStackFolder = entries.some((entry) => entry === 'STACK/' || entry.startsWith('STACK/'));
+  checks.volumeEntries = entries.filter((entry) => entry.startsWith('VOLUMES/')).length;
+  checks.databaseEntries = entries.filter((entry) => entry.startsWith('DATABASES/')).length;
+
+  if (opts.requireStackFolder && !checks.hasStackFolder) {
+    return { ok: false, checks };
+  }
+  if (opts.expectedVolumeTargets > 0 && Number(checks.volumeEntries) === 0) {
+    return { ok: false, checks };
+  }
+  if (opts.expectedDatabaseDumps > 0 && Number(checks.databaseEntries) === 0) {
+    return { ok: false, checks };
+  }
+
+  return { ok: true, checks };
+}
+
 export async function runBackup(stackId: string): Promise<void> {
   const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [stackId]);
   if (!stack) throw new Error(`Stack ${stackId} not found`);
@@ -55,8 +171,12 @@ export async function runBackup(stackId: string): Promise<void> {
 
   try {
     let artifactsCount = 0;
-    const selectedVolumes = backupConfig.include_volumes
-      ? await resolveSelectedVolumeNames(stack.name, backupConfig)
+    const selectedVolumeTargets = backupConfig.include_volumes
+      ? await resolveSelectedVolumeTargets(stack.name, backupConfig)
+      : [];
+    const selectedVolumeKeys = selectedVolumeTargets.map((target) => target.key);
+    const selectedDatabaseNames = backupConfig.include_databases
+      ? await resolveSelectedDatabaseNames(stack.name, backupConfig)
       : [];
 
     // Backup stack folder into STACK/
@@ -74,21 +194,21 @@ export async function runBackup(stackId: string): Promise<void> {
       }
     }
 
-    // Backup selected volumes into VOLUMES/<volume>.tar.gz
-    if (backupConfig.include_volumes && selectedVolumes.length > 0) {
+    // Backup selected volumes/bind mounts into VOLUMES/<target>/
+    if (backupConfig.include_volumes && selectedVolumeTargets.length > 0) {
       try {
         const volumeDir = join(stagingDir, 'VOLUMES');
         await mkdir(volumeDir, { recursive: true });
-        for (const vol of selectedVolumes) {
+        for (const target of selectedVolumeTargets) {
           const helperName = `hlc-backup-${Date.now()}-${Math.random().toString(16).slice(2)}`;
           try {
-            const targetDir = join(volumeDir, vol);
+            const targetDir = join(volumeDir, `${target.kind}-${sanitizePathToName(target.name)}`);
             await mkdir(targetDir, { recursive: true });
 
             await execFileAsync('docker', [
               'create',
               '--name', helperName,
-              '-v', `${vol}:/source:ro`,
+              '-v', `${target.source}:/source:ro`,
               'alpine',
               'true',
             ], { timeout: 30000 });
@@ -98,7 +218,7 @@ export async function runBackup(stackId: string): Promise<void> {
             });
             artifactsCount += 1;
           } catch (err) {
-            logger.warn({ err, volume: vol }, 'Volume backup failed');
+            logger.warn({ err, target }, 'Volume/bind backup failed');
           } finally {
             await execFileAsync('docker', ['rm', '-f', helperName], { timeout: 30000 }).catch(() => {});
           }
@@ -113,8 +233,11 @@ export async function runBackup(stackId: string): Promise<void> {
       const dbDir = join(stagingDir, 'DATABASES');
       await mkdir(dbDir, { recursive: true });
       databaseBytes = await backupDatabaseTargets(stack, backupConfig, dbDir, dirTimestamp);
-      if (databaseBytes > 0) {
+      if (databaseBytes > 0 || selectedDatabaseNames.length > 0) {
         artifactsCount += 1;
+      }
+      if (selectedDatabaseNames.length > 0 && databaseBytes <= 0) {
+        throw new Error('Database backup selected but no logical dump file was produced. Use volume backup for unsupported database engines or verify credentials/container health.');
       }
     }
 
@@ -122,40 +245,65 @@ export async function runBackup(stackId: string): Promise<void> {
       throw new Error('Backup produced no content. Verify stack path/volumes and backup selection.');
     }
 
+    const manifest = {
+      stackId,
+      stackName: stack.name,
+      timestamp: new Date().toISOString(),
+      includes: {
+        stackFolder: backupConfig.include_stack_folder,
+        volumes: backupConfig.include_volumes,
+        selectedVolumeKeys,
+        selectedVolumeTargets: selectedVolumeTargets.map((target) => ({ key: target.key, kind: target.kind, source: target.source, name: target.name })),
+        databases: backupConfig.include_databases,
+        selectedDatabaseNames,
+      },
+      databaseBytes,
+    };
+    await writeFile(join(stagingDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+
     const archiveName = `${stack.name}_backup_${dirTimestamp}.tar.gz`;
     const archivePath = join(backupDir, archiveName);
     await execFileAsync('tar', ['czf', archivePath, '-C', stagingDir, '.'], { timeout: 300000 });
     const archiveStat = await stat(archivePath);
     const totalSize = archiveStat.size;
 
-    // Write manifest
-    const manifest = {
-      stackId,
-      stackName: stack.name,
-      timestamp: new Date().toISOString(),
-      archive: archiveName,
-      includes: {
-        stackFolder: backupConfig.include_stack_folder,
-        volumes: backupConfig.include_volumes,
-        selectedVolumes,
-        databases: backupConfig.include_databases,
-      },
-      databaseBytes,
-      totalSize,
-    };
-    await writeFile(join(backupDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+    const verification = await verifyBackupArchive(archivePath, {
+      requireStackFolder: Boolean(backupConfig.include_stack_folder && stack.stack_path),
+      expectedVolumeTargets: selectedVolumeTargets.length,
+      expectedDatabaseDumps: selectedDatabaseNames.length > 0 ? 1 : 0,
+    });
+    if (!verification.ok) {
+      throw new Error(`Backup archive verification failed: ${JSON.stringify(verification.checks)}`);
+    }
+
+    // Write manifest alongside archive for quick inspection
+    const completedManifest = { ...manifest, archive: archiveName, totalSize, verification };
+    await writeFile(join(backupDir, 'manifest.json'), JSON.stringify(completedManifest, null, 2));
     await rm(stagingDir, { recursive: true, force: true });
 
     await pool.query(
       `UPDATE backup_jobs SET status = 'completed', size_bytes = $1, completed_at = NOW()
-       WHERE id = $2`,
-      [totalSize, job.id]
+       , includes = $2
+       WHERE id = $3`,
+      [
+        totalSize,
+        JSON.stringify({
+          stackFolder: backupConfig.include_stack_folder,
+          volumes: backupConfig.include_volumes,
+          databases: backupConfig.include_databases,
+          selectedVolumeKeys,
+          selectedDatabaseNames,
+          verification,
+        }),
+        job.id,
+      ]
     );
 
     await sendNotification('backupCompleted', {
       stackName: stack.name,
       sizeBytes: totalSize,
       archive: archiveName,
+      verification,
     });
     await enforceRetention(stack.name, backupConfig);
     logger.info({ stackId, backupDir, totalSize }, 'Backup completed');
@@ -172,8 +320,8 @@ export async function runBackup(stackId: string): Promise<void> {
   }
 }
 
-async function resolveSelectedVolumeNames(stackName: string, backupConfig: any): Promise<string[]> {
-  const detected = await detectStackVolumeNames(stackName);
+async function resolveSelectedVolumeTargets(stackName: string, backupConfig: any): Promise<BackupVolumeTarget[]> {
+  const detected = await detectStackVolumeTargets(stackName);
   const requested = Array.isArray(backupConfig.database_config?.volumeNames)
     ? backupConfig.database_config.volumeNames
     : [];
@@ -183,7 +331,7 @@ async function resolveSelectedVolumeNames(stackName: string, backupConfig: any):
   }
 
   const selected = new Set(requested.map((entry: string) => String(entry)));
-  return detected.filter((name) => selected.has(name));
+  return detected.filter((target) => selected.has(target.key) || selected.has(target.name) || selected.has(target.source));
 }
 
 async function resolveSelectedDatabaseNames(stackName: string, backupConfig: any): Promise<string[]> {
@@ -224,54 +372,50 @@ async function enforceRetention(stackName: string, config: any): Promise<void> {
 }
 
 export async function detectStackVolumeNames(stackName: string): Promise<string[]> {
-  const containers = await docker.listContainers({ all: true });
-  const volumeNames = new Set<string>();
-  let matchedContainers = 0;
+  const targets = await detectStackVolumeTargets(stackName);
+  return targets.map((target) => target.key).sort((a, b) => a.localeCompare(b));
+}
 
-  // First pass: try exact project name match
+export async function detectStackVolumeTargets(stackName: string): Promise<BackupVolumeTarget[]> {
+  const containers = await listLikelyStackContainers(stackName);
+  const dedup = new Map<string, BackupVolumeTarget>();
+
   for (const container of containers) {
-    const project = container.Labels?.['com.docker.compose.project'];
-    if (!project || project.toLowerCase() !== stackName.toLowerCase()) continue;
-    
-    matchedContainers++;
-    for (const mount of container.Mounts || []) {
-      if (mount.Type === 'volume' && mount.Name) {
-        volumeNames.add(mount.Name);
-      }
-    }
-  }
-
-  // If no containers found with exact match, try to find by any compose project (fallback for renamed/adopted stacks)
-  if (matchedContainers === 0) {
-    logger.warn({ stackName }, 'No containers found with matching docker-compose project label; trying fallback detection');
-    
-    // Fallback: check if any containers have labels with our stack name in any form
-    for (const container of containers) {
-      const project = container.Labels?.['com.docker.compose.project'];
-      // Try case-insensitive match and also try normalization that docker-compose might use
-      if (!project) continue;
-      
-      const stackNameNorm = stackName.toLowerCase().replace(/[^a-z0-9_-]/g, '');
-      const projectNorm = project.toLowerCase().replace(/[^a-z0-9_-]/g, '');
-      
-      if (stackNameNorm === projectNorm && stackNameNorm.length > 0) {
-        matchedContainers++;
-        for (const mount of container.Mounts || []) {
-          if (mount.Type === 'volume' && mount.Name) {
-            volumeNames.add(mount.Name);
-          }
+    for (const mount of container.mounts) {
+      const mountType = mount.type.toLowerCase();
+      if (mountType === 'volume' && mount.name) {
+        const key = `volume:${mount.name}`;
+        if (!dedup.has(key)) {
+          dedup.set(key, {
+            key,
+            name: mount.name,
+            kind: 'volume',
+            source: mount.name,
+            containerName: container.name,
+          });
+        }
+      } else if (mountType === 'bind' && mount.source) {
+        const key = `bind:${mount.source}`;
+        if (!dedup.has(key)) {
+          dedup.set(key, {
+            key,
+            name: mount.source,
+            kind: 'bind',
+            source: mount.source,
+            containerName: container.name,
+          });
         }
       }
     }
   }
 
-  if (matchedContainers === 0) {
-    logger.warn({ stackName, containerCount: containers.length }, 'No containers found for stack with any detection method');
+  const result = [...dedup.values()].sort((a, b) => a.name.localeCompare(b.name));
+  if (result.length === 0) {
+    logger.warn({ stackName, candidateContainers: containers.length }, 'No backup mount targets detected for stack');
   } else {
-    logger.debug({ stackName, matchedContainers, volumeCount: volumeNames.size }, 'Detected stack volumes');
+    logger.debug({ stackName, containerCount: containers.length, targetCount: result.length }, 'Detected backup mount targets');
   }
-
-  return [...volumeNames].sort((a, b) => a.localeCompare(b));
+  return result;
 }
 
 export interface DatabaseInfo {
@@ -281,71 +425,31 @@ export interface DatabaseInfo {
 }
 
 export async function detectStackDatabaseNames(stackName: string): Promise<DatabaseInfo[]> {
-  const containers = await docker.listContainers({ all: true });
+  const containers = await listLikelyStackContainers(stackName);
   const databases: DatabaseInfo[] = [];
   const seen = new Set<string>();
   let matchedContainers = 0;
   let dbTypesFound = 0;
 
-  // First pass: try exact project name match
   for (const container of containers) {
-    const project = container.Labels?.['com.docker.compose.project'];
-    if (!project || project.toLowerCase() !== stackName.toLowerCase()) continue;
-
     matchedContainers++;
-    const image = container.Image || '';
+    const image = container.image || '';
     const type = inferDatabaseType(image);
     if (!type) {
-      logger.debug({ image, containerName: container.Names?.[0] }, 'Container image does not match any database type');
+      logger.debug({ image, containerName: container.name }, 'Container image does not match any database type');
       continue;
     }
 
     dbTypesFound++;
-    const serviceName = container.Labels?.['com.docker.compose.service'] || container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12);
+    const serviceName = container.service || container.name || container.id.slice(0, 12);
     
     if (!seen.has(serviceName)) {
       seen.add(serviceName);
       databases.push({
         serviceName,
         type,
-        containerName: container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12),
+        containerName: container.name || container.id.slice(0, 12),
       });
-    }
-  }
-
-  // If no containers found with exact match, try to find by any compose project (fallback for renamed/adopted stacks)
-  if (matchedContainers === 0) {
-    logger.warn({ stackName }, 'No containers found with matching docker-compose project label; trying fallback detection');
-    
-    // Fallback: check if any containers have labels with our stack name in any form
-    for (const container of containers) {
-      const project = container.Labels?.['com.docker.compose.project'];
-      if (!project) continue;
-      
-      const stackNameNorm = stackName.toLowerCase().replace(/[^a-z0-9_-]/g, '');
-      const projectNorm = project.toLowerCase().replace(/[^a-z0-9_-]/g, '');
-      
-      if (stackNameNorm === projectNorm && stackNameNorm.length > 0) {
-        matchedContainers++;
-        const image = container.Image || '';
-        const type = inferDatabaseType(image);
-        if (!type) {
-          logger.debug({ image, containerName: container.Names?.[0] }, 'Container image does not match any database type');
-          continue;
-        }
-
-        dbTypesFound++;
-        const serviceName = container.Labels?.['com.docker.compose.service'] || container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12);
-        
-        if (!seen.has(serviceName)) {
-          seen.add(serviceName);
-          databases.push({
-            serviceName,
-            type,
-            containerName: container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12),
-          });
-        }
-      }
     }
   }
 
@@ -368,7 +472,14 @@ async function backupDatabaseTargets(stack: any, backupConfig: any, backupDir: s
   let totalSize = 0;
   for (const target of targets) {
     try {
-      const archiveName = `${stack.name}_db-${target.serviceName}_${dirTimestamp}${target.type === 'mongodb' ? '.archive.gz' : '.sql.gz'}`;
+      const extension = target.type === 'mongodb'
+        ? '.archive.gz'
+        : target.type === 'redis'
+          ? '.rdb.gz'
+          : target.type === 'influxdb'
+            ? '.influx-backup.tgz'
+            : '.sql.gz';
+      const archiveName = `${stack.name}_db-${target.serviceName}_${dirTimestamp}${extension}`;
       const archivePath = join(backupDir, archiveName);
       const dumpBuffer = await createDatabaseDump(target);
       if (!dumpBuffer) continue;
@@ -387,30 +498,24 @@ async function detectDatabaseTargets(stackName: string, backupConfig: any): Prom
   const forcedType = backupConfig.database_type && backupConfig.database_type !== 'auto' && backupConfig.database_type !== 'none'
     ? backupConfig.database_type
     : null;
+  const containers = await listLikelyStackContainers(stackName);
+  const selectedNames = await resolveSelectedDatabaseNames(stackName, backupConfig);
+  const selectedSet = new Set(selectedNames.map((name: string) => String(name)));
 
-  const containers = await docker.listContainers({ all: true });
   const detected = containers
-    .filter((container) => {
-      const project = container.Labels?.['com.docker.compose.project'];
-      return project && project.toLowerCase() === stackName.toLowerCase();
-    })
     .map((container) => {
-      const image = container.Image || '';
-      const type = inferDatabaseType(image);
+      const type = inferDatabaseType(container.image || '');
       if (!type) return null;
+      const serviceName = container.service || container.name || container.id.slice(0, 12);
       return {
         type,
-        serviceName: container.Labels?.['com.docker.compose.service'] || container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12),
-        containerName: container.Names?.[0]?.replace(/^\//, '') || container.Id.slice(0, 12),
-        containerId: container.Id,
-        databaseName: undefined,
+        serviceName,
+        containerName: container.name || container.id.slice(0, 12),
+        containerId: container.id,
+        databaseName: backupConfig.database_config?.databaseName,
       } as DatabaseTarget;
     })
     .filter((target): target is DatabaseTarget => Boolean(target));
-
-  // Get selected database names; if none specified, use all detected
-  const selectedNames = await resolveSelectedDatabaseNames(stackName, backupConfig);
-  const selectedSet = new Set(selectedNames.map((name: string) => String(name)));
 
   return detected.filter((target) => {
     if (forcedType && target.type !== forcedType) return false;
@@ -437,9 +542,9 @@ async function createDatabaseDump(target: DatabaseTarget): Promise<Buffer | null
     case 'mongodb':
       return dumpMongo(target);
     case 'redis':
+      return dumpRedis(target);
     case 'influxdb':
-      logger.warn({ target }, 'Logical dump not implemented for this database type yet; rely on volume backup');
-      return null;
+      return dumpInflux(target);
     default:
       return null;
   }
@@ -490,6 +595,26 @@ async function dumpMongo(target: DatabaseTarget): Promise<Buffer> {
   const { stdout } = await execFileAsync('docker', ['exec', target.containerName, 'sh', '-lc', command], {
     encoding: 'buffer' as BufferEncoding,
     maxBuffer: 256 * 1024 * 1024,
+  });
+  return Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout);
+}
+
+async function dumpRedis(target: DatabaseTarget): Promise<Buffer> {
+  const tmp = `/tmp/hlc-redis-${Date.now()}.rdb`;
+  const command = `set -e; redis-cli --rdb ${shellEscape(tmp)} >/dev/null 2>&1 || true; if [ -f ${shellEscape(tmp)} ]; then cat ${shellEscape(tmp)}; rm -f ${shellEscape(tmp)}; elif [ -f /data/dump.rdb ]; then cat /data/dump.rdb; else exit 1; fi`;
+  const { stdout } = await execFileAsync('docker', ['exec', target.containerName, 'sh', '-lc', `${command} | gzip -c`], {
+    encoding: 'buffer' as BufferEncoding,
+    maxBuffer: 256 * 1024 * 1024,
+  });
+  return Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout);
+}
+
+async function dumpInflux(target: DatabaseTarget): Promise<Buffer> {
+  const tmpDir = `/tmp/hlc-influx-${Date.now()}`;
+  const command = `set -e; mkdir -p ${shellEscape(tmpDir)}; influxd backup -portable ${shellEscape(tmpDir)} >/dev/null 2>&1; tar czf - -C ${shellEscape(tmpDir)} .; rm -rf ${shellEscape(tmpDir)}`;
+  const { stdout } = await execFileAsync('docker', ['exec', target.containerName, 'sh', '-lc', command], {
+    encoding: 'buffer' as BufferEncoding,
+    maxBuffer: 512 * 1024 * 1024,
   });
   return Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout);
 }

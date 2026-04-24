@@ -202,6 +202,22 @@ function buildHumanMessage(eventType: string, data: Record<string, unknown>): { 
         level: 'error',
       };
     }
+    case 'diskSpaceLow': {
+      const freeGB = pickString(data, details, ['freeGB']);
+      const thresholdGB = pickString(data, details, ['thresholdGB']);
+      const msg = pickString(data, details, ['message']);
+      const lines = [
+        `Free Space: ${freeGB ? freeGB + ' GB' : 'Unknown'}`,
+        `Threshold: ${thresholdGB ? thresholdGB + ' GB' : 'Unknown'}`,
+      ];
+      if (msg) lines.push(`Note: ${msg}`);
+      lines.push(...buildGenericLines(data, details, ['freeGB', 'thresholdGB', 'message', 'action']));
+      return {
+        title: '⚠️ Low Disk Space — Auto-Update Skipped',
+        message: lines.join('\n'),
+        level: 'warning',
+      };
+    }
     default: {
       const genericTitle = pickString(data, details, ['title']) || `Homelab Commander: ${eventType}`;
       const message = pickString(data, details, ['message']);
@@ -246,6 +262,17 @@ export async function sendNotification(
     for (const service of services) {
       try {
         await sendNotificationToService(service, eventType, data);
+        // Log every successful dispatch to audit_log for the history view
+        const payload = buildPayload(eventType, data);
+        await pool.query(
+          `INSERT INTO audit_log (action, resource_type, resource_id, details) VALUES ($1, $2, $3, $4)`,
+          [
+            'notification',
+            eventType,
+            service.name || service.type,
+            JSON.stringify({ title: payload.title, message: payload.message, level: payload.level, serviceType: service.type }),
+          ]
+        );
       } catch (err) {
         logger.error({ err, service: service.name }, 'Notification dispatch failed');
       }

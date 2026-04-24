@@ -1,6 +1,6 @@
 import type {
   Container, Image, Stack, Volume, Network, SystemInfo,
-  AppSettings, NotificationService, BackupConfig, BackupJob,
+  AppSettings, NotificationService, NotificationLogEntry, BackupConfig, BackupJob, BackupVolumeOption, BackupDatabaseOption,
   PortReservation, SmartStartupConfig, SmartStartupStartupWarning,
   SmartStartupCheckNowResult, ContainerStats,
 } from './types';
@@ -312,11 +312,11 @@ export async function fetchBackupConfig(stackId: string): Promise<BackupConfig> 
   return request(`/backups/${stackId}/config`);
 }
 
-export async function fetchBackupVolumes(stackId: string): Promise<Array<{ name: string }>> {
+export async function fetchBackupVolumes(stackId: string): Promise<BackupVolumeOption[]> {
   return request(`/backups/${stackId}/volumes`);
 }
 
-export async function fetchBackupDatabases(stackId: string): Promise<Array<{ name: string; type: string; containerName: string }>> {
+export async function fetchBackupDatabases(stackId: string): Promise<BackupDatabaseOption[]> {
   return request(`/backups/${stackId}/databases`);
 }
 
@@ -374,6 +374,10 @@ export async function testNotificationService(id: string): Promise<void> {
 
 export async function testNotificationServiceConfig(service: Omit<NotificationService, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
   await request('/notifications/test-config', { method: 'POST', body: JSON.stringify(service) });
+}
+
+export async function fetchNotificationLog(limit = 200): Promise<NotificationLogEntry[]> {
+  return request(`/notifications/log?limit=${limit}`);
 }
 
 // ---- Port Reservations ----

@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS backup_configs (
   include_stack_folder BOOLEAN DEFAULT TRUE,
   include_volumes BOOLEAN DEFAULT TRUE,
   include_databases BOOLEAN DEFAULT FALSE,
-  database_type TEXT DEFAULT 'none' CHECK (database_type IN ('postgresql','mysql','mongodb','redis','none')),
+  database_type TEXT DEFAULT 'none' CHECK (database_type IN ('postgresql','mysql','mongodb','redis','influxdb','none')),
   database_config JSONB DEFAULT '{}'::jsonb,
   compression_level INTEGER DEFAULT 6,
   encrypted BOOLEAN DEFAULT FALSE,

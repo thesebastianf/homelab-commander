@@ -3,7 +3,7 @@ import { pool } from '../database.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { validateBody } from '../middleware/validate.js';
 import { backupConfigBody } from '../validation/schemas.js';
-import { runBackup, detectStackVolumeNames, detectStackDatabaseNames } from '../services/backups.js';
+import { runBackup, detectStackVolumeTargets, detectStackDatabaseNames } from '../services/backups.js';
 import { rescheduleBackup } from '../services/backupScheduler.js';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
@@ -46,8 +46,15 @@ router.get('/:stackId/volumes', asyncHandler(async (req, res) => {
     return;
   }
 
-  const volumeNames = await detectStackVolumeNames(String(stack.name));
-  res.json(volumeNames.map((name) => ({ name })));
+  const targets = await detectStackVolumeTargets(String(stack.name));
+  res.json(targets.map((target) => ({
+    key: target.key,
+    name: target.key,
+    displayName: target.name,
+    kind: target.kind,
+    source: target.source,
+    containerName: target.containerName,
+  })));
 }));
 
 // List detectable databases for a stack
@@ -82,7 +89,7 @@ router.get('/:stackId/debug/containers', asyncHandler(async (req, res) => {
       name: c.Names?.[0]?.replace(/^\//, ''),
       image: c.Image,
       labels: c.Labels || {},
-      mounts: (c.Mounts || []).map(m => ({ name: m.Name, type: m.Type })),
+      mounts: (c.Mounts || []).map(m => ({ name: m.Name, type: m.Type, source: m.Source, destination: m.Destination })),
     })),
   };
   res.json(debugInfo);
