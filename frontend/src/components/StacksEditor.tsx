@@ -1745,6 +1745,7 @@ export function StacksEditor({
                       })()}
 
                       {/* Per-port conflict list */}
+
                       {newPorts.length === 0 ? (
                         <div className="flex items-center justify-center h-24">
                           <p className="text-xs text-muted-foreground font-mono">No ports defined in compose yet</p>
@@ -1768,33 +1769,33 @@ export function StacksEditor({
                               </div>
                             )
                           })}
+
+                          <p className="text-xs text-muted-foreground pt-1 pb-1">Service name conflicts across stacks:</p>
+                          {newServiceNames.length === 0 ? (
+                            <p className="text-xs text-muted-foreground italic">No services defined in compose yet</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {newServiceNames.map((serviceName) => {
+                                const clashes = newServiceConflicts.get(serviceName) || []
+                                return (
+                                  <div key={serviceName} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${clashes.length > 0 ? 'border-amber-500/60 bg-amber-500/5' : 'border-border/40 bg-muted/20'}`}>
+                                    <span className="font-mono text-xs font-semibold">{serviceName}</span>
+                                    {clashes.length > 0 ? (
+                                      <span className="text-xs text-amber-400 flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3" />
+                                        Reused by <strong className="ml-0.5">{clashes.join(', ')}</strong>
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-green-500">Unique</span>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+
+                          <p className="text-[10px] text-muted-foreground">Reusing service names across stacks can cause confusion in tooling, logs, and helper integrations even when ports do not clash.</p>
                         </>
-
-                        <p className="text-xs text-muted-foreground pt-1 pb-1">Service name conflicts across stacks:</p>
-                        {newServiceNames.length === 0 ? (
-                          <p className="text-xs text-muted-foreground italic">No services defined in compose yet</p>
-                        ) : (
-                          <div className="space-y-1.5">
-                            {newServiceNames.map((serviceName) => {
-                              const clashes = newServiceConflicts.get(serviceName) || []
-                              return (
-                                <div key={serviceName} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${clashes.length > 0 ? 'border-amber-500/60 bg-amber-500/5' : 'border-border/40 bg-muted/20'}`}>
-                                  <span className="font-mono text-xs font-semibold">{serviceName}</span>
-                                  {clashes.length > 0 ? (
-                                    <span className="text-xs text-amber-400 flex items-center gap-1">
-                                      <AlertTriangle className="w-3 h-3" />
-                                      Reused by <strong className="ml-0.5">{clashes.join(', ')}</strong>
-                                    </span>
-                                  ) : (
-                                    <span className="text-xs text-green-500">Unique</span>
-                                  )}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-
-                        <p className="text-[10px] text-muted-foreground">Reusing service names across stacks can cause confusion in tooling, logs, and helper integrations even when ports do not clash.</p>
                       )}
 
                       {/* All ports in use */}
@@ -1847,7 +1848,13 @@ export function StacksEditor({
                         </SelectContent>
                       </Select>
                       {refStackId ? (
-                        <YamlEditor value={refStackCompose} readOnly minHeight="180px" className="flex-1" />
+                        <YamlEditor
+                          value={refStackCompose}
+                          readOnly
+                          minHeight="0"
+                          className="flex-1 min-h-0"
+                          style={{ flex: 1 }}
+                        />
                       ) : (
                         <div className="flex-1 flex items-center justify-center">
                           <p className="text-xs text-muted-foreground text-center">Select a stack above to view its compose as reference</p>
