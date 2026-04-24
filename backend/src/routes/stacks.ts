@@ -175,57 +175,58 @@ async function startDetachedSelfUpdate(id: string, stack: any, op: OperationStat
   try {
     const project = composeProjectNameFromStack(stack);
     const composeFile = await findComposeFile(cwd);
-    op.lines.push('Detected self stack update; handing off to helper container...');
+    op.lines.push('[+] Self-update detected — handing off to helper container...');
 
     // Get current container ID (self)
     const currentContainerId = String(process.env.HOSTNAME || '').trim();
     if (!currentContainerId) {
-      throw new Error('Cannot determine self container ID for graceful shutdown');
+      op.lines.push('⚠️ Cannot determine own container ID — falling back to in-process update');
+      return false;
     }
 
-    // Build the detached command: sleep + pull latest + stop old + start new + exit old
-    // This follows the Dockge "fire and forget" pattern
-    const updateCommand = [
-      'sh', '-c',
-      `sleep 5 && ` +
-      `docker compose --project-name ${project} -f ${cwd}/${composeFile} pull && ` +
-      `docker compose --project-name ${project} -f ${cwd}/${composeFile} up -d --pull always --force-recreate && ` +
-      `docker stop ${currentContainerId}`
-    ];
+    const composePath = `${cwd}/${composeFile}`;
 
-    // Start the update process DETACHED so it survives even when this container dies
+    // Build the helper script: wait → pull → recreate → cleanup
+    const script = [
+      'set -e',
+      'echo "Helper: waiting 3s for old instance to finish responding..."',
+      'sleep 3',
+      `echo "Helper: pulling latest images for project ${project}..."`,
+      `docker compose --project-name ${project} -f ${composePath} pull`,
+      `echo "Helper: recreating containers..."`,
+      `docker compose --project-name ${project} -f ${composePath} up -d --force-recreate`,
+      'echo "Helper: self-update complete!"',
+    ].join(' && ');
+
+    // Start a detached helper container with docker socket + compose files
     const child = spawn('docker', [
-      'run',
-      '--rm',
+      'run', '-d', '--rm',
+      '--name', `hlc-self-update-${Date.now()}`,
       '-v', '/var/run/docker.sock:/var/run/docker.sock',
-      '-v', `${cwd}:${cwd}`,
+      '-v', `${cwd}:${cwd}:ro`,
       'docker:cli',
-      ...updateCommand
+      'sh', '-c', script,
     ], {
       detached: true,
-      stdio: 'ignore', // Completely detach from parent process
+      stdio: 'ignore',
     });
 
-    // Unref the child so parent process can exit without waiting
     child.unref();
 
-    op.lines.push('Helper update process spawned (detached)');
-    op.lines.push('• Self-update handoff started. THC will restart itself shortly.');
-    op.lines.push('• Success notification is not sent from the old instance anymore, because it cannot verify the detached helper result after shutdown.');
+    op.lines.push('• Helper container spawned (detached)');
+    op.lines.push('• THC will pull latest images and recreate itself');
+    op.lines.push('• Page will reload automatically when new instance is ready');
+    op.done = true;
 
-    // Exit gracefully after a short delay to allow response to be sent
-    setTimeout(() => {
-      logger.info({ stackId: id, stackName: stack.name }, 'Self-update handoff complete, exiting old container');
-      process.exit(0);
-    }, 100);
-
+    // Don't process.exit — let the helper container handle the recreation
+    // The compose up --force-recreate will stop and replace this container
     return true;
   } catch (err: any) {
     logger.warn(
       { action: 'update', stackId: id, stackName: stack.name, error: formatExecError(err) },
       'Detached self-update handoff failed; falling back to in-process update'
     );
-    op.lines.push('⚠️ Detached self-update handoff failed, trying direct update...');
+    op.lines.push('⚠️ Self-update helper failed, trying direct update...');
     return false;
   } finally {
     await cleanup?.();
@@ -675,7 +676,6 @@ async function finishActionOnFailure(
 }
 
 async function runUpdateOperation(id: string, stack: any, op: OperationState, trigger = 'manual'): Promise<void> {
-  let cwd = '';
   let cleanup: (() => Promise<void>) | null = null;
   const wasRunning = stack.status === 'running';
   try {
@@ -689,34 +689,87 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState, tr
     }
 
     const resolved = await resolveStackCwd(stack);
-    cwd = resolved.cwd;
+    const cwd = resolved.cwd;
     cleanup = resolved.cleanup;
 
     // Like Dockge: if stack is not running, only pull images — don't start
+    const composeCommand = wasRunning
+      ? ['up', '-d', '--pull', 'always']
+      : ['pull'];
+
     if (!wasRunning) {
       op.lines.push('Stack is not running — pulling images only (will not auto-start)');
-      const result = await execComposeCommand(stack, id, 'update', ['pull'], { cwd, timeout: 120000 });
-      const outputLines = `${result.stdout}\n${result.stderr}`.split('\n').map((l) => l.trim()).filter(Boolean);
-      outputLines.forEach((line) => compactComposeOutput(op, line));
-      setStackUpdateStatus(stack.name, false);
-      // Restore original status (stopped), not 'running'
-      await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [stack.status === 'deploying' ? 'stopped' : stack.status, id]);
-      op.reconciledStatus = 'stopped';
-      op.lines.push('✅ Images pulled successfully (stack remains stopped)');
-    } else {
-      const result = await execComposeCommand(stack, id, 'update', ['up', '-d', '--pull', 'always'], { cwd, timeout: 120000 });
-      const outputLines = `${result.stdout}\n${result.stderr}`.split('\n').map((l) => l.trim()).filter(Boolean);
-      outputLines.forEach((line) => compactComposeOutput(op, line));
-      await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
-      setStackUpdateStatus(stack.name, false);
-      op.reconciledStatus = 'running';
-      op.lines.push('✅ Update complete — containers restarted with latest images');
     }
-    await auditLog('update', 'stack', id, { trigger, source: trigger === 'schedule' ? 'auto-update' : 'user' });
-    await sendStackOperationNotification('update', stack, true, { trigger });
+
+    // Use streaming spawn for real-time progress (Dockge-style)
+    const attempts = getComposeInvocations(stack, composeCommand, cwd);
+    let lastError: any = null;
+
+    for (let attemptIdx = 0; attemptIdx < attempts.length; attemptIdx++) {
+      const attempt = attempts[attemptIdx];
+      lastError = null;
+
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const proc = spawn(attempt.runtime, attempt.args, {
+            cwd,
+            timeout: 300000, // 5min for pull+up
+            env: buildComposeCommandEnv(),
+          });
+
+          proc.stdout.on('data', (data: Buffer) => {
+            data.toString('utf8').split('\n').filter(Boolean).forEach(line => {
+              compactComposeOutput(op, line);
+            });
+          });
+
+          proc.stderr.on('data', (data: Buffer) => {
+            data.toString('utf8').split('\n').filter(Boolean).forEach(line => {
+              compactComposeOutput(op, line);
+            });
+          });
+
+          proc.on('close', (code: number) => {
+            if (code === 0) {
+              resolve();
+            } else {
+              reject(new Error(`${attempt.runtime} exited with code ${code}`));
+            }
+          });
+
+          proc.on('error', (err: NodeJS.ErrnoException) => {
+            reject(new Error(err.code === 'ENOENT' ? `${attempt.runtime} not found` : err.message));
+          });
+        });
+
+        // Success
+        if (wasRunning) {
+          await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
+          op.reconciledStatus = 'running';
+          op.lines.push('✅ Update complete — containers restarted with latest images');
+        } else {
+          await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [stack.status === 'deploying' ? 'stopped' : stack.status, id]);
+          op.reconciledStatus = 'stopped';
+          op.lines.push('✅ Images pulled successfully (stack remains stopped)');
+        }
+        setStackUpdateStatus(stack.name, false);
+        await auditLog('update', 'stack', id, { trigger, source: trigger === 'schedule' ? 'auto-update' : 'user' });
+        await sendStackOperationNotification('update', stack, true, { trigger });
+        return;
+      } catch (err: any) {
+        lastError = err;
+        const isLast = attemptIdx === attempts.length - 1;
+        if (isLast || !shouldTryComposeFallback(err)) {
+          throw err;
+        }
+        op.lines.push(`⚠️ Attempt ${attemptIdx + 1} failed, trying fallback...`);
+      }
+    }
+
+    throw lastError || new Error('Update operation failed');
   } catch (err: any) {
-    logger.error({ action: 'update', stackId: id, stackName: stack.name, stackPath: stack.stack_path, cwd, error: formatExecError(err) }, 'Stack update operation failed');
-    op.lines.push(`❌ Error: ${formatExecError(err)}`);
+    logger.error({ action: 'update', stackId: id, stackName: stack.name, error: formatExecError(err) }, 'Stack update operation failed');
+    op.lines.push(`❌ Update failed: ${formatExecError(err)}`);
     op.error = formatExecError(err);
     const reconciledStatus = await reconcileStackStatusFromRuntime(id, stack);
     op.reconciledStatus = reconciledStatus;
@@ -1314,6 +1367,9 @@ router.put('/:id', validateBody(updateStackBody), asyncHandler(async (req, res) 
 // Delete stack
 router.delete('/:id', asyncHandler(async (req, res) => {
   const id = String(req.params.id);
+  // Clean up related configs to prevent orphan warnings
+  await pool.query("DELETE FROM smart_startup_configs WHERE target_id = $1 AND target_type = 'stack'", [id]);
+  await pool.query('DELETE FROM backup_configs WHERE stack_id = $1', [id]);
   await pool.query('DELETE FROM stacks WHERE id = $1', [id]);
   await auditLog('delete', 'stack', id);
   res.json({ ok: true });

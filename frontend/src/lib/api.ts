@@ -137,7 +137,7 @@ export async function inspectVolume(name: string): Promise<any> {
 // ---- Networks ----
 
 export async function fetchNetworks(): Promise<Network[]> {
-  return request('/networks');
+  return request('/networks/list');
 }
 
 export async function createNetwork(name: string, driver = 'bridge'): Promise<void> {

@@ -134,6 +134,18 @@ async function main() {
   initUpdateChecker();
   initThresholdMonitor();
   await initAutoUpdateScheduler();
+
+  // Restore any managed networks that may have been pruned or removed since last run
+  try {
+    const { restoreManagedNetworks } = await import('./routes/networks.js');
+    const restored = await restoreManagedNetworks();
+    const created = restored.filter((r) => r.status === 'created');
+    if (created.length > 0) {
+      logger.info({ networks: created.map((r) => r.name) }, 'Restored managed networks on startup');
+    }
+  } catch (err) {
+    logger.warn({ err }, 'Startup network restore failed (non-fatal)');
+  }
 }
 
 async function shutdown(signal: string) {

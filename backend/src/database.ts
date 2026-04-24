@@ -206,10 +206,12 @@ async function initSchema(client: pg.PoolClient): Promise<void> {
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       docker_network_id TEXT NOT NULL UNIQUE,
       docker_network_name TEXT NOT NULL UNIQUE,
+      driver TEXT NOT NULL DEFAULT 'bridge',
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
   await client.query(`CREATE INDEX IF NOT EXISTS idx_managed_networks_docker_id ON managed_networks(docker_network_id)`);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_managed_networks_name ON managed_networks(docker_network_name)`);
 
   await client.query(`
     CREATE TABLE IF NOT EXISTS audit_log (
@@ -346,9 +348,12 @@ async function runMigrations(client: pg.PoolClient): Promise<void> {
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       docker_network_id TEXT NOT NULL UNIQUE,
       docker_network_name TEXT NOT NULL UNIQUE,
+      driver TEXT NOT NULL DEFAULT 'bridge',
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`,
     `CREATE INDEX IF NOT EXISTS idx_managed_networks_docker_id ON managed_networks(docker_network_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_managed_networks_name ON managed_networks(docker_network_name)`,
+    `ALTER TABLE managed_networks ADD COLUMN IF NOT EXISTS driver TEXT NOT NULL DEFAULT 'bridge'`,
   ];
 
   for (const statement of statements) {

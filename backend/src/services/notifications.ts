@@ -4,274 +4,467 @@ import { logger } from '../logger.js';
 interface NotificationPayload {
   title: string;
   message: string;
-  level: 'info' | 'warning' | 'error';
+  level: 'info' | 'warning' | 'error' | 'success';
   timestamp: string;
+  // Rich data for Discord/Slack fields
+  fields?: Array<{ name: string; value: string; inline?: boolean }>;
+  emoji?: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function toStringValue(value: unknown): string {
-  if (value === null || value === undefined) return '-';
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value)) {
-    return value.map((item) => toStringValue(item)).join(', ');
-  }
-  if (isRecord(value)) {
-    return Object.entries(value)
-      .map(([key, inner]) => `${humanizeKey(key)}: ${toStringValue(inner)}`)
-      .join(', ');
-  }
-  return String(value);
-}
-
-function humanizeKey(key: string): string {
-  const lookup: Record<string, string> = {
-    stack: 'Stack',
-    stackName: 'Stack',
-    name: 'Name',
-    action: 'Action',
-    container: 'Container',
-    usage: 'Usage',
-    threshold: 'Threshold',
-    trigger: 'Triggered By',
-    mode: 'Mode',
-    desiredStatus: 'Target Status',
-    reconciledStatus: 'Runtime Status',
-    size: 'Size',
-    sizeBytes: 'Size',
-    error: 'Error',
-    address: 'Address',
-    stackId: 'Stack ID',
-    triggeredBy: 'Triggered By',
-  };
-  return lookup[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, (char) => char.toUpperCase());
-}
-
-function triggerLabel(trigger: unknown): string {
-  const value = String(trigger || '').toLowerCase();
-  if (!value) return 'Manual';
-  if (value === 'schedule' || value === 'auto_update_schedule') return 'Auto update schedule';
-  if (value === 'manual') return 'Manual';
-  if (value === 'detached-self-update') return 'Self-update handoff';
-  return value.replace(/[_-]+/g, ' ').replace(/^./, (char) => char.toUpperCase());
-}
-
-function actionLabel(action: unknown): string {
-  const value = String(action || '').toLowerCase();
-  const labels: Record<string, string> = {
-    deploy: 'Deploy',
-    update: 'Update',
-    'bulk-update': 'Bulk update',
-    restart: 'Restart',
-    recreate: 'Recreate',
-    stop: 'Stop',
-    deactivate: 'Deactivate',
-    auto_update: 'Auto update',
-  };
-  return labels[value] || (value ? value.replace(/[_-]+/g, ' ') : 'Update');
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let value = bytes;
   let idx = 0;
-  while (value >= 1024 && idx < units.length - 1) {
-    value /= 1024;
-    idx += 1;
-  }
+  while (value >= 1024 && idx < units.length - 1) { value /= 1024; idx += 1; }
   const precision = idx === 0 ? 0 : idx === 1 ? 1 : 2;
   return `${value.toFixed(precision)} ${units[idx]}`;
 }
 
-function extractNestedDetails(data: Record<string, unknown>): Record<string, unknown> {
-  return isRecord(data.details) ? data.details : {};
+function triggerLabel(trigger: unknown): string {
+  const value = String(trigger || '').toLowerCase();
+  if (!value || value === 'manual') return 'Manual';
+  if (value === 'schedule' || value === 'auto_update_schedule') return 'Auto-update schedule';
+  if (value === 'detached-self-update') return 'Self-update';
+  return value.replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase());
 }
 
-function pickString(data: Record<string, unknown>, details: Record<string, unknown>, keys: string[]): string | undefined {
+function actionLabel(action: unknown): string {
+  const value = String(action || '').toLowerCase();
+  const labels: Record<string, string> = {
+    deploy: 'Start', update: 'Update', 'bulk-update': 'Bulk update',
+    restart: 'Restart', recreate: 'Recreate', stop: 'Stop',
+    deactivate: 'Deactivate', auto_update: 'Auto update',
+  };
+  return labels[value] || (value ? value.replace(/[_-]+/g, ' ') : 'Update');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function pickString(data: Record<string, unknown>, keys: string[]): string | undefined {
   for (const key of keys) {
-    if (data[key] !== undefined && data[key] !== null && String(data[key]).trim()) {
-      return toStringValue(data[key]);
-    }
-    if (details[key] !== undefined && details[key] !== null && String(details[key]).trim()) {
-      return toStringValue(details[key]);
+    const v = data[key];
+    if (v !== undefined && v !== null && String(v).trim()) return String(v);
+    if (isRecord(data.details)) {
+      const dv = (data.details as Record<string, unknown>)[key];
+      if (dv !== undefined && dv !== null && String(dv).trim()) return String(dv);
     }
   }
   return undefined;
 }
 
-function buildGenericLines(data: Record<string, unknown>, details: Record<string, unknown>, exclude: string[] = []): string[] {
-  const excluded = new Set([...exclude, 'title', 'message', 'details']);
-  const source: Record<string, unknown> = { ...data, ...details };
-  return Object.entries(source)
-    .filter(([key, value]) => !excluded.has(key) && value !== undefined)
-    .map(([key, value]) => `${humanizeKey(key)}: ${toStringValue(value)}`);
+// ─── Rich message builder ──────────────────────────────────────────────────────
+
+interface RichPayload {
+  title: string;
+  emoji: string;
+  level: 'info' | 'warning' | 'error' | 'success';
+  fields: Array<{ name: string; value: string; inline?: boolean }>;
+  footer?: string;
+  oneliner: string; // compact for Telegram
 }
 
-function buildHumanMessage(eventType: string, data: Record<string, unknown>): { title: string; message: string; level: 'info' | 'warning' | 'error' } {
-  const details = extractNestedDetails(data);
-  const stackName = pickString(data, details, ['stackName', 'stack', 'name']);
-  const container = pickString(data, details, ['container', 'name']);
-  const action = actionLabel(pickString(data, details, ['action']) || eventType);
-  const trigger = triggerLabel(pickString(data, details, ['trigger', 'triggeredBy', 'mode']) || 'manual');
+function buildRichPayload(eventType: string, data: Record<string, unknown>): RichPayload {
+  const stackName = pickString(data, ['stackName', 'stack', 'name']);
+  const action = actionLabel(pickString(data, ['action']) || eventType);
+  const trigger = triggerLabel(pickString(data, ['trigger', 'triggeredBy', 'mode']) || 'manual');
+  const container = pickString(data, ['container']);
+  const error = pickString(data, ['error', 'message']);
 
   switch (eventType) {
-    case 'containerAutoUpdated': {
-      const lines = [
-        stackName ? `Stack: ${stackName}` : 'Stack: Unknown',
-        `Action: ${action}`,
-        `Triggered By: ${trigger}`,
-      ];
-      lines.push(...buildGenericLines(data, details, ['stackName', 'stack', 'name', 'action', 'trigger', 'triggeredBy', 'mode']));
+    case 'stackDeployed':
+    case 'containerStarted': {
       return {
-        title: '✅ Stack Update Succeeded',
-        message: lines.join('\n'),
-        level: 'info',
+        title: '✅ Stack Started Successfully',
+        emoji: '🚀',
+        level: 'success',
+        fields: [
+          { name: '📦 Stack', value: stackName || '—', inline: true },
+          { name: '⚡ Action', value: action, inline: true },
+          { name: '👤 Triggered By', value: trigger, inline: true },
+        ],
+        oneliner: `✅ *${stackName || 'Stack'}* started successfully`,
       };
     }
-    case 'stackDeployed': {
-      const lines = [stackName ? `Stack: ${stackName}` : 'Stack: Unknown', `Action: ${action}`, `Triggered By: ${trigger}`];
-      lines.push(...buildGenericLines(data, details, ['stackName', 'stack', 'name', 'action', 'trigger', 'triggeredBy', 'mode']));
-      return { title: '🚀 Stack Deploy Succeeded', message: lines.join('\n'), level: 'info' };
+    case 'containerStopped': {
+      return {
+        title: '⏹ Stack Stopped',
+        emoji: '⏹',
+        level: 'info',
+        fields: [
+          { name: '📦 Stack', value: stackName || '—', inline: true },
+          { name: '⚡ Action', value: action, inline: true },
+          { name: '👤 Triggered By', value: trigger, inline: true },
+        ],
+        oneliner: `⏹ *${stackName || 'Stack'}* stopped`,
+      };
+    }
+    case 'containerAutoUpdated': {
+      return {
+        title: '🔄 Stack Updated Successfully',
+        emoji: '🔄',
+        level: 'success',
+        fields: [
+          { name: '📦 Stack', value: stackName || '—', inline: true },
+          { name: '⚡ Action', value: action, inline: true },
+          { name: '👤 Triggered By', value: trigger, inline: true },
+        ],
+        oneliner: `🔄 *${stackName || 'Stack'}* updated successfully`,
+      };
     }
     case 'stackFailed': {
-      const lines = [
-        stackName ? `Stack: ${stackName}` : 'Stack: Unknown',
-        `Action: ${action}`,
-        `Triggered By: ${trigger}`,
+      const fields: RichPayload['fields'] = [
+        { name: '📦 Stack', value: stackName || '—', inline: true },
+        { name: '⚡ Action', value: action, inline: true },
+        { name: '👤 Triggered By', value: trigger, inline: true },
       ];
-      const error = pickString(data, details, ['error', 'message']);
-      if (error) lines.push(`Error: ${error}`);
-      lines.push(...buildGenericLines(data, details, ['stackName', 'stack', 'name', 'action', 'trigger', 'triggeredBy', 'mode', 'error', 'message']));
+      if (error) fields.push({ name: '❗ Error', value: error.slice(0, 500), inline: false });
       return {
         title: '❌ Stack Action Failed',
-        message: lines.join('\n'),
+        emoji: '🚨',
         level: 'error',
-      };
-    }
-    case 'highCpu': {
-      return {
-        title: '🔥 High CPU Usage',
-        message: [
-          `Container: ${container || 'Unknown'}`,
-          `Usage: ${pickString(data, details, ['usage']) || '-'}`,
-          `Threshold: ${pickString(data, details, ['threshold']) || '-'}`,
-        ].join('\n'),
-        level: 'warning',
-      };
-    }
-    case 'highMemory': {
-      return {
-        title: '🧠 High Memory Usage',
-        message: [
-          `Container: ${container || 'Unknown'}`,
-          `Usage: ${pickString(data, details, ['usage']) || '-'}`,
-          `Threshold: ${pickString(data, details, ['threshold']) || '-'}`,
-        ].join('\n'),
-        level: 'warning',
+        fields,
+        oneliner: `❌ *${stackName || 'Stack'}* — action failed: ${error?.slice(0, 100) || 'Unknown error'}`,
       };
     }
     case 'backupCompleted': {
-      const sizeBytesRaw = data.sizeBytes ?? details.sizeBytes;
-      const parsed = typeof sizeBytesRaw === 'number' ? sizeBytesRaw : Number(sizeBytesRaw);
-      const size = Number.isFinite(parsed) && parsed > 0
-        ? formatBytes(parsed)
-        : pickString(data, details, ['size']) || 'Unknown';
-      const lines = [
-        `Stack: ${stackName || 'Unknown'}`,
-        `Backup Size: ${size}`,
-      ];
-      lines.push(...buildGenericLines(data, details, ['stackName', 'stack', 'name', 'size', 'sizeBytes']));
+      const sizeRaw = data.sizeBytes ?? (isRecord(data.details) ? data.details.sizeBytes : undefined);
+      const size = typeof sizeRaw === 'number' && sizeRaw > 0 ? formatBytes(sizeRaw) : (pickString(data, ['size']) || '—');
+      const archive = pickString(data, ['archive']) || '—';
       return {
         title: '🗄️ Backup Completed',
-        message: lines.join('\n'),
-        level: 'info',
+        emoji: '🗄️',
+        level: 'success',
+        fields: [
+          { name: '📦 Stack', value: stackName || '—', inline: true },
+          { name: '📁 Archive Size', value: size, inline: true },
+          { name: '🗜️ File', value: archive, inline: false },
+        ],
+        oneliner: `🗄️ Backup of *${stackName || 'Stack'}* complete — ${size}`,
       };
     }
     case 'backupFailed': {
-      const lines = [`Stack: ${stackName || 'Unknown'}`];
-      const error = pickString(data, details, ['error', 'message']);
-      if (error) lines.push(`Error: ${error}`);
-      lines.push(...buildGenericLines(data, details, ['stackName', 'stack', 'name', 'error', 'message']));
       return {
         title: '🚨 Backup Failed',
-        message: lines.join('\n'),
+        emoji: '🚨',
         level: 'error',
+        fields: [
+          { name: '📦 Stack', value: stackName || '—', inline: true },
+          ...(error ? [{ name: '❗ Error', value: error.slice(0, 500), inline: false as const }] : []),
+        ],
+        oneliner: `🚨 Backup of *${stackName || 'Stack'}* failed: ${error?.slice(0, 100) || '—'}`,
+      };
+    }
+    case 'highCpu': {
+      const usage = pickString(data, ['usage']) || '—';
+      const threshold = pickString(data, ['threshold']) || '—';
+      return {
+        title: '🔥 High CPU Usage',
+        emoji: '🔥',
+        level: 'warning',
+        fields: [
+          { name: '📦 Container', value: container || '—', inline: true },
+          { name: '📈 Usage', value: usage, inline: true },
+          { name: '⚠️ Threshold', value: threshold, inline: true },
+        ],
+        oneliner: `🔥 High CPU on *${container || 'container'}*: ${usage} (threshold: ${threshold})`,
+      };
+    }
+    case 'highMemory': {
+      const usage = pickString(data, ['usage']) || '—';
+      const threshold = pickString(data, ['threshold']) || '—';
+      return {
+        title: '🧠 High Memory Usage',
+        emoji: '🧠',
+        level: 'warning',
+        fields: [
+          { name: '📦 Container', value: container || '—', inline: true },
+          { name: '📈 Usage', value: usage, inline: true },
+          { name: '⚠️ Threshold', value: threshold, inline: true },
+        ],
+        oneliner: `🧠 High memory on *${container || 'container'}*: ${usage} (threshold: ${threshold})`,
       };
     }
     case 'diskSpaceLow': {
-      const freeGB = pickString(data, details, ['freeGB']);
-      const thresholdGB = pickString(data, details, ['thresholdGB']);
-      const msg = pickString(data, details, ['message']);
-      const lines = [
-        `Free Space: ${freeGB ? freeGB + ' GB' : 'Unknown'}`,
-        `Threshold: ${thresholdGB ? thresholdGB + ' GB' : 'Unknown'}`,
-      ];
-      if (msg) lines.push(`Note: ${msg}`);
-      lines.push(...buildGenericLines(data, details, ['freeGB', 'thresholdGB', 'message', 'action']));
+      const freeGB = pickString(data, ['freeGB']);
+      const thresholdGB = pickString(data, ['thresholdGB']);
       return {
-        title: '⚠️ Low Disk Space — Auto-Update Skipped',
-        message: lines.join('\n'),
+        title: '💾 Low Disk Space — Auto-Update Skipped',
+        emoji: '⚠️',
         level: 'warning',
+        fields: [
+          { name: '💽 Free Space', value: freeGB ? `${freeGB} GB` : '—', inline: true },
+          { name: '⚠️ Threshold', value: thresholdGB ? `${thresholdGB} GB` : '—', inline: true },
+        ],
+        oneliner: `⚠️ Low disk space — free: ${freeGB || '?'} GB (threshold: ${thresholdGB || '?'} GB)`,
       };
     }
     default: {
-      const genericTitle = pickString(data, details, ['title']) || `Homelab Commander: ${eventType}`;
-      const message = pickString(data, details, ['message']);
-      if (message) {
-        const remainder = buildGenericLines(data, details, ['message']);
-        return {
-          title: genericTitle,
-          message: [message, ...remainder].join('\n'),
-          level: eventType.toLowerCase().includes('fail') || eventType.toLowerCase().includes('error') ? 'error' : 'info',
-        };
-      }
-      const fallbackLines = buildGenericLines(data, details);
+      const title = pickString(data, ['title']) || `Homelab Commander: ${eventType}`;
+      const msg = pickString(data, ['message']) || 'No details.';
       return {
-        title: genericTitle,
-        message: fallbackLines.length > 0 ? fallbackLines.join('\n') : 'No details provided',
-        level: eventType.toLowerCase().includes('high') ? 'warning'
-          : eventType.toLowerCase().includes('fail') || eventType.toLowerCase().includes('error') ? 'error'
-            : 'info',
+        title,
+        emoji: 'ℹ️',
+        level: eventType.toLowerCase().includes('fail') || eventType.toLowerCase().includes('error') ? 'error' : 'info',
+        fields: [{ name: 'Details', value: msg.slice(0, 500), inline: false }],
+        oneliner: `ℹ️ ${title}`,
       };
     }
   }
 }
 
-export async function sendNotification(
+// ─── Channel formatters ────────────────────────────────────────────────────────
+
+/** Telegram MarkdownV2 — escape required characters */
+function escapeMdV2(text: string): string {
+  return text.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&');
+}
+
+function buildTelegramText(rich: RichPayload, timestamp: string): string {
+  const ts = new Date(timestamp).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', hour12: false });
+  const sep = escapeMdV2('──────────────────');
+  const lines: string[] = [
+    `*${escapeMdV2(rich.title)}*`,
+    sep,
+  ];
+  for (const field of rich.fields) {
+    lines.push(`*${escapeMdV2(field.name)}*`);
+    lines.push(escapeMdV2(field.value));
+    lines.push('');
+  }
+  lines.push(sep);
+  lines.push(`_${escapeMdV2('🏠 Homelab Commander • ' + ts)}_`);
+  return lines.join('\n');
+}
+
+/** Discord rich embed with color-coded sidebar, fields and footer */
+function buildDiscordEmbed(rich: RichPayload, timestamp: string) {
+  const color = rich.level === 'error' ? 0xe74c3c
+    : rich.level === 'warning' ? 0xf39c12
+    : rich.level === 'success' ? 0x2ecc71
+    : 0x3498db;
+
+  return {
+    embeds: [{
+      title: rich.title,
+      color,
+      fields: rich.fields.map((f) => ({
+        name: f.name,
+        value: f.value || '—',
+        inline: f.inline ?? false,
+      })),
+      footer: {
+        text: '🏠 Homelab Commander',
+        icon_url: 'https://raw.githubusercontent.com/thesebastianf/homelab-commander/main/docs/icon.png',
+      },
+      timestamp,
+    }],
+  };
+}
+
+/** Slack Block Kit */
+function buildSlackPayload(rich: RichPayload, timestamp: string) {
+  const ts = new Date(timestamp).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', hour12: false });
+  const levelColor = rich.level === 'error' ? '#e74c3c'
+    : rich.level === 'warning' ? '#f39c12'
+    : rich.level === 'success' ? '#2ecc71'
+    : '#3498db';
+
+  const fieldsText = rich.fields
+    .map((f) => `*${f.name}*\n${f.value || '—'}`)
+    .join('\n\n');
+
+  return {
+    attachments: [{
+      color: levelColor,
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: rich.title, emoji: true },
+        },
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: fieldsText },
+        },
+        { type: 'divider' },
+        {
+          type: 'context',
+          elements: [
+            { type: 'mrkdwn', text: `🏠 *Homelab Commander* · ${ts}` },
+          ],
+        },
+      ],
+    }],
+  };
+}
+
+/** HTML email */
+function buildHtmlEmail(rich: RichPayload, timestamp: string): { subject: string; html: string; text: string } {
+  const ts = new Date(timestamp).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', hour12: false });
+  const accentColor = rich.level === 'error' ? '#e74c3c'
+    : rich.level === 'warning' ? '#f39c12'
+    : rich.level === 'success' ? '#2ecc71'
+    : '#3498db';
+
+  const fieldsHtml = rich.fields.map((f) => `
+    <tr>
+      <td style="padding:8px 12px;font-weight:600;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap">${f.name}</td>
+      <td style="padding:8px 12px;color:#1f2937;font-size:14px">${f.value || '—'}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
+        <!-- Header bar -->
+        <tr><td style="background:${accentColor};border-radius:8px 8px 0 0;padding:24px 32px">
+          <p style="margin:0;color:rgba(255,255,255,0.8);font-size:12px;text-transform:uppercase;letter-spacing:0.1em">HOMELAB COMMANDER</p>
+          <h1 style="margin:8px 0 0;color:#ffffff;font-size:22px;font-weight:700;line-height:1.3">${rich.title}</h1>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="background:#ffffff;padding:0;border-radius:0 0 8px 8px">
+          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+            ${fieldsHtml}
+          </table>
+          <!-- Footer -->
+          <div style="border-top:1px solid #e5e7eb;padding:16px 32px;background:#f9fafb;border-radius:0 0 8px 8px">
+            <p style="margin:0;color:#9ca3af;font-size:12px">🏠 Homelab Commander &nbsp;·&nbsp; ${ts}</p>
+          </div>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = [rich.title, '', ...rich.fields.map((f) => `${f.name}: ${f.value || '—'}`), '', `Homelab Commander · ${ts}`].join('\n');
+
+  return { subject: rich.title, html, text };
+}
+
+// ─── Dispatch ─────────────────────────────────────────────────────────────────
+
+function buildPayload(eventType: string, data: Record<string, unknown>): NotificationPayload {
+  const rich = buildRichPayload(eventType, data);
+  return {
+    title: rich.title,
+    message: rich.fields.map((f) => `${f.name}: ${f.value}`).join('\n'),
+    level: rich.level,
+    timestamp: new Date().toISOString(),
+    fields: rich.fields,
+    emoji: rich.emoji,
+  };
+}
+
+async function dispatchToService(
+  service: { type: string; config: Record<string, string> },
   eventType: string,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  payload: NotificationPayload
 ): Promise<void> {
+  const rich = buildRichPayload(eventType, data);
+  switch (service.type) {
+    case 'telegram': await sendTelegram(service.config, rich, payload.timestamp); break;
+    case 'discord':  await sendDiscord(service.config, rich, payload.timestamp);  break;
+    case 'slack':    await sendSlack(service.config, rich, payload.timestamp);    break;
+    case 'email':    await sendEmail(service.config, rich, payload.timestamp);    break;
+    case 'webhook':  await sendWebhook(service.config, payload);                  break;
+  }
+}
+
+// ─── Channel implementations ──────────────────────────────────────────────────
+
+async function sendTelegram(config: Record<string, string>, rich: RichPayload, timestamp: string): Promise<void> {
+  if (!config.botToken || !config.chatId) throw new Error('Telegram requires botToken and chatId');
+  const text = buildTelegramText(rich, timestamp);
+  const response = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: config.chatId, text, parse_mode: 'MarkdownV2' }),
+  });
+  const body = await response.text();
+  if (!response.ok) throw new Error(`Telegram API error (${response.status}): ${body}`);
+  try {
+    const parsed = JSON.parse(body) as { ok?: boolean; description?: string };
+    if (parsed.ok === false) throw new Error(`Telegram rejected: ${parsed.description}`);
+  } catch { /* non-JSON ok */ }
+}
+
+async function sendDiscord(config: Record<string, string>, rich: RichPayload, timestamp: string): Promise<void> {
+  const response = await fetch(config.webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(buildDiscordEmbed(rich, timestamp)),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Discord webhook failed (${response.status}): ${body}`);
+  }
+}
+
+async function sendSlack(config: Record<string, string>, rich: RichPayload, timestamp: string): Promise<void> {
+  const response = await fetch(config.webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(buildSlackPayload(rich, timestamp)),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Slack webhook failed (${response.status}): ${body}`);
+  }
+}
+
+async function sendEmail(config: Record<string, string>, rich: RichPayload, timestamp: string): Promise<void> {
+  const nodemailer = await import('nodemailer');
+  const { subject, html, text } = buildHtmlEmail(rich, timestamp);
+  const transporter = nodemailer.default.createTransport({
+    host: config.smtpHost,
+    port: parseInt(config.smtpPort || '587'),
+    secure: parseInt(config.smtpPort || '587') === 465,
+    auth: { user: config.username, pass: config.password },
+  });
+  await transporter.sendMail({ from: config.from, to: config.to, subject, text, html });
+}
+
+async function sendWebhook(config: Record<string, string>, payload: NotificationPayload): Promise<void> {
+  const response = await fetch(config.url, {
+    method: config.method || 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Webhook failed (${response.status}): ${body}`);
+  }
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+export async function sendNotification(eventType: string, data: Record<string, unknown>): Promise<void> {
   try {
     const { rows: [settings] } = await pool.query('SELECT notification_config FROM settings WHERE id = 1');
     if (!settings) return;
-
     const notifConfig = settings.notification_config;
     if (!notifConfig?.enabled) return;
     if (notifConfig.events && !notifConfig.events[eventType]) return;
 
     const payload = buildPayload(eventType, data);
-
-    const { rows: services } = await pool.query(
-      'SELECT * FROM notification_services WHERE enabled = true'
-    );
+    const { rows: services } = await pool.query('SELECT * FROM notification_services WHERE enabled = true');
 
     for (const service of services) {
       try {
-        await sendNotificationToService(service, eventType, data);
-        // Log every successful dispatch to audit_log for the history view
-        const payload = buildPayload(eventType, data);
+        await dispatchToService(service, eventType, data, payload);
         await pool.query(
           `INSERT INTO audit_log (action, resource_type, resource_id, details) VALUES ($1, $2, $3, $4)`,
-          [
-            'notification',
-            eventType,
-            service.name || service.type,
-            JSON.stringify({ title: payload.title, message: payload.message, level: payload.level, serviceType: service.type }),
-          ]
+          ['notification', eventType, service.name || service.type,
+           JSON.stringify({ title: payload.title, level: payload.level, serviceType: service.type })]
         );
       } catch (err) {
         logger.error({ err, service: service.name }, 'Notification dispatch failed');
@@ -288,143 +481,11 @@ export async function sendNotificationToService(
   data: Record<string, unknown>
 ): Promise<void> {
   const payload = buildPayload(eventType, data);
-  await dispatchToService(service, payload);
+  await dispatchToService(service, eventType, data, payload);
 }
 
-function buildPayload(eventType: string, data: Record<string, unknown>): NotificationPayload {
-  const friendly = buildHumanMessage(eventType, data);
+// ─── Threshold monitor ────────────────────────────────────────────────────────
 
-  return {
-    title: friendly.title,
-    message: friendly.message,
-    level: friendly.level,
-    timestamp: new Date().toISOString(),
-  };
-}
-
-async function dispatchToService(
-  service: { type: string; config: Record<string, string> },
-  payload: NotificationPayload
-): Promise<void> {
-  switch (service.type) {
-    case 'telegram':
-      await sendTelegram(service.config, payload);
-      break;
-    case 'discord':
-      await sendDiscord(service.config, payload);
-      break;
-    case 'slack':
-      await sendSlack(service.config, payload);
-      break;
-    case 'email':
-      await sendEmail(service.config, payload);
-      break;
-    case 'webhook':
-      await sendWebhook(service.config, payload);
-      break;
-  }
-}
-
-async function sendTelegram(
-  config: Record<string, string>,
-  payload: NotificationPayload
-): Promise<void> {
-  if (!config.botToken || !config.chatId) {
-    throw new Error('Telegram configuration requires botToken and chatId');
-  }
-
-  const text = `${payload.title}\n\n${payload.message}`;
-  const response = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: config.chatId, text }),
-  });
-
-  const body = await response.text();
-  if (!response.ok) {
-    throw new Error(`Telegram API error (${response.status}): ${body || response.statusText}`);
-  }
-
-  // Telegram can return 200 with ok=false in body.
-  try {
-    const parsed = JSON.parse(body) as { ok?: boolean; description?: string };
-    if (parsed.ok === false) {
-      throw new Error(`Telegram API rejected message: ${parsed.description || 'unknown error'}`);
-    }
-  } catch {
-    // Non-JSON success body is acceptable.
-  }
-}
-
-async function sendDiscord(
-  config: Record<string, string>,
-  payload: NotificationPayload
-): Promise<void> {
-  const color = payload.level === 'error' ? 0xff0000
-    : payload.level === 'warning' ? 0xffaa00 : 0x00ff00;
-  const response = await fetch(config.webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      embeds: [{ title: payload.title, description: payload.message, color, timestamp: payload.timestamp }],
-    }),
-  });
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Discord webhook failed (${response.status}): ${body || response.statusText}`);
-  }
-}
-
-async function sendSlack(
-  config: Record<string, string>,
-  payload: NotificationPayload
-): Promise<void> {
-  const response = await fetch(config.webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: `${payload.title}\n${payload.message}` }),
-  });
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Slack webhook failed (${response.status}): ${body || response.statusText}`);
-  }
-}
-
-async function sendEmail(
-  config: Record<string, string>,
-  payload: NotificationPayload
-): Promise<void> {
-  const nodemailer = await import('nodemailer');
-  const transporter = nodemailer.default.createTransport({
-    host: config.smtpHost,
-    port: parseInt(config.smtpPort || '587'),
-    secure: parseInt(config.smtpPort || '587') === 465,
-    auth: { user: config.username, pass: config.password },
-  });
-  await transporter.sendMail({
-    from: config.from,
-    to: config.to,
-    subject: payload.title,
-    text: payload.message,
-  });
-}
-
-async function sendWebhook(
-  config: Record<string, string>,
-  payload: NotificationPayload
-): Promise<void> {
-  const response = await fetch(config.url, {
-    method: config.method || 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Webhook failed (${response.status}): ${body || response.statusText}`);
-  }
-}
-
-// Threshold monitoring
 const alertCooldown = new Map<string, number>();
 const COOLDOWN_MS = 15 * 60 * 1000;
 
@@ -432,7 +493,6 @@ export async function checkThresholds(): Promise<void> {
   try {
     const { rows: [settings] } = await pool.query('SELECT notification_config FROM settings WHERE id = 1');
     if (!settings?.notification_config?.enabled) return;
-
     const thresholds = settings.notification_config.thresholds;
     if (!thresholds) return;
 
@@ -444,23 +504,14 @@ export async function checkThresholds(): Promise<void> {
       const now = Date.now();
       const lastAlert = alertCooldown.get(container.id) || 0;
       if (now - lastAlert < COOLDOWN_MS) continue;
-
       try {
         const stats = await getContainerStats(container.id);
         if (stats.cpu > thresholds.cpuPercent) {
-          await sendNotification('highCpu', {
-            container: container.name,
-            usage: `${stats.cpu.toFixed(1)}%`,
-            threshold: `${thresholds.cpuPercent}%`,
-          });
+          await sendNotification('highCpu', { container: container.name, usage: `${stats.cpu.toFixed(1)}%`, threshold: `${thresholds.cpuPercent}%` });
           alertCooldown.set(container.id, now);
         }
         if (stats.memoryPercent > thresholds.memoryPercent) {
-          await sendNotification('highMemory', {
-            container: container.name,
-            usage: `${stats.memoryPercent.toFixed(1)}%`,
-            threshold: `${thresholds.memoryPercent}%`,
-          });
+          await sendNotification('highMemory', { container: container.name, usage: `${stats.memoryPercent.toFixed(1)}%`, threshold: `${thresholds.memoryPercent}%` });
           alertCooldown.set(container.id, now);
         }
       } catch { /* container may have stopped */ }

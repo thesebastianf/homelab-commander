@@ -450,9 +450,10 @@ export async function listComposeProjects() {
       existing.status = 'running';
     } else if (existing.status !== 'running' && (state === 'restarting' || state === 'created')) {
       existing.status = 'deploying';
-    } else if (existing.status !== 'running' && existing.status !== 'deploying' && (state === 'dead' || state === 'exited')) {
+    } else if (existing.status !== 'running' && existing.status !== 'deploying' && state === 'dead') {
       existing.status = 'failed';
     }
+    // 'exited' is the normal state for stopped containers — leave status as 'stopped' (default)
 
     projects.set(projectName, existing);
   }

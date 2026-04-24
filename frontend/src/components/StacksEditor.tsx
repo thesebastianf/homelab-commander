@@ -871,32 +871,37 @@ export function StacksEditor({
 
   const deployActionMutation = useMutation({
     mutationFn: (id: string) => api.deployStack(id),
-    onMutate: () => { setIsOperating(true); setOperationDone(false); setOperationError(null); setCurrentOperation('Starting') },
-    onError: (e: any) => { setIsOperating(false); toast.error(e.message || 'Failed to start stack') },
+    onMutate: () => { setOperationDone(false); setOperationError(null); setCurrentOperation('Starting') },
+    onSuccess: () => { setIsOperating(true) },
+    onError: (e: any) => { toast.error(e.message || 'Failed to start stack') },
   })
 
   const stopActionMutation = useMutation({
     mutationFn: (id: string) => api.stopStack(id),
-    onMutate: () => { setIsOperating(true); setOperationDone(false); setOperationError(null); setCurrentOperation('Stopping') },
-    onError: (e: any) => { setIsOperating(false); toast.error(e.message || 'Failed to stop stack') },
+    onMutate: () => { setOperationDone(false); setOperationError(null); setCurrentOperation('Stopping') },
+    onSuccess: () => { setIsOperating(true) },
+    onError: (e: any) => { toast.error(e.message || 'Failed to stop stack') },
   })
 
   const restartActionMutation = useMutation({
     mutationFn: (id: string) => api.restartStack(id),
-    onMutate: () => { setIsOperating(true); setOperationDone(false); setOperationError(null); setCurrentOperation('Restarting') },
-    onError: (e: any) => { setIsOperating(false); toast.error(e.message || 'Failed to restart stack') },
+    onMutate: () => { setOperationDone(false); setOperationError(null); setCurrentOperation('Restarting') },
+    onSuccess: () => { setIsOperating(true) },
+    onError: (e: any) => { toast.error(e.message || 'Failed to restart stack') },
   })
 
   const deactivateActionMutation = useMutation({
     mutationFn: (id: string) => api.deactivateStack(id),
-    onMutate: () => { setIsOperating(true); setOperationDone(false); setOperationError(null); setCurrentOperation('Deactivating') },
-    onError: (e: any) => { setIsOperating(false); toast.error(e.message || 'Failed to deactivate stack') },
+    onMutate: () => { setOperationDone(false); setOperationError(null); setCurrentOperation('Deactivating') },
+    onSuccess: () => { setIsOperating(true) },
+    onError: (e: any) => { toast.error(e.message || 'Failed to deactivate stack') },
   })
 
   const recreateActionMutation = useMutation({
     mutationFn: (id: string) => api.recreateStack(id),
-    onMutate: () => { setIsOperating(true); setOperationDone(false); setOperationError(null); setCurrentOperation('Recreating') },
-    onError: (e: any) => { setIsOperating(false); toast.error(e.message || 'Failed to recreate stack') },
+    onMutate: () => { setOperationDone(false); setOperationError(null); setCurrentOperation('Recreating') },
+    onSuccess: () => { setIsOperating(true) },
+    onError: (e: any) => { toast.error(e.message || 'Failed to recreate stack') },
   })
 
   const syncGitMutation = useMutation({

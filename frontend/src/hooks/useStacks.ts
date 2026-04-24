@@ -6,7 +6,7 @@ export function useStacks() {
   return useQuery({
     queryKey: ['stacks'],
     queryFn: api.fetchStacks,
-    refetchInterval: 10000,
+    refetchInterval: 5000,
   });
 }
 
