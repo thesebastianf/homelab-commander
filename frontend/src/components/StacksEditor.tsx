@@ -273,6 +273,18 @@ function FullBackupPanel({ config: cfg, onChange: u, stackId, onSave, isSaving, 
                             onCheckedChange={checked => setVolumeSelection(entry.name, !!checked)}
                           />
                           <span className="font-mono truncate">{entry.name}</span>
+                          {entry.isDangerousBackupPath && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">
+                                  <p><strong>Warning:</strong> This bind mount overlaps with the global backup folder. Backing it up will cause infinite recursion and disk fill-up.</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                         </label>
                       ))}
                     </div>
@@ -649,6 +661,15 @@ export function StacksEditor({
       qc.invalidateQueries({ queryKey: ['stack-detail', selectedStack?.id] })
     },
     onError: (e: any) => toast.error(`Sync failed: ${e.message}`),
+  })
+  const deleteStackMutation = useMutation({
+    mutationFn: () => api.deleteStack(selectedStack!.id),
+    onSuccess: () => {
+      toast.success('Removed stack from database')
+      setSelectedStack(null)
+      qc.invalidateQueries({ queryKey: ['stacks'] })
+    },
+    onError: (e: any) => toast.error(`Failed to remove: ${e.message}`),
   })
   const hostPathAccessible = !!stackDetail?.diskComposeContent !== false && stackDetail !== undefined
   const usingHostPath = stackDetail !== undefined && (stackDetail.diskComposeContent !== null && stackDetail.diskComposeContent !== undefined)
@@ -2030,6 +2051,24 @@ export function StacksEditor({
                   <Badge variant="outline" className="text-xs shrink-0">
                     {selectedStack.services} {selectedStack.services === 1 ? 'service' : 'services'}
                   </Badge>
+                  {selectedStack.filesLost && (
+                    <Badge variant="outline" className="text-xs shrink-0 border-destructive text-destructive gap-1">
+                      <AlertTriangle className="w-3 h-3" />
+                      {selectedStack.isTmpGhost ? 'Ghost Stack' : 'Files Lost'}
+                    </Badge>
+                  )}
+                  {selectedStack.filesLost && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="ml-auto gap-1 h-7 text-xs"
+                      onClick={() => deleteStackMutation.mutate()}
+                      disabled={deleteStackMutation.isPending}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      {deleteStackMutation.isPending ? 'Removing...' : 'Remove from DB'}
+                    </Button>
+                  )}
                   {selectedStack.updateAvailable && (
                     <Badge variant="outline" className="text-xs shrink-0 border-amber-500 text-amber-500 gap-1">
                       <RefreshCw className="w-3 h-3" />

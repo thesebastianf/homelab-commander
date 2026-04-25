@@ -13,6 +13,8 @@ export interface Container {
   network: {
     rx: number
     tx: number
+    totalRx?: number
+    totalTx?: number
   }
   updateAvailable?: boolean
   autoUpdate?: boolean
@@ -57,6 +59,7 @@ export interface Stack {
   // External change detection (populated by GET /api/stacks/:id)
   filesLost?: boolean
   hasExternalChanges?: boolean
+  isTmpGhost?: boolean
   diskComposeContent?: string | null
   diskEnvContent?: string | null
   backupConfig?: {
@@ -305,6 +308,7 @@ export interface BackupVolumeOption {
   kind?: 'volume' | 'bind'
   source?: string
   containerName?: string
+  isDangerousBackupPath?: boolean
 }
 
 export interface BackupDatabaseOption {

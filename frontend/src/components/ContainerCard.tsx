@@ -194,8 +194,32 @@ export function ContainerCard({
         <div className="flex items-center gap-4 mt-2 text-xs font-mono text-muted-foreground flex-wrap">
           <span>CPU <span className="text-foreground font-semibold">{container.cpu.toFixed(1)}%</span></span>
           <span>MEM <span className="text-foreground font-semibold">{container.memory.toFixed(0)} MB</span></span>
-          <span>NET ↓ <span className="text-foreground font-semibold">{formatNet(container.network.rx / 1024)}</span></span>
-          <span>NET ↑ <span className="text-foreground font-semibold">{formatNet(container.network.tx / 1024)}</span></span>
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="cursor-help flex items-center">
+                  NET ↓ <span className="text-foreground font-semibold ml-1">{formatNet(container.network.rx / 1024)}</span>
+                  <span className="text-[10px] text-muted-foreground/70 ml-1">({formatBytes(container.network.totalRx || 0)})</span>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">Current rate: {formatNet(container.network.rx / 1024)}</p>
+                <p className="text-xs">Total Downloaded: {formatBytes(container.network.totalRx || 0)}</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="cursor-help flex items-center">
+                  NET ↑ <span className="text-foreground font-semibold ml-1">{formatNet(container.network.tx / 1024)}</span>
+                  <span className="text-[10px] text-muted-foreground/70 ml-1">({formatBytes(container.network.totalTx || 0)})</span>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">Current rate: {formatNet(container.network.tx / 1024)}</p>
+                <p className="text-xs">Total Uploaded: {formatBytes(container.network.totalTx || 0)}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       )}
 

@@ -22,7 +22,7 @@ import volumeRoutes from './routes/volumes.js';
 import networkRoutes from './routes/networks.js';
 import systemRoutes from './routes/system.js';
 import settingsRoutes from './routes/settings.js';
-import stackRoutes from './routes/stacks.js';
+import stackRoutes, { purgeGhostTmpStacks } from './routes/stacks.js';
 import backupRoutes from './routes/backups.js';
 import notificationServiceRoutes from './routes/notificationServices.js';
 import portReservationRoutes from './routes/portReservations.js';
@@ -127,6 +127,13 @@ async function main() {
   server.listen(config.port, '0.0.0.0', () => {
     logger.info({ port: config.port }, 'Homelab Commander Backend started');
   });
+
+  // Auto-purge ghost /tmp/ stack DB entries created by the auto-update helper container
+  try {
+    await purgeGhostTmpStacks();
+  } catch (err) {
+    logger.warn({ err }, 'Ghost /tmp/ stack purge failed (non-fatal)');
+  }
 
   // Initialize background services
   await initBackupScheduler();

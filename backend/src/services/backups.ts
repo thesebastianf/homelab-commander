@@ -25,6 +25,7 @@ export interface BackupVolumeTarget {
   kind: 'volume' | 'bind';
   source: string;
   containerName: string;
+  isDangerousBackupPath?: boolean;
 }
 
 interface StackContainerInfo {
@@ -390,12 +391,15 @@ export async function detectStackVolumeTargets(stackName: string): Promise<Backu
       } else if (mountType === 'bind' && mount.source) {
         const key = `bind:${mount.source}`;
         if (!dedup.has(key)) {
+          // Prevent infinite recursion: flag bind mounts that overlap with the global backups dir
+          const isDangerous = mount.source.startsWith(config.backupsPath);
           dedup.set(key, {
             key,
             name: mount.source,
             kind: 'bind',
             source: mount.source,
             containerName: container.name,
+            isDangerousBackupPath: isDangerous,
           });
         }
       }

@@ -937,8 +937,15 @@ router.get('/', asyncHandler(async (_req, res) => {
     if (runtimeStatus) (mapped as any).status = runtimeStatus;
     // Check if stack files are still accessible on disk
     if (row.stack_path) {
-      const accessiblePath = await resolveAccessibleStackPath(row);
-      (mapped as any).filesLost = !accessiblePath;
+      // /tmp/ paths are always ghost entries (auto-update artifacts) — flag immediately
+      const isTmpPath = String(row.stack_path).startsWith('/tmp/');
+      if (isTmpPath) {
+        (mapped as any).filesLost = true;
+        (mapped as any).isTmpGhost = true;
+      } else {
+        const accessiblePath = await resolveAccessibleStackPath(row);
+        (mapped as any).filesLost = !accessiblePath;
+      }
     }
     return mapped;
   }));
@@ -986,6 +993,9 @@ router.get('/external', asyncHandler(async (_req, res) => {
   const unmanagedProjects = externalProjects.filter((project) => {
     if (managedNames.has(project.name.toLowerCase())) return false;
     if (project.stackPath && managedPaths.has(project.stackPath)) return false;
+    // Filter out transient /tmp/ paths — these are artifacts from the auto-update helper container
+    // (resolveStackCwd creates hlc-* temp dirs in /tmp when the real stack path isn't mounted)
+    if (project.stackPath && (project.stackPath.startsWith('/tmp/') || /\/tmp\/hlc-/i.test(project.stackPath))) return false;
     return true;
   });
 
@@ -1927,4 +1937,35 @@ function countServices(compose: string): number {
   return count || 1;
 }
 
+/**
+ * Auto-purges stacks whose stack_path starts with /tmp/ from the DB.
+ * These are always artifacts from the auto-update helper container which uses mkdtemp()
+ * to create a transient working directory. They can never be valid persistent stacks.
+ * Called once at application startup.
+ */
+export async function purgeGhostTmpStacks(): Promise<void> {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, stack_path FROM stacks WHERE stack_path LIKE '/tmp/%'`
+    );
+    if (rows.length === 0) return;
+
+    for (const row of rows) {
+      logger.warn(
+        { stackId: row.id, stackName: row.name, stackPath: row.stack_path },
+        'Auto-purging ghost /tmp/ stack from database (auto-update artifact)'
+      );
+      // Clean up related configs first (target_id is TEXT, no FK cascade)
+      await pool.query("DELETE FROM smart_startup_configs WHERE target_id = $1 AND target_type = 'stack'", [row.id]);
+      await pool.query('DELETE FROM backup_configs WHERE stack_id = $1', [row.id]);
+      await pool.query('DELETE FROM stacks WHERE id = $1', [row.id]);
+    }
+
+    logger.info({ count: rows.length }, `Purged ${rows.length} ghost /tmp/ stack(s) from database`);
+  } catch (err) {
+    logger.error({ err }, 'Failed to purge ghost /tmp/ stacks from database');
+  }
+}
+
 export default router;
+

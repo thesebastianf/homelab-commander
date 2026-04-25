@@ -263,9 +263,22 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
                     <Badge
                       key={item.configId}
                       variant="outline"
-                      className="font-mono text-[10px] border-amber-500/40 text-amber-200"
+                      className="font-mono text-[10px] border-amber-500/40 text-amber-200 flex items-center pr-1"
                     >
                       {item.triggerValue} - {item.targetId.slice(0, 8)}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-4 w-4 ml-1 hover:bg-amber-500/20 text-amber-200"
+                        onClick={() => {
+                          deleteConfig.mutate(item.configId, {
+                            onSuccess: () => toast.success('Orphan config removed'),
+                            onError: (e: any) => toast.error(`Failed to remove: ${e.message}`),
+                          })
+                        }}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
                     </Badge>
                   ))}
                 </div>

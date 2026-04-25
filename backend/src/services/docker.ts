@@ -26,6 +26,16 @@ function sampleCpu(): void {
 sampleCpu();
 setInterval(sampleCpu, 15_000);
 
+// ---- Per-container network delta cache ----
+// Docker stats API returns cumulative rx/tx bytes since container start — NOT per-second rates.
+// We track the previous snapshot to compute actual byte-per-second deltas.
+interface NetSnapshot {
+  rxBytes: number;
+  txBytes: number;
+  ts: number; // Date.now() at sample time
+}
+const netSnapshots = new Map<string, NetSnapshot>();
+
 // ---- Containers ----
 
 export async function listContainers() {
@@ -39,11 +49,34 @@ export async function listContainers() {
       const computed = computeStats(stats);
       container.cpu = computed.cpu;
       container.memory = Math.round((computed.memoryUsage || 0) / 1024 / 1024);
-      container.network = { rx: computed.networkRx || 0, tx: computed.networkTx || 0 };
+
+      // Compute per-second network rates using delta from last sample
+      const now = Date.now();
+      const totalRx = computed.networkRx || 0;
+      const totalTx = computed.networkTx || 0;
+      const prev = netSnapshots.get(container.id);
+
+      if (prev && now > prev.ts && totalRx >= prev.rxBytes && totalTx >= prev.txBytes) {
+        const elapsedSec = (now - prev.ts) / 1000;
+        const rxRate = Math.round((totalRx - prev.rxBytes) / elapsedSec);
+        const txRate = Math.round((totalTx - prev.txBytes) / elapsedSec);
+        container.network = { rx: rxRate, tx: txRate, totalRx, totalTx };
+      } else {
+        // First sample — no delta available yet; report 0 rates but store totals
+        container.network = { rx: 0, tx: 0, totalRx, totalTx };
+      }
+
+      netSnapshots.set(container.id, { rxBytes: totalRx, txBytes: totalTx, ts: now });
     } catch {
       // Keep zeros when stats are not available for this polling cycle.
     }
   }));
+
+  // Remove stale snapshots for containers that no longer exist
+  const activeIds = new Set(mapped.map((c) => c.id));
+  for (const id of netSnapshots.keys()) {
+    if (!activeIds.has(id)) netSnapshots.delete(id);
+  }
 
   return mapped;
 }
@@ -493,7 +526,7 @@ function mapContainer(c: Dockerode.ContainerInfo) {
     restartPolicy: (c as any).HostConfig?.RestartPolicy?.Name || '',
     cpu: 0,
     memory: 0,
-    network: { rx: 0, tx: 0 },
+    network: { rx: 0, tx: 0, totalRx: 0, totalTx: 0 },
   };
 }
 
