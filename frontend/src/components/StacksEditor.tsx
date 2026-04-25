@@ -662,7 +662,7 @@ export function StacksEditor({
     },
     onError: (e: any) => toast.error(`Sync failed: ${e.message}`),
   })
-  const deleteStackMutation = useMutation({
+  const removeStackDbMutation = useMutation({
     mutationFn: () => api.deleteStack(selectedStack!.id),
     onSuccess: () => {
       toast.success('Removed stack from database')
@@ -2062,11 +2062,11 @@ export function StacksEditor({
                       variant="destructive"
                       size="sm"
                       className="ml-auto gap-1 h-7 text-xs"
-                      onClick={() => deleteStackMutation.mutate()}
-                      disabled={deleteStackMutation.isPending}
+                      onClick={() => removeStackDbMutation.mutate()}
+                      disabled={removeStackDbMutation.isPending}
                     >
                       <Trash2 className="w-3 h-3" />
-                      {deleteStackMutation.isPending ? 'Removing...' : 'Remove from DB'}
+                      {removeStackDbMutation.isPending ? 'Removing...' : 'Remove from DB'}
                     </Button>
                   )}
                   {selectedStack.updateAvailable && (

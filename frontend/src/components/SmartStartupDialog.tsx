@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Zap, Loader2, Info, Wifi, WifiOff, Clock, Timer, AlertTriangle, Activity } from 'lucide-react'
+import { Zap, Loader2, Info, Wifi, WifiOff, Clock, Timer, AlertTriangle, Activity, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
 import type { Stack, SmartStartupConfig, SmartStartupCheckNowResult } from '@/lib/types'
@@ -310,9 +310,8 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
           </Card>
         )}
 
-        <div className="flex-1 min-h-0 mt-2 overflow-hidden">
-          <ScrollArea className="h-full pr-1">
-            <div className="space-y-2 pr-3 pb-2">
+        <ScrollArea className="flex-1 min-h-0 mt-2 pr-1">
+          <div className="space-y-2 pr-3 pb-2">
               {stacks.length === 0 && (
                 <p className="text-xs text-muted-foreground">No stacks found.</p>
               )}
@@ -334,7 +333,6 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
               ))}
             </div>
           </ScrollArea>
-        </div>
       </DialogContent>
     </Dialog>
   )
