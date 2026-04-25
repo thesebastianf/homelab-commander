@@ -59,8 +59,9 @@ router.put('/:id', validate(smartStartupBody), asyncHandler(async (req, res) => 
 }));
 
 router.delete('/:id', asyncHandler(async (req, res) => {
-  await pool.query('DELETE FROM smart_startup_configs WHERE id = $1', [req.params.id]);
-  removeStartupOrphanFromSnapshot(req.params.id);
+  const id = String(req.params.id);
+  await pool.query('DELETE FROM smart_startup_configs WHERE id = $1', [id]);
+  removeStartupOrphanFromSnapshot(id);
   res.json({ ok: true });
 }));
 
