@@ -3,7 +3,7 @@ import { pool } from '../database.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { validateBody as validate } from '../middleware/validate.js';
 import { smartStartupBody, smartStartupCheckNowBody } from '../validation/schemas.js';
-import { getDeviceStatuses, getStartupOrphansSnapshot, runDeviceDiagnostics } from '../services/smartStartup.js';
+import { getDeviceStatuses, getStartupOrphansSnapshot, runDeviceDiagnostics, removeStartupOrphanFromSnapshot } from '../services/smartStartup.js';
 
 const router = Router();
 
@@ -60,6 +60,7 @@ router.put('/:id', validate(smartStartupBody), asyncHandler(async (req, res) => 
 
 router.delete('/:id', asyncHandler(async (req, res) => {
   await pool.query('DELETE FROM smart_startup_configs WHERE id = $1', [req.params.id]);
+  removeStartupOrphanFromSnapshot(req.params.id);
   res.json({ ok: true });
 }));
 

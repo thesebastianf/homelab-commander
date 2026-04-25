@@ -86,6 +86,12 @@ export function getStartupOrphansSnapshot(): { checkedAt: string; count: number;
   return startupOrphansSnapshot;
 }
 
+/** Called when an orphan is manually deleted to update the UI snapshot state. */
+export function removeStartupOrphanFromSnapshot(configId: string): void {
+  startupOrphansSnapshot.items = startupOrphansSnapshot.items.filter(i => i.configId !== configId);
+  startupOrphansSnapshot.count = startupOrphansSnapshot.items.length;
+}
+
 /** Called by route to force an immediate check for one IP/hostname. */
 export async function runDeviceDiagnostics(address: string): Promise<SmartStartupDiagnostics> {
   const { isOnline, latencyMs } = await pingDeviceWithLatency(address);

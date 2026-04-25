@@ -310,8 +310,9 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
           </Card>
         )}
 
-        <ScrollArea className="flex-1 min-h-0 mt-2 pr-1">
-          <div className="space-y-2 pr-3 pb-2">
+        <div className="flex-1 min-h-0 overflow-hidden mt-2 -mr-2 pr-2">
+          <ScrollArea className="h-full pr-3">
+            <div className="space-y-2 pb-2">
               {stacks.length === 0 && (
                 <p className="text-xs text-muted-foreground">No stacks found.</p>
               )}
@@ -333,6 +334,7 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
               ))}
             </div>
           </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   )

@@ -204,7 +204,7 @@ async function startDetachedSelfUpdate(id: string, stack: any, op: OperationStat
       '--name', `hlc-self-update-${Date.now()}`,
       '-v', '/var/run/docker.sock:/var/run/docker.sock',
       '-v', `${cwd}:${cwd}:ro`,
-      'docker:cli',
+      'ghcr.io/thesebastianf/homelab-commander:latest',
       'sh', '-c', script,
     ], {
       detached: true,

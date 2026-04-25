@@ -190,17 +190,46 @@ export function MobileStacksView({
                         </Tooltip>
                       )}
 
-                      {(stack.backupCount ?? 0) > 0 && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Badge variant="outline" className="border-blue-500 text-blue-400 gap-1">
-                              <Archive className="w-2.5 h-2.5" />
-                              Bkp:{stack.backupCount}
-                            </Badge>
-                          </TooltipTrigger>
-                          <TooltipContent>Completed backups</TooltipContent>
-                        </Tooltip>
-                      )}
+                      {(() => {
+                        const bkpCfg = stack.backupConfig;
+                        const bkpCount = stack.backupCount || 0;
+                        if (!bkpCfg?.enabled && bkpCount === 0) return null;
+                        
+                        let colorClass = "border-border text-muted-foreground";
+                        let icon = <Archive className="w-2.5 h-2.5" />;
+                        let tooltipText = `Completed backups: ${bkpCount} (Automatic backups disabled)`;
+                        
+                        if (bkpCfg?.enabled) {
+                          if (!bkpCfg.schedule) {
+                            colorClass = "border-amber-500 text-amber-500";
+                            icon = <Zap className="w-2.5 h-2.5" />;
+                            tooltipText = "Backup enabled but NO schedule defined! Backups: " + bkpCount;
+                          } else {
+                            const lastDate = bkpCfg.lastBackupAt ? new Date(bkpCfg.lastBackupAt) : null;
+                            const isStale = !lastDate || (Date.now() - lastDate.getTime() > 30 * 24 * 60 * 60 * 1000);
+                            
+                            if (isStale) {
+                              colorClass = "border-yellow-400 text-yellow-400";
+                              tooltipText = "Backup enabled, but last backup is older than 30 days or missing. Backups: " + bkpCount;
+                            } else {
+                              colorClass = "border-blue-500 text-blue-400";
+                              tooltipText = "Backup active and fresh. Schedule: " + bkpCfg.schedule + ". Backups: " + bkpCount;
+                            }
+                          }
+                        }
+                        
+                        return (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge variant="outline" className={`${colorClass} gap-1`}>
+                                {icon}
+                                Bkp:{bkpCount}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>{tooltipText}</TooltipContent>
+                          </Tooltip>
+                        );
+                      })()}
 
                       {(stack.ports || []).length > 0 && (
                         <Tooltip>
