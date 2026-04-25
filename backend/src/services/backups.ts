@@ -129,9 +129,11 @@ async function verifyBackupArchive(archivePath: string, opts: { requireStackFold
   return { ok, checks };
 }
 
-export async function runBackup(stackId: string): Promise<void> {
+export async function runBackup(stackId: string, triggeredBy = 'scheduled'): Promise<void> {
   const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [stackId]);
   if (!stack) throw new Error(`Stack ${stackId} not found`);
+
+  logger.info({ stackId, stackName: stack.name, triggeredBy }, 'Backup triggered');
 
   const { rows: [backupConfigRow] } = await pool.query(
   'SELECT * FROM backup_configs WHERE stack_id = $1', [stackId]
@@ -145,7 +147,7 @@ export async function runBackup(stackId: string): Promise<void> {
     retention_days: 7,
   };
 
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 17);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
   const dirTimestamp = timestamp.replace(/-/g, '').replace('_', '-');
   const backupDir = join(config.backupsPath, `${stack.name}_${dirTimestamp}`);
   const stagingDir = join(backupDir, 'staging');
@@ -300,7 +302,7 @@ export async function runBackup(stackId: string): Promise<void> {
       verification,
     });
     await enforceRetention(stack.name, backupConfig);
-    logger.info({ stackId, backupDir, totalSize }, 'Backup completed');
+    logger.info({ stackId, backupDir, totalSize, triggeredBy }, 'Backup completed');
   } catch (err) {
     await rm(stagingDir, { recursive: true, force: true }).catch(() => {});
     await pool.query(
@@ -349,17 +351,33 @@ async function enforceRetention(stackName: string, config: any): Promise<void> {
   try {
     const entries = await readdir(backupDir);
     const relevantEntries = entries.filter((entry) => entry.startsWith(`${stackName}_`));
-    if (relevantEntries.length <= 1) return;
+    
+    // Retention days is used as retention count in frontend ("Keep N Last Backups")
+    const retentionCount = config.retention_days || 7;
+    if (relevantEntries.length <= retentionCount) return;
 
-    // Simple retention: delete folders older than retention_days
-    const cutoff = Date.now() - (config.retention_days || 7) * 24 * 60 * 60 * 1000;
-    for (const entry of relevantEntries) {
-      try {
-        const s = await stat(join(backupDir, entry));
-        if (s.mtimeMs < cutoff) {
-          await rm(join(backupDir, entry), { recursive: true });
-          logger.info({ backupDir, entry }, 'Old backup removed by retention policy');
+    const entriesWithStats = await Promise.all(
+      relevantEntries.map(async (entry) => {
+        try {
+          const s = await stat(join(backupDir, entry));
+          return { entry, mtimeMs: s.mtimeMs };
+        } catch {
+          return { entry, mtimeMs: 0 };
         }
+      })
+    );
+
+    // Sort by mtimeMs descending (newest first)
+    entriesWithStats.sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+    // Keep the first `retentionCount`
+    const toDelete = entriesWithStats.slice(retentionCount);
+
+    for (const item of toDelete) {
+      if (item.mtimeMs === 0) continue;
+      try {
+        await rm(join(backupDir, item.entry), { recursive: true });
+        logger.info({ backupDir, entry: item.entry }, 'Old backup removed by retention policy');
       } catch { /* skip */ }
     }
   } catch { /* directory may not exist */ }

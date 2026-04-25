@@ -267,7 +267,7 @@ router.get('/:stackId/jobs', asyncHandler(async (req, res) => {
 // Run backup now
 router.post('/:stackId/run', asyncHandler(async (req, res) => {
   const stackId = String(req.params.stackId);
-  await runBackup(stackId);
+  await runBackup(stackId, 'manual');
   res.json({ ok: true });
 }));
 
@@ -280,7 +280,7 @@ router.post('/run-all', asyncHandler(async (_req, res) => {
 
   for (const stack of stacks) {
     try {
-      await runBackup(String(stack.id));
+      await runBackup(String(stack.id), 'manual-all');
       summary.started.push({ id: String(stack.id), name: String(stack.name) });
     } catch (err: any) {
       summary.failed.push({ id: String(stack.id), name: String(stack.name), error: err?.message || 'unknown error' });

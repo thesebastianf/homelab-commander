@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Zap, Loader2, Info, Wifi, WifiOff, Clock, Timer, AlertTriangle, Activity, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
@@ -84,17 +85,18 @@ function StackRow({ stack, config, diagnostic, checkingAddress, onCheckNow, onCr
   const lastSeen = config?.lastSeenAt ? new Date(config.lastSeenAt) : null
 
   return (
-    <div className={`rounded-lg border overflow-hidden relative ${enabled ? 'border-primary/20' : 'border-border/40'}`}>
+    <AccordionItem value={stack.id} className={`rounded-lg border overflow-hidden relative !border-b ${enabled ? 'border-primary/20' : 'border-border/40'}`}>
       <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${enabled ? 'bg-primary' : 'bg-transparent'}`} />
 
-      {/* Row header */}
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-2 min-w-0">
+      <AccordionTrigger className="hover:no-underline px-4 py-3 data-[state=open]:pb-3">
+        <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
           <span className={`font-mono font-semibold text-sm truncate ${!enabled ? 'text-muted-foreground' : ''}`}>{stack.name}</span>
           <span className="text-xs text-muted-foreground shrink-0">{stack.services} svc</span>
-          <Badge className={`text-[9px] px-1.5 py-0 border shrink-0 ${enabled ? 'bg-primary/10 text-primary border-primary/30' : 'bg-muted/30 text-muted-foreground border-border/40'}`}>
-            {enabled ? 'Active' : 'Inactive'}
-          </Badge>
+          {enabled ? (
+            <Badge className="text-[9px] bg-primary/20 text-primary shrink-0">Enabled</Badge>
+          ) : (
+            <Badge variant="outline" className="text-[9px] shrink-0 text-muted-foreground">Inactive</Badge>
+          )}
           {/* Device online status when enabled */}
           {enabled && config?.triggerValue && (
             <Badge className={`text-[9px] px-1.5 py-0 border shrink-0 ${isOnline ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30'}`}>
@@ -103,14 +105,21 @@ function StackRow({ stack, config, diagnostic, checkingAddress, onCheckNow, onCr
             </Badge>
           )}
         </div>
-        <Switch checked={enabled} onCheckedChange={handleToggle} disabled={isBusy} />
-      </div>
+      </AccordionTrigger>
 
-      {/* Config form - shown when enabled */}
-      {enabled && config && (
-        <div className="px-4 pb-3 space-y-3 border-t border-border/30 pt-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2 flex flex-col gap-1">
+      {/* Config form */}
+      <AccordionContent className="space-y-4 pb-4 px-4 pt-3 border-t border-border/30">
+        <div className="flex items-center justify-between bg-muted/20 p-3 rounded-lg border border-border/40">
+          <div>
+            <Label className="text-sm">Enable Smart Startup</Label>
+            <p className="text-xs text-muted-foreground">Start this stack automatically when the monitored device is online</p>
+          </div>
+          <Switch checked={enabled} onCheckedChange={handleToggle} disabled={isBusy} />
+        </div>
+
+        {enabled && config && (
+          <div className="space-y-4 pt-2">
+            <div className="flex flex-col gap-1">
               <Label className="text-xs text-muted-foreground">Device IP / Hostname</Label>
               <Input
                 className="h-7 text-xs font-mono"
@@ -121,77 +130,79 @@ function StackRow({ stack, config, diagnostic, checkingAddress, onCheckNow, onCr
               <p className="text-[10px] text-muted-foreground">The NAS or device that must be online to trigger stack start</p>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                <Timer className="w-3 h-3" /> Start Delay (seconds)
-              </Label>
-              <Input
-                type="number"
-                className="h-7 w-full text-xs font-mono"
-                min={0}
-                max={3600}
-                value={merged.startDelay ?? 60}
-                onChange={(e) => setDraft(d => ({ ...d, startDelay: parseInt(e.target.value) || 0 }))}
-              />
-              <p className="text-[10px] text-muted-foreground">Wait this long after device comes online before starting</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Timer className="w-3 h-3" /> Start Delay (seconds)
+                </Label>
+                <Input
+                  type="number"
+                  className="h-7 w-full text-xs font-mono"
+                  min={0}
+                  max={3600}
+                  value={merged.startDelay ?? 60}
+                  onChange={(e) => setDraft(d => ({ ...d, startDelay: parseInt(e.target.value) || 0 }))}
+                />
+                <p className="text-[10px] text-muted-foreground">Wait this long after device comes online before starting</p>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Clock className="w-3 h-3" /> Check Interval (seconds)
+                </Label>
+                <Input
+                  type="number"
+                  className="h-7 w-full text-xs font-mono"
+                  min={5}
+                  max={3600}
+                  value={merged.monitorInterval ?? 30}
+                  onChange={(e) => setDraft(d => ({ ...d, monitorInterval: parseInt(e.target.value) || 30 }))}
+                />
+                <p className="text-[10px] text-muted-foreground">How often to ping the device</p>
+              </div>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                <Clock className="w-3 h-3" /> Check Interval (seconds)
-              </Label>
-              <Input
-                type="number"
-                className="h-7 w-full text-xs font-mono"
-                min={5}
-                max={3600}
-                value={merged.monitorInterval ?? 30}
-                onChange={(e) => setDraft(d => ({ ...d, monitorInterval: parseInt(e.target.value) || 30 }))}
-              />
-              <p className="text-[10px] text-muted-foreground">How often to ping the device</p>
+            {/* Device status */}
+            {config.triggerValue && (
+              <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-mono bg-muted/20 rounded px-2 py-1.5">
+                <span>Last check: {lastChecked ? formatDistanceToNow(lastChecked, { addSuffix: true }) : 'pending'}</span>
+                {lastSeen && <span>Last seen: {formatDistanceToNow(lastSeen, { addSuffix: true })}</span>}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => config?.triggerValue && onCheckNow(config.triggerValue)}
+                disabled={!canCheckNow || isCheckingThisAddress}
+              >
+                {isCheckingThisAddress ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
+                Check now
+              </Button>
+
+              {diagnostic && (
+                <span className={`text-[10px] font-mono ${diagnostic.isOnline ? 'text-green-400' : 'text-red-400'}`}>
+                  {diagnostic.isOnline ? 'Online' : 'Offline'}
+                  {diagnostic.isOnline ? ` (${diagnostic.latencyMs} ms)` : ''}
+                  {' · '}
+                  {formatDistanceToNow(new Date(diagnostic.checkedAt), { addSuffix: true })}
+                </span>
+              )}
             </div>
-          </div>
 
-          {/* Device status */}
-          {config.triggerValue && (
-            <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-mono bg-muted/20 rounded px-2 py-1.5">
-              <span>Last check: {lastChecked ? formatDistanceToNow(lastChecked, { addSuffix: true }) : 'pending'}</span>
-              {lastSeen && <span>Last seen: {formatDistanceToNow(lastSeen, { addSuffix: true })}</span>}
-            </div>
-          )}
-
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs"
-              onClick={() => config?.triggerValue && onCheckNow(config.triggerValue)}
-              disabled={!canCheckNow || isCheckingThisAddress}
-            >
-              {isCheckingThisAddress ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Activity className="w-3 h-3 mr-1" />}
-              Check now
-            </Button>
-
-            {diagnostic && (
-              <span className={`text-[10px] font-mono ${diagnostic.isOnline ? 'text-green-400' : 'text-red-400'}`}>
-                {diagnostic.isOnline ? 'Online' : 'Offline'}
-                {diagnostic.isOnline ? ` (${diagnostic.latencyMs} ms)` : ''}
-                {' · '}
-                {formatDistanceToNow(new Date(diagnostic.checkedAt), { addSuffix: true })}
-              </span>
+            {isDirty && (
+              <Button size="sm" className="h-7 text-xs" onClick={handleSave} disabled={isBusy}>
+                {isBusy ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                Save
+              </Button>
             )}
           </div>
-
-          {isDirty && (
-            <Button size="sm" className="h-7 text-xs" onClick={handleSave} disabled={isBusy}>
-              {isBusy ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-              Save
-            </Button>
-          )}
-        </div>
-      )}
-    </div>
+        )}
+      </AccordionContent>
+    </AccordionItem>
   )
 }
 
@@ -227,25 +238,27 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[88vh] flex flex-col overflow-hidden">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 font-mono">
-            <Zap className="w-5 h-5 text-primary" />
-            Smart Startup
-          </DialogTitle>
-          <DialogDescription>
-            Start stacks automatically when a monitored device (e.g. NAS) comes online
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="w-[90vw] sm:max-w-4xl h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex h-full min-h-0 flex-col">
+          <DialogHeader className="shrink-0 mb-4">
+            <DialogTitle className="flex items-center gap-2 font-mono">
+              <Zap className="w-5 h-5 text-primary" />
+              Smart Startup
+            </DialogTitle>
+            <DialogDescription>
+              Start stacks automatically when a monitored device (e.g. NAS) comes online
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="rounded-lg bg-blue-500/5 border border-blue-500/20 p-3 flex gap-2 text-xs text-blue-400 shrink-0">
-          <Info className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>
-            Smart Startup pings the configured device IP or hostname at the set interval.
-            When the device comes online, the stack starts automatically after the configured delay.
-            Ideal for NAS-dependent stacks - just enter your Synology's IP or <code className="font-mono">synology.local</code>.
-          </span>
-        </div>
+          <div className="flex flex-col gap-3 shrink-0">
+            <div className="rounded-lg bg-blue-500/5 border border-blue-500/20 p-3 flex gap-2 text-xs text-blue-400 shrink-0">
+              <Info className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                Smart Startup pings the configured device IP or hostname at the set interval.
+                When the device comes online, the stack starts automatically after the configured delay.
+                Ideal for NAS-dependent stacks - just enter your Synology's IP or <code className="font-mono">synology.local</code>.
+              </span>
+            </div>
 
         {startupWarnings && startupWarnings.count > 0 && (
           <Card className="p-3 shrink-0 border-amber-500/30 bg-amber-500/5">
@@ -309,10 +322,11 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
             </div>
           </Card>
         )}
+        </div>
 
-        <div className="flex-1 min-h-0 overflow-hidden mt-2 -mr-2 pr-2">
-          <ScrollArea className="h-full pr-3">
-            <div className="space-y-2 pb-2">
+          <div className="flex-1 min-h-0 overflow-hidden mt-4">
+            <ScrollArea className="h-full pr-4">
+            <Accordion type="multiple" className="space-y-2 pb-2">
               {stacks.length === 0 && (
                 <p className="text-xs text-muted-foreground">No stacks found.</p>
               )}
@@ -332,11 +346,12 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
                   onDelete={deleteConfig}
                 />
               ))}
-            </div>
+            </Accordion>
           </ScrollArea>
         </div>
-      </DialogContent>
-    </Dialog>
-  )
+      </div>
+    </DialogContent>
+  </Dialog>
+)
 }
 

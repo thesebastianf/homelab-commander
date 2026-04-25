@@ -1236,7 +1236,7 @@ router.post('/actions/update-all', asyncHandler(async (_req, res) => {
       const shouldBackupFirst = !!stack.run_backup_before_update || !!stack.backup_enabled;
       if (shouldBackupFirst) {
         try {
-          await runBackup(id);
+          await runBackup(id, 'auto-update');
         } catch (backupErr: any) {
           summary.failed.push({ id, name, error: `backup failed: ${backupErr?.message || 'unknown error'}` });
           continue;
