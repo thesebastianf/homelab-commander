@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS settings (
       "containerFailed": true,
       "highMemory": true,
       "highCpu": true,
+      "autoUpdateSkippedFrozen": true,
       "containerStarted": false,
       "containerStopped": false,
       "stackDeployed": true,

@@ -203,6 +203,22 @@ function buildRichPayload(eventType: string, data: Record<string, unknown>): Ric
         oneliner: `⚠️ Low disk space — free: ${freeGB || '?'} GB (threshold: ${thresholdGB || '?'} GB)`,
       };
     }
+    case 'autoUpdateSkippedFrozen': {
+      const phase = pickString(data, ['phase']) || 'preflight';
+      const phaseLabel = phase === 'mid-run' ? 'during scheduled run' : 'before scheduled run';
+      return {
+        title: '❄️ Auto-Update Skipped (Global Freeze Active)',
+        emoji: '❄️',
+        level: 'warning',
+        fields: [
+          { name: '🧊 Reason', value: 'Global Update Freeze is enabled', inline: false },
+          { name: '⚙️ Trigger', value: 'Auto-update schedule', inline: true },
+          { name: '🕒 Phase', value: phaseLabel, inline: true },
+          { name: '📦 Stack', value: stackName || 'All scheduled stacks', inline: false },
+        ],
+        oneliner: `❄️ Scheduled auto-update skipped because Global Update Freeze is enabled`,
+      };
+    }
     default: {
       const title = pickString(data, ['title']) || `Homelab Commander: ${eventType}`;
       const msg = pickString(data, ['message']) || 'No details.';

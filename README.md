@@ -16,6 +16,15 @@ The Homelab Commander gives you one place to run your Docker infrastructure with
 
 It combines day-to-day container operations, stack lifecycle tooling, backups, update workflows, Smart Startup dependencies, and AI-assisted compose workflows in a single dashboard.
 
+## Support This Project
+
+If The Homelab Commander helps your homelab, you can support ongoing development on Ko-fi:
+
+- Ko-fi: https://ko-fi.com/thesebastianf
+- Username: thesebastianf
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Q5Q11YKFB9)
+
 ## Highlights
 
 - Docker inventory for containers, images, volumes, and networks

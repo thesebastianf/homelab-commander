@@ -80,7 +80,10 @@ app.use(rateLimit({
 
 app.use(express.json({ limit: '1mb' }));
 app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => (req as any).url === '/healthz' } }));
-app.use(basicAuth);
+
+// Protect API endpoints with app-level credentials while keeping static assets
+// publicly reachable so the React login screen can render.
+app.use('/api', basicAuth);
 
 // Routes
 app.use('/', healthRoutes);

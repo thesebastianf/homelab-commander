@@ -2763,7 +2763,7 @@ export function StacksEditor({
                               {settings.globalUpdateFreeze && (
                                 <p className="text-xs text-destructive mt-1 flex items-center gap-1">
                                   <AlertTriangle className="w-3 h-3" />
-                                  Global Update Freeze is active - updates paused
+                                  Global Update Freeze is active - scheduled auto-updates are paused (manual updates still allowed)
                                 </p>
                               )}
                             </div>

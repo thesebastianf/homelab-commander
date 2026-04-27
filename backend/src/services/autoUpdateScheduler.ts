@@ -66,6 +66,29 @@ async function checkFreeDiskSpaceGB(): Promise<number> {
 
 let scheduledTask: cron.ScheduledTask | null = null;
 
+async function recordFreezeSkip(phase: 'preflight' | 'mid-run', stackName?: string): Promise<void> {
+  const details: Record<string, unknown> = {
+    trigger: 'schedule',
+    action: 'update',
+    source: 'auto-update',
+    reason: 'global_update_freeze',
+    phase,
+  };
+  if (stackName) {
+    details.stackName = stackName;
+  }
+
+  await auditLog('auto_update_skipped', 'system', undefined, details).catch(() => { /* best-effort */ });
+  await sendNotification('autoUpdateSkippedFrozen', details).catch(() => { /* best-effort */ });
+}
+
+async function isGlobalUpdateFreezeEnabled(): Promise<boolean> {
+  const { rows: [settings] } = await pool.query(
+    'SELECT global_update_freeze FROM settings WHERE id = 1'
+  );
+  return Boolean(settings?.global_update_freeze);
+}
+
 export async function initAutoUpdateScheduler(): Promise<void> {
   try {
     const { rows: [settings] } = await pool.query('SELECT auto_update_schedule FROM settings WHERE id = 1');
@@ -100,12 +123,9 @@ export function rescheduleAutoUpdater(cronExpr: string | null): void {
 
 async function runScheduledUpdates(): Promise<void> {
   try {
-    const { rows: [settings] } = await pool.query(
-      'SELECT global_update_freeze FROM settings WHERE id = 1'
-    );
-
-    if (settings?.global_update_freeze) {
+    if (await isGlobalUpdateFreezeEnabled()) {
       logger.info('Auto-update scheduled run skipped: global update freeze is active');
+      await recordFreezeSkip('preflight');
       return;
     }
 
@@ -134,6 +154,12 @@ async function runScheduledUpdates(): Promise<void> {
     logger.info({ count: stacks.length, freeGB }, 'Starting scheduled auto-update run');
 
     for (const stack of stacks) {
+      if (await isGlobalUpdateFreezeEnabled()) {
+        logger.info('Auto-update run interrupted: global update freeze enabled during execution');
+        await recordFreezeSkip('mid-run', stack.name);
+        return;
+      }
+
       logger.info({ stackName: stack.name }, 'Auto-updating stack');
       try {
         // Run backup before update if configured

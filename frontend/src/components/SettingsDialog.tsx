@@ -307,7 +307,8 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Disable ALL container updates for maximum stability. Overrules everything.
+                        Pauses scheduled automatic updates globally for maximum stability.
+                        Manual updates from the UI are still allowed.
                       </p>
                     </div>
                     <Switch
@@ -325,7 +326,7 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                       <Label className="text-base">Scheduled Auto-Update Window</Label>
                       <p className="text-sm text-muted-foreground mt-0.5">
                         Run automatic updates for all stacks with auto-update enabled on a defined schedule.
-                        Respects Global Update Freeze.
+                        This is paused while Global Update Freeze is active.
                       </p>
                     </div>
                     <Switch
@@ -424,6 +425,7 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                   {Object.entries({
                     updateAvailable: 'Update Available',
                     containerAutoUpdated: 'Container Auto-Updated',
+                    autoUpdateSkippedFrozen: 'Auto-Update Skipped (Global Freeze)',
                     containerFailed: 'Container Failed',
                     containerStarted: 'Container Started',
                     containerStopped: 'Container Stopped',

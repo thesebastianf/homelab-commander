@@ -66,6 +66,7 @@ async function initSchema(client: pg.PoolClient): Promise<void> {
           "containerFailed": true,
           "highMemory": true,
           "highCpu": true,
+          "autoUpdateSkippedFrozen": true,
           "containerStarted": false,
           "containerStopped": false,
           "stackDeployed": true,
@@ -354,6 +355,14 @@ async function runMigrations(client: pg.PoolClient): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_managed_networks_docker_id ON managed_networks(docker_network_id)`,
     `CREATE INDEX IF NOT EXISTS idx_managed_networks_name ON managed_networks(docker_network_name)`,
     `ALTER TABLE managed_networks ADD COLUMN IF NOT EXISTS driver TEXT NOT NULL DEFAULT 'bridge'`,
+    `UPDATE settings
+      SET notification_config = jsonb_set(
+        COALESCE(notification_config, '{}'::jsonb),
+        '{events,autoUpdateSkippedFrozen}',
+        'true'::jsonb,
+        true
+      )
+      WHERE id = 1`,
   ];
 
   for (const statement of statements) {

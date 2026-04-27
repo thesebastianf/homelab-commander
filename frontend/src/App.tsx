@@ -92,6 +92,7 @@ const defaultSettings: AppSettings = {
       containerFailed: true,
       highMemory: true,
       highCpu: true,
+      autoUpdateSkippedFrozen: true,
       containerStarted: false,
       containerStopped: false,
       stackDeployed: true,
