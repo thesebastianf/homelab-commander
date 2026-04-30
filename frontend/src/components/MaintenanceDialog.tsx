@@ -195,9 +195,9 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
           {/* Row 1: Images | Volumes | Stopped Containers */}
           <div className="grid grid-cols-3 gap-3">
             {/* Purge Unused Images */}
-            <div className="rounded-lg border border-l-4 border-blue-500/20 border-l-blue-500 bg-card p-3 flex flex-col gap-2">
+            <div className="rounded-lg border border-l-4 border-info/20 border-l-info bg-card p-3 flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-blue-500 shrink-0" />
+                <ImageIcon className="w-4 h-4 text-info shrink-0" />
                 <h4 className="font-mono font-semibold text-xs">Purge Unused Images</h4>
               </div>
               <p className="text-[11px] text-muted-foreground">Remove images not associated with any container.</p>
@@ -205,7 +205,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
                 <div className="flex gap-4">
                   <div>
                     <p className="text-[10px] text-muted-foreground">Count</p>
-                    <p className="text-lg font-mono font-bold text-blue-500">{dfData.images.count ?? 0}</p>
+                    <p className="text-lg font-mono font-bold text-info">{dfData.images.count ?? 0}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground">Reclaimable</p>
@@ -214,7 +214,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
                 </div>
               )}
               <div className="mt-auto flex flex-col gap-1">
-                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-7 w-fit"
+                <Button size="sm" className="bg-info hover:bg-info/90 text-primary-foreground text-xs h-7 w-fit"
                   disabled={pruning !== null} onClick={() => handlePrune('images', 'Image prune', 'All unused images (not associated with any container) will be permanently deleted. This frees up disk space but images must be re-pulled to use again.')}>
                   {pruning === 'images' ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Pruning...</> : 'Purge Images'}
                 </Button>
@@ -242,7 +242,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
                 </div>
               )}
               <div className="mt-auto flex flex-col gap-1">
-                <Button size="sm" className="bg-primary hover:bg-primary/90 text-white text-xs h-7 w-fit"
+                <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-7 w-fit"
                   disabled={pruning !== null} onClick={() => handlePrune('volumes', 'Volume prune', 'All volumes not referenced by any container will be permanently deleted including their data. This cannot be undone.')}>
                   {pruning === 'volumes' ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Pruning...</> : 'Prune Volumes'}
                 </Button>
@@ -316,21 +316,21 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
             </div>
 
             {/* Prune Networks */}
-            <div className={`rounded-lg border border-l-4 bg-card p-3 flex flex-col gap-2 ${networkPoolWarning ? 'border-orange-500/40 border-l-orange-500' : 'border-orange-500/20 border-l-orange-500'}`}>
+            <div className={`rounded-lg border border-l-4 bg-card p-3 flex flex-col gap-2 ${networkPoolWarning ? 'border-warning/40 border-l-warning' : 'border-warning/20 border-l-warning'}`}>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <Network className="w-4 h-4 text-orange-500 shrink-0" />
+                  <Network className="w-4 h-4 text-warning shrink-0" />
                   <h4 className="font-mono font-semibold text-xs">Prune Networks</h4>
                 </div>
                 {networkPoolWarning && (
-                  <Badge className="text-[10px] bg-orange-500/15 text-orange-400 border-orange-500/30 py-0">Full!</Badge>
+                  <Badge className="text-[10px] bg-warning/15 text-warning border-warning/30 py-0">Full!</Badge>
                 )}
               </div>
               <p className="text-[11px] text-muted-foreground">Remove unused networks. Prevents "address pool exhausted" errors.</p>
               <div className="flex gap-4">
                 <div>
                   <p className="text-[10px] text-muted-foreground">Active</p>
-                  <p className={`text-lg font-mono font-bold ${networkPoolWarning ? 'text-orange-400' : 'text-orange-500'}`}>{networkCount}</p>
+                  <p className={`text-lg font-mono font-bold ${networkPoolWarning ? 'text-warning' : 'text-warning'}`}>{networkCount}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground">Threshold</p>
@@ -338,12 +338,12 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
                 </div>
               </div>
               {networkPoolWarning && (
-                <div className="rounded bg-orange-500/10 border border-orange-500/20 p-1.5 text-[10px] text-orange-400">
+                <div className="rounded bg-warning/10 border border-warning/20 p-1.5 text-[10px] text-warning">
                   Pool nearly full — remove unused stacks or prune now.
                 </div>
               )}
               <div className="mt-auto flex flex-col gap-1">
-                <Button size="sm" className="bg-orange-600 hover:bg-orange-700 text-white text-xs h-7 w-fit"
+                <Button size="sm" className="bg-warning hover:bg-warning/90 text-primary-foreground text-xs h-7 w-fit"
                   disabled={pruning !== null} onClick={() => handlePrune('networks', 'Network prune', 'All unused Docker networks (not connected to any container) will be removed. Running containers are not affected.')}>
                   {pruning === 'networks' ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Pruning...</> : 'Prune Networks'}
                 </Button>

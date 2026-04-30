@@ -37,7 +37,7 @@ export function CreateNetworkDialog({ open, onOpenChange }: CreateNetworkDialogP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="w-[96vw] sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Central Network</DialogTitle>
           <DialogDescription>

@@ -247,12 +247,12 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                       <Label className="text-xs font-semibold">Select Volumes</Label>
                       <div className="flex items-center gap-1">
                         {newVolumeCount > 0 && (
-                          <Badge className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30">
+                          <Badge className="text-[10px] bg-info/15 text-info border-info/30">
                             +{newVolumeCount} new
                           </Badge>
                         )}
                         {removedVolumeNames.length > 0 && (
-                          <Badge className="text-[10px] bg-amber-500/20 text-amber-400 border-amber-500/30">
+                          <Badge className="text-[10px] bg-warning/15 text-warning border-warning/30">
                             -{removedVolumeNames.length} removed
                           </Badge>
                         )}
@@ -292,7 +292,7 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                       <p className="text-[11px] text-muted-foreground">No named volumes or bind-mount paths were detected for this stack.</p>
                     )}
                     {removedVolumeNames.length > 0 && (
-                      <div className="pt-1 text-[11px] text-amber-400">
+                      <div className="pt-1 text-[11px] text-warning">
                         Previously selected but no longer detected: {removedVolumeNames.join(', ')}
                       </div>
                     )}
@@ -324,12 +324,12 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                       <Label className="text-xs font-semibold">Select Databases</Label>
                       <div className="flex items-center gap-1">
                         {newDatabaseCount > 0 && (
-                          <Badge className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30">
+                          <Badge className="text-[10px] bg-info/15 text-info border-info/30">
                             +{newDatabaseCount} new
                           </Badge>
                         )}
                         {removedDatabaseNames.length > 0 && (
-                          <Badge className="text-[10px] bg-amber-500/20 text-amber-400 border-amber-500/30">
+                          <Badge className="text-[10px] bg-warning/15 text-warning border-warning/30">
                             -{removedDatabaseNames.length} removed
                           </Badge>
                         )}
@@ -364,17 +364,17 @@ function StackBackupItem({ stack }: { stack: Stack }) {
                       </div>
                     )}
                     {dbWarnings.length > 0 && (
-                      <div className="pt-1 text-[11px] text-amber-400">
+                      <div className="pt-1 text-[11px] text-warning">
                         {dbWarnings.map((entry) => (
                           <div key={`warn-${entry.key || entry.name}`}>{entry.warning}</div>
                         ))}
                       </div>
                     )}
                     {backupDatabases.length === 0 && (
-                      <p className="text-[11px] text-amber-400">No compose-labeled databases detected in this stack. THC now blocks loose container-name matching to prevent cross-stack backups.</p>
+                      <p className="text-[11px] text-warning">No compose-labeled databases detected in this stack. THC now blocks loose container-name matching to prevent cross-stack backups.</p>
                     )}
                     {removedDatabaseNames.length > 0 && (
-                      <div className="pt-1 text-[11px] text-amber-400">
+                      <div className="pt-1 text-[11px] text-warning">
                         Previously selected but no longer detected: {removedDatabaseNames.join(', ')}
                       </div>
                     )}
@@ -434,7 +434,7 @@ function StackJobHistoryItems({ stack }: { stack: Stack }) {
         <div key={job.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
           <div className="flex items-center gap-3">
             {job.status === 'completed' ? (
-              <CheckCircle className="w-4 h-4 text-green-500" />
+              <CheckCircle className="w-4 h-4 text-success" />
             ) : job.status === 'failed' ? (
               <XCircle className="w-4 h-4 text-destructive" />
             ) : (

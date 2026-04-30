@@ -47,32 +47,54 @@ export function StackCard({ stack, onStart, onStop, onRestart, onRemove, onViewC
   }
 
   const isRunning = stack.status === 'running'
+  const accentClass =
+    stack.status === 'running' ? 'before:bg-success' :
+    stack.status === 'failed' ? 'before:bg-destructive' :
+    stack.status === 'deploying' ? 'before:bg-info' :
+    'before:bg-border'
+
+  const dotState =
+    stack.status === 'running' ? 'running' :
+    stack.status === 'failed' ? 'failed' :
+    stack.status === 'deploying' ? 'deploying' : 'idle'
 
   return (
     <TooltipProvider delayDuration={200}>
-    <Card className="p-6 hover:shadow-lg transition-all duration-200 group relative overflow-hidden border-l-4" style={{
-      borderLeftColor: stack.status === 'running' ? 'var(--success)' : stack.status === 'failed' ? 'var(--destructive)' : 'var(--border)'
-    }}>
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-start gap-3">
-          <div className="p-2 rounded-lg bg-primary/10 text-primary">
-            <Layers className="w-6 h-6" />
+    <Card className={cn(
+      "card-surface lift p-4 sm:p-5 lg:p-6 group relative overflow-hidden rounded-xl",
+      "before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:content-['']",
+      accentClass
+    )}>
+      {/* Decorative gradient halo on hover */}
+      <div className="pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+           style={{ background: 'radial-gradient(circle, color-mix(in oklch, var(--accent) 18%, transparent) 0%, transparent 70%)' }} />
+
+      <div className="relative flex items-start justify-between gap-3 mb-4">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="relative shrink-0">
+            <div className="p-2.5 rounded-xl brand-grad text-primary-foreground shadow-lg shadow-accent/20">
+              <Layers className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2.25} />
+            </div>
+            <span className={cn("status-dot absolute -top-0.5 -right-0.5 ring-2 ring-card")} data-state={dotState} />
           </div>
-          <div>
-            <h3 className="font-mono font-semibold text-lg">{stack.name}</h3>
-            <p className="text-sm text-muted-foreground">{stack.services} services • Version {stack.version}</p>
+          <div className="min-w-0">
+            <h3 className="font-semibold text-base sm:text-lg truncate tracking-tight">{stack.name}</h3>
+            <p className="text-xs sm:text-sm text-muted-foreground truncate">
+              <span className="font-mono">{stack.services}</span> services · v<span className="font-mono">{stack.version}</span>
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge className={cn(getStatusColor(stack.status), isRunning && "animate-pulse-glow")}>
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <Badge className={cn(getStatusColor(stack.status), "uppercase text-[10px] tracking-wider font-semibold px-2 py-0.5")}>
             {stack.status}
           </Badge>
           {stack.hasHostNetworking && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Badge variant="destructive" className="gap-1.5 bg-orange-500/20 text-orange-400 border-orange-500/30 hover:bg-orange-500/30">
+                <Badge variant="outline" className="gap-1.5 bg-warning/15 text-warning border-warning/40 hover:bg-warning/25">
                   <Network className="w-3.5 h-3.5" />
-                  Host Network
+                  <span className="hidden sm:inline">Host Network</span>
+                  <span className="sm:hidden">Host</span>
                 </Badge>
               </TooltipTrigger>
               <TooltipContent className="max-w-xs">
@@ -182,7 +204,7 @@ export function StackCard({ stack, onStart, onStop, onRestart, onRemove, onViewC
         </div>
       </div>
 
-      <div className="text-xs text-muted-foreground font-mono bg-muted/30 p-3 rounded max-h-32 overflow-auto">
+      <div className="text-xs text-muted-foreground font-mono surface-2 p-3 rounded-md max-h-32 overflow-auto border border-border/50">
         <pre className="whitespace-pre-wrap break-all">{stack.compose.slice(0, 200)}...</pre>
       </div>
     </Card>

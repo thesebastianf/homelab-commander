@@ -33,7 +33,7 @@ export function ImageCard({ image, onPull, onRemove }: ImageCardProps) {
 
   return (
     <>
-    <Card className="p-4 hover:shadow-lg transition-all duration-200">
+    <Card className="card-surface lift p-4 rounded-xl">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
           <h3 className="font-mono font-semibold text-sm truncate">{isDangling ? 'untagged-image' : image.repository}</h3>

@@ -246,7 +246,7 @@ function FullBackupPanel({ config: cfg, onChange: u, stackId, onSave, isSaving, 
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-semibold">Select Volumes</Label>
                     {newVolumeCount > 0 && (
-                      <Badge className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30">
+                      <Badge className="text-[10px] bg-info/15 text-info border-info/20">
                         +{newVolumeCount} new
                       </Badge>
                     )}
@@ -319,7 +319,7 @@ function FullBackupPanel({ config: cfg, onChange: u, stackId, onSave, isSaving, 
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-semibold">Select Databases</Label>
                     {newDatabaseCount > 0 && (
-                      <Badge className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30">
+                      <Badge className="text-[10px] bg-info/15 text-info border-info/20">
                         +{newDatabaseCount} new
                       </Badge>
                     )}
@@ -354,14 +354,14 @@ function FullBackupPanel({ config: cfg, onChange: u, stackId, onSave, isSaving, 
                     </div>
                   )}
                   {dbWarnings.length > 0 && (
-                    <div className="pt-1 text-[11px] text-amber-400">
+                    <div className="pt-1 text-[11px] text-warning">
                       {dbWarnings.map((entry) => (
                         <div key={`warn-${entry.key || entry.name}`}>{entry.warning}</div>
                       ))}
                     </div>
                   )}
                   {stackId && backupDatabases.length === 0 && (
-                    <p className="text-[11px] text-amber-400">No compose-labeled databases detected in this stack. THC blocks loose container-name matching to prevent cross-stack backups.</p>
+                    <p className="text-[11px] text-warning">No compose-labeled databases detected in this stack. THC blocks loose container-name matching to prevent cross-stack backups.</p>
                   )}
                 </div>
                 <div className="pt-2 space-y-1 border-t border-muted">
@@ -1397,7 +1397,7 @@ export function StacksEditor({
                             {stack.updateAvailable && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <span className="text-[10px] font-semibold text-amber-500 flex items-center gap-0.5 cursor-default">
+                                  <span className="text-[10px] font-semibold text-warning flex items-center gap-0.5 cursor-default">
                                     <RefreshCw className="w-2.5 h-2.5" />upd
                                   </span>
                                 </TooltipTrigger>
@@ -1407,7 +1407,7 @@ export function StacksEditor({
                             {stack.hasHostNetworking && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <span className="text-[10px] text-orange-400 flex items-center gap-0.5 cursor-default">
+                                  <span className="text-[10px] text-warning flex items-center gap-0.5 cursor-default">
                                     <AlertTriangle className="w-2.5 h-2.5" />host-net
                                   </span>
                                 </TooltipTrigger>
@@ -1435,7 +1435,7 @@ export function StacksEditor({
                               
                               if (bkpCfg?.enabled) {
                                 if (!bkpCfg.schedule) {
-                                  colorClass = "text-amber-500";
+                                  colorClass = "text-warning";
                                   icon = <Zap className="w-2.5 h-2.5" />;
                                   tooltipText = "Backup enabled but NO schedule defined! Backups: " + bkpCount;
                                 } else {
@@ -1443,10 +1443,10 @@ export function StacksEditor({
                                   const isStale = !lastDate || (Date.now() - lastDate.getTime() > 30 * 24 * 60 * 60 * 1000);
                                   
                                   if (isStale) {
-                                    colorClass = "text-yellow-400";
+                                    colorClass = "text-warning";
                                     tooltipText = "Backup enabled, but last backup is older than 30 days or missing. Backups: " + bkpCount;
                                   } else {
-                                    colorClass = "text-blue-400";
+                                    colorClass = "text-info";
                                     tooltipText = "Backup active and fresh. Schedule: " + bkpCfg.schedule + ". Backups: " + bkpCount;
                                   }
                                 }
@@ -1486,7 +1486,7 @@ export function StacksEditor({
                             {(stackServiceNameConflictCounts.get(stack.id) || 0) > 0 && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <span className="text-[10px] text-amber-500 flex items-center gap-0.5 cursor-default">
+                                  <span className="text-[10px] text-warning flex items-center gap-0.5 cursor-default">
                                     <AlertTriangle className="w-2.5 h-2.5" />svc:{stackServiceNameConflictCounts.get(stack.id)}
                                   </span>
                                 </TooltipTrigger>
@@ -1507,7 +1507,7 @@ export function StacksEditor({
                         </div>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className={`text-[10px] mt-0.5 cursor-help ${stack.status === 'running' ? 'text-green-500' : stack.status === 'failed' ? 'text-destructive' : 'text-muted-foreground/40'}`}>&#9679;</span>
+                            <span className={`text-[10px] mt-0.5 cursor-help ${stack.status === 'running' ? 'text-success' : stack.status === 'failed' ? 'text-destructive' : 'text-muted-foreground/40'}`}>&#9679;</span>
                           </TooltipTrigger>
                           <TooltipContent className="text-xs">Status dot: green = running, red = failed, gray = stopped/deploying.</TooltipContent>
                         </Tooltip>
@@ -1556,7 +1556,7 @@ export function StacksEditor({
                         </div>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className={`text-[10px] mt-0.5 cursor-help ${stack.status === 'running' ? 'text-green-500' : stack.status === 'failed' ? 'text-destructive' : 'text-muted-foreground/40'}`}>&#9679;</span>
+                            <span className={`text-[10px] mt-0.5 cursor-help ${stack.status === 'running' ? 'text-success' : stack.status === 'failed' ? 'text-destructive' : 'text-muted-foreground/40'}`}>&#9679;</span>
                           </TooltipTrigger>
                           <TooltipContent className="text-xs">Status dot: green = running, red = failed, gray = stopped/deploying.</TooltipContent>
                         </Tooltip>
@@ -1591,14 +1591,14 @@ export function StacksEditor({
                 <>
                   <p className="px-1 pt-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/70">Found on Disk (Unadopted)</p>
                   {filteredOrphanStacks.map(orphan => (
-                    <Card key={orphan.stackPath} className="p-3 border-dashed border-amber-500/40 bg-amber-500/5">
+                    <Card key={orphan.stackPath} className="p-3 border-dashed border-warning/30 bg-warning/15">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <p className="font-mono text-sm truncate font-semibold">{orphan.name}</p>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <span className="text-[10px] text-amber-500 flex items-center gap-0.5 cursor-default shrink-0">
+                                <span className="text-[10px] text-warning flex items-center gap-0.5 cursor-default shrink-0">
                                   <FolderOpen className="w-2.5 h-2.5" />disk
                                 </span>
                               </TooltipTrigger>
@@ -1616,7 +1616,7 @@ export function StacksEditor({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="w-full mt-2 h-6 text-[10px] gap-1 border-amber-500/50 text-amber-500 hover:bg-amber-500/10"
+                        className="w-full mt-2 h-6 text-[10px] gap-1 border-warning/30 text-warning hover:bg-warning/15"
                         disabled={adoptMutation.isPending}
                         onClick={() => adoptMutation.mutate({ name: orphan.name, stackPath: orphan.stackPath, composeFiles: undefined })}
                       >
@@ -1809,16 +1809,16 @@ export function StacksEditor({
                         const sysHits = newPorts.filter(p => SYSTEM_PORTS[p])
                         if (sysHits.length === 0) return null
                         return (
-                          <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/8 px-3 py-2 space-y-1">
-                            <p className="text-[10px] font-semibold text-yellow-400 uppercase tracking-wide flex items-center gap-1">
+                          <div className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 space-y-1">
+                            <p className="text-[10px] font-semibold text-warning uppercase tracking-wide flex items-center gap-1">
                               <AlertTriangle className="w-3 h-3" /> Well-known port{sysHits.length > 1 ? 's' : ''} in use
                             </p>
                             {sysHits.map(p => (
-                              <p key={p} className="text-xs text-yellow-300 font-mono">
-                                :{p} <span className="text-yellow-400/70">— {SYSTEM_PORTS[p]}</span>
+                              <p key={p} className="text-xs text-warning font-mono">
+                                :{p} <span className="text-warning/70">— {SYSTEM_PORTS[p]}</span>
                               </p>
                             ))}
-                            <p className="text-[10px] text-yellow-400/60 mt-1">These ports are typically reserved by the OS or standard services. Consider using ports above 1024.</p>
+                            <p className="text-[10px] text-warning/60 mt-1">These ports are typically reserved by the OS or standard services. Consider using ports above 1024.</p>
                           </div>
                         )
                       })()}
@@ -1843,7 +1843,7 @@ export function StacksEditor({
                                     Used by <strong className="ml-0.5">{conflict.name}</strong>
                                   </span>
                                 ) : (
-                                  <span className="text-xs text-green-500">&#10003; Available</span>
+                                  <span className="text-xs text-success">&#10003; Available</span>
                                 )}
                               </div>
                             )
@@ -1857,15 +1857,15 @@ export function StacksEditor({
                               {newServiceNames.map((serviceName) => {
                                 const clashes = newServiceConflicts.get(serviceName) || []
                                 return (
-                                  <div key={serviceName} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${clashes.length > 0 ? 'border-amber-500/60 bg-amber-500/5' : 'border-border/40 bg-muted/20'}`}>
+                                  <div key={serviceName} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${clashes.length > 0 ? 'border-warning/30 bg-warning/15' : 'border-border/40 bg-muted/20'}`}>
                                     <span className="font-mono text-xs font-semibold">{serviceName}</span>
                                     {clashes.length > 0 ? (
-                                      <span className="text-xs text-amber-400 flex items-center gap-1">
+                                      <span className="text-xs text-warning flex items-center gap-1">
                                         <AlertTriangle className="w-3 h-3" />
                                         Reused by <strong className="ml-0.5">{clashes.join(', ')}</strong>
                                       </span>
                                     ) : (
-                                      <span className="text-xs text-green-500">Unique</span>
+                                      <span className="text-xs text-success">Unique</span>
                                     )}
                                   </div>
                                 )
@@ -2101,7 +2101,7 @@ export function StacksEditor({
                     </Button>
                   )}
                   {selectedStack.updateAvailable && (
-                    <Badge variant="outline" className="text-xs shrink-0 border-amber-500 text-amber-500 gap-1">
+                    <Badge variant="outline" className="text-xs shrink-0 border-warning text-warning gap-1">
                       <RefreshCw className="w-3 h-3" />
                       Update available
                     </Badge>
@@ -2174,12 +2174,12 @@ export function StacksEditor({
                   <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/30 shrink-0">
                     <div className="flex items-center gap-2">
                       <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className={`text-xs font-mono ${operationDone && operationError ? 'text-red-400' : 'text-muted-foreground'}`}>
+                      <span className={`text-xs font-mono ${operationDone && operationError ? 'text-destructive' : 'text-muted-foreground'}`}>
                         {isOperating ? `${currentOperation}...` : currentOperation}
                       </span>
-                      {isOperating && <Loader2 className="w-3 h-3 animate-spin text-blue-400" />}
-                      {operationDone && !isOperating && !operationError && <CheckCircle2 className="w-3 h-3 text-green-500" />}
-                      {operationDone && !isOperating && operationError && <XCircle className="w-3 h-3 text-red-500" />}
+                      {isOperating && <Loader2 className="w-3 h-3 animate-spin text-info" />}
+                      {operationDone && !isOperating && !operationError && <CheckCircle2 className="w-3 h-3 text-success" />}
+                      {operationDone && !isOperating && operationError && <XCircle className="w-3 h-3 text-destructive" />}
                     </div>
                     <button
                       onClick={() => { setIsOperating(false); setOperationDone(false); setOperationError(null) }}
@@ -2192,14 +2192,14 @@ export function StacksEditor({
                     <div className="font-mono text-xs space-y-0.5 whitespace-pre-wrap break-all">
                       {opLines.map((line, i) => (
                         <div key={i} className={
-                          line.startsWith('✅') || line.includes('successfully') ? 'text-green-400' :
+                          line.startsWith('✅') || line.includes('successfully') ? 'text-success' :
                           line.startsWith('[+]') ? 'text-cyan-400 font-semibold' :
-                          line.startsWith('❌') || line.startsWith('🔴') || line.includes('failed') ? 'text-red-400' :
-                          line.startsWith('⚠') || line.includes('warn') || line.includes('Warning') ? 'text-yellow-400' :
-                          line.startsWith('ℹ️') || line.includes('Pulling') || line.includes('Pulled') ? 'text-blue-400' :
+                          line.startsWith('❌') || line.startsWith('🔴') || line.includes('failed') ? 'text-destructive' :
+                          line.startsWith('⚠') || line.includes('warn') || line.includes('Warning') ? 'text-warning' :
+                          line.startsWith('ℹ️') || line.includes('Pulling') || line.includes('Pulled') ? 'text-info' :
                           line.startsWith('•') ? 'text-foreground/80' :
-                          line.includes('✓') || line.includes('Started') || line.includes('Healthy') || line.includes('Created') || line.includes('Removed') ? 'text-green-400' :
-                          line.includes('Stopped') ? 'text-amber-400' :
+                          line.includes('✓') || line.includes('Started') || line.includes('Healthy') || line.includes('Created') || line.includes('Removed') ? 'text-success' :
+                          line.includes('Stopped') ? 'text-warning' :
                           'text-foreground/70'
                         }>
                           {line}
@@ -2304,8 +2304,8 @@ export function StacksEditor({
                         <TooltipTrigger asChild>
                           <span className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono shrink-0 border ${
                             usingHostPath
-                              ? 'border-green-500/40 text-green-400 bg-green-500/10'
-                              : 'border-yellow-500/40 text-yellow-400 bg-yellow-500/10'
+                              ? 'border-success/30 text-success bg-success/15'
+                              : 'border-warning/40 text-warning bg-warning/10'
                           }`}>
                             <HardDriveDownload className="w-2.5 h-2.5" />
                             {usingHostPath ? 'HOST' : 'DB'}
@@ -2327,7 +2327,7 @@ export function StacksEditor({
                         >
                           <FileCode className="w-3 h-3" />
                           compose.yml
-                          {isDirty && activeFile === 'compose' && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
+                          {isDirty && activeFile === 'compose' && <span className="w-1.5 h-1.5 rounded-full bg-warning" />}
                         </button>
                       </TooltipTrigger>
                       <TooltipContent className="text-xs">Edit the compose file used by docker compose commands</TooltipContent>
@@ -2342,7 +2342,7 @@ export function StacksEditor({
                         >
                           <File className="w-3 h-3" />
                           .env
-                          {isDirty && activeFile === 'env' && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
+                          {isDirty && activeFile === 'env' && <span className="w-1.5 h-1.5 rounded-full bg-warning" />}
                         </button>
                       </TooltipTrigger>
                       <TooltipContent className="text-xs">Edit environment variables passed to compose services</TooltipContent>
@@ -2358,7 +2358,7 @@ export function StacksEditor({
                           >
                             <FileText className="w-3 h-3" />
                             {f.name}
-                            {isDirty && activeFile === f.path && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
+                            {isDirty && activeFile === f.path && <span className="w-1.5 h-1.5 rounded-full bg-warning" />}
                           </button>
                         </TooltipTrigger>
                         <TooltipContent className="text-xs">Open file {f.name} from stack directory</TooltipContent>
@@ -2376,16 +2376,16 @@ export function StacksEditor({
 
                   {/* External change banner */}
                   {hasExternalChanges && (
-                    <div className="flex items-start gap-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 mb-2 shrink-0">
-                      <AlertTriangle className="w-3.5 h-3.5 text-yellow-400 shrink-0 mt-0.5" />
+                    <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 mb-2 shrink-0">
+                      <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-yellow-300">External change detected on host</p>
-                        <p className="text-xs text-yellow-400/80 mt-0.5">The compose file on disk differs from the DB version. Someone edited it directly on the host.</p>
+                        <p className="text-xs font-medium text-warning">External change detected on host</p>
+                        <p className="text-xs text-warning/80 mt-0.5">The compose file on disk differs from the DB version. Someone edited it directly on the host.</p>
                       </div>
                       <div className="flex gap-1.5 shrink-0">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/20 px-2"
+                            <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1 border-warning/40 text-warning hover:bg-warning/10 px-2"
                               onClick={() => {
                                 if (stackDetail?.diskComposeContent) setComposeContent(stackDetail.diskComposeContent)
                                 if (stackDetail?.diskEnvContent !== null && stackDetail?.diskEnvContent !== undefined) setEnvContent(stackDetail.diskEnvContent)
@@ -2442,8 +2442,8 @@ export function StacksEditor({
                                 ? <Loader2 className="w-3 h-3 animate-spin" />
                                 : <GitBranch className="w-3 h-3" />}
                               <span className="font-mono">{gitStatus.branch}</span>
-                              {gitStatus.status === 'modified' && <span className="text-amber-400 text-[10px]">*</span>}
-                              {gitStatus.status === 'in_sync' && <span className="text-green-400 text-[10px]">*</span>}
+                              {gitStatus.status === 'modified' && <span className="text-warning text-[10px]">*</span>}
+                              {gitStatus.status === 'in_sync' && <span className="text-success text-[10px]">*</span>}
                             </button>
                           </TooltipTrigger>
                           <TooltipContent className="text-xs max-w-[220px]">
@@ -2453,7 +2453,7 @@ export function StacksEditor({
                         </Tooltip>
                       )}
 
-                      {isDirty && <span className="text-amber-500 font-mono text-xs">* Unsaved</span>}
+                      {isDirty && <span className="text-warning font-mono text-xs">* Unsaved</span>}
                     </div>
 
                     <Tooltip>
@@ -2631,7 +2631,7 @@ export function StacksEditor({
                           <div className="font-mono text-xs space-y-0.5 p-2">
                             {logLines.slice(-500).map((line, i) => (
                               <div key={i} className="flex gap-2 leading-relaxed min-w-0">
-                                <span className="text-amber-500 shrink-0">[{line.container}]</span>
+                                <span className="text-warning shrink-0">[{line.container}]</span>
                                 <span className="text-foreground/75 break-all min-w-0">{line.text}</span>
                               </div>
                             ))}
@@ -2662,9 +2662,9 @@ export function StacksEditor({
                                 key={i}
                                 className={`whitespace-pre-wrap leading-5 px-1 rounded-sm ${
                                   part.added
-                                    ? 'bg-green-500/15 text-green-400'
+                                    ? 'bg-success/15 text-success'
                                     : part.removed
-                                    ? 'bg-red-500/15 text-red-400 line-through opacity-60'
+                                    ? 'bg-destructive/15 text-destructive line-through opacity-60'
                                     : 'text-muted-foreground'
                                 }`}
                               >
@@ -2787,7 +2787,7 @@ export function StacksEditor({
                         />
                       </div>
                       {selectedStack.runBackupBeforeUpdate && !stackBackupConfig?.enabled && (
-                        <p className="text-xs text-amber-500 px-1 flex items-center gap-1">
+                        <p className="text-xs text-warning px-1 flex items-center gap-1">
                           <AlertTriangle className="w-3 h-3 shrink-0" />
                           Configure backup settings in the Backup tab to enable pre-update backups
                         </p>
@@ -2837,16 +2837,16 @@ export function StacksEditor({
                           const sysHits = editPorts.filter(p => SYSTEM_PORTS[p])
                           if (sysHits.length === 0) return null
                           return (
-                            <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/8 px-3 py-2 space-y-1">
-                              <p className="text-[10px] font-semibold text-yellow-400 uppercase tracking-wide flex items-center gap-1">
+                            <div className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 space-y-1">
+                              <p className="text-[10px] font-semibold text-warning uppercase tracking-wide flex items-center gap-1">
                                 <AlertTriangle className="w-3 h-3" /> Well-known port{sysHits.length > 1 ? 's' : ''} in use
                               </p>
                               {sysHits.map(p => (
-                                <p key={p} className="text-xs text-yellow-300 font-mono">
-                                  :{p} <span className="text-yellow-400/70">- {SYSTEM_PORTS[p]}</span>
+                                <p key={p} className="text-xs text-warning font-mono">
+                                  :{p} <span className="text-warning/70">- {SYSTEM_PORTS[p]}</span>
                                 </p>
                               ))}
-                              <p className="text-[10px] text-yellow-400/60 mt-1">These ports are typically reserved by the OS or standard services. Consider using ports above 1024.</p>
+                              <p className="text-[10px] text-warning/60 mt-1">These ports are typically reserved by the OS or standard services. Consider using ports above 1024.</p>
                             </div>
                           )
                         })()}
@@ -2869,7 +2869,7 @@ export function StacksEditor({
                                       Used by <strong className="ml-0.5">{conflicts.map(c => c.name).join(', ')}</strong>
                                     </span>
                                   ) : (
-                                    <span className="text-xs text-green-500">&#10003; Available</span>
+                                    <span className="text-xs text-success">&#10003; Available</span>
                                   )}
                                 </div>
                               )
@@ -2885,15 +2885,15 @@ export function StacksEditor({
                             {activeServiceNames.map((serviceName) => {
                               const clashes = serviceNameConflicts.get(serviceName) || []
                               return (
-                                <div key={serviceName} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${clashes.length > 0 ? 'border-amber-500/60 bg-amber-500/5' : 'border-border/40 bg-muted/20'}`}>
+                                <div key={serviceName} className={`flex items-center justify-between px-3 py-2 rounded-lg border ${clashes.length > 0 ? 'border-warning/30 bg-warning/15' : 'border-border/40 bg-muted/20'}`}>
                                   <span className="font-mono text-xs font-semibold">{serviceName}</span>
                                   {clashes.length > 0 ? (
-                                    <span className="text-xs text-amber-400 flex items-center gap-1">
+                                    <span className="text-xs text-warning flex items-center gap-1">
                                       <AlertTriangle className="w-3 h-3" />
                                       Reused by <strong className="ml-0.5">{clashes.join(', ')}</strong>
                                     </span>
                                   ) : (
-                                    <span className="text-xs text-green-500">Unique</span>
+                                    <span className="text-xs text-success">Unique</span>
                                   )}
                                 </div>
                               )
@@ -3061,7 +3061,7 @@ export function StacksEditor({
                             style={{ paddingLeft: `${8 + (f.depth ?? 0) * 14}px` }}
                           >
                             {f.type === 'directory'
-                              ? <Folder className="w-3 h-3 shrink-0 text-blue-400" />
+                              ? <Folder className="w-3 h-3 shrink-0 text-info" />
                               : <FileText className="w-3 h-3 shrink-0" />
                             }
                             <span className="font-mono truncate">{f.name}</span>
@@ -3109,7 +3109,7 @@ export function StacksEditor({
               Remove <span className="font-mono font-semibold">{selectedStack?.name}</span> from the THC database and stack list.
               This does not automatically remove compose files from disk.
               {selectedStack?.status === 'running' && (
-                <span className="block mt-2 text-amber-500 text-xs font-mono">Warning: stack is currently running. Deactivate first to avoid orphaned running containers.</span>
+                <span className="block mt-2 text-warning text-xs font-mono">Warning: stack is currently running. Deactivate first to avoid orphaned running containers.</span>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>

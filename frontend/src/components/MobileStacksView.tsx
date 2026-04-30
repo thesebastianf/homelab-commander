@@ -157,7 +157,7 @@ export function MobileStacksView({
                       {stack.updateAvailable && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Badge variant="outline" className="border-amber-500 text-amber-500 gap-1">
+                            <Badge variant="outline" className="border-warning text-warning gap-1">
                               <RefreshCw className="w-2.5 h-2.5" />
                               Update available
                             </Badge>
@@ -169,7 +169,7 @@ export function MobileStacksView({
                       {stack.hasHostNetworking && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Badge variant="outline" className="border-orange-500 text-orange-400 gap-1">
+                            <Badge variant="outline" className="border-warning text-warning gap-1">
                               <AlertTriangle className="w-2.5 h-2.5" />
                               Host net
                             </Badge>
@@ -201,7 +201,7 @@ export function MobileStacksView({
                         
                         if (bkpCfg?.enabled) {
                           if (!bkpCfg.schedule) {
-                            colorClass = "border-amber-500 text-amber-500";
+                            colorClass = "border-warning text-warning";
                             icon = <Zap className="w-2.5 h-2.5" />;
                             tooltipText = "Backup enabled but NO schedule defined! Backups: " + bkpCount;
                           } else {
@@ -209,10 +209,10 @@ export function MobileStacksView({
                             const isStale = !lastDate || (Date.now() - lastDate.getTime() > 30 * 24 * 60 * 60 * 1000);
                             
                             if (isStale) {
-                              colorClass = "border-yellow-400 text-yellow-400";
+                              colorClass = "border-warning text-warning";
                               tooltipText = "Backup enabled, but last backup is older than 30 days or missing. Backups: " + bkpCount;
                             } else {
-                              colorClass = "border-blue-500 text-blue-400";
+                              colorClass = "border-info text-info";
                               tooltipText = "Backup active and fresh. Schedule: " + bkpCfg.schedule + ". Backups: " + bkpCount;
                             }
                           }

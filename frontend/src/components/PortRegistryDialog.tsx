@@ -24,11 +24,11 @@ const RANGE_PRESETS: { label: string; start: number; end: number; group: string;
 ]
 
 const GROUP_COLORS: Record<string, string> = {
-  Web: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  Databases: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  Monitoring: 'bg-green-500/20 text-green-400 border-green-500/30',
+  Web: 'bg-info/15 text-info border-info/20',
+  Databases: 'bg-warning/10 text-warning border-warning/40',
+  Monitoring: 'bg-success/15 text-success border-success/30',
   Media: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
-  HA: 'bg-red-500/20 text-red-400 border-red-500/30',
+  HA: 'bg-destructive/15 text-destructive border-destructive/30',
   Dev: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
   Custom: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
 }
@@ -321,12 +321,12 @@ export function PortRegistryDialog({
 
           <TabsContent value="hostnetworks" className="mt-4 space-y-4 flex-1 min-h-0 overflow-y-auto pr-1">
             {/* Host Network Warning */}
-            <Card className="border-orange-500/30 bg-orange-500/5">
+            <Card className="border-warning/30 bg-warning/5">
               <CardContent className="pt-3 pb-3">
                 <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
+                  <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="font-semibold text-sm text-orange-400 mb-1">Host Networking Mode</h4>
+                    <h4 className="font-semibold text-sm text-warning mb-1">Host Networking Mode</h4>
                     <p className="text-xs text-muted-foreground">
                       Stacks using host networking mode bypass Docker's port mapping and expose all container ports directly on the host network. This can pose security risks if not properly managed.
                       All exposed ports are directly accessible without explicit mappings.
@@ -354,10 +354,10 @@ export function PortRegistryDialog({
                   <ScrollArea className="flex-1 min-h-0">
                     <div className="space-y-2 pr-4">
                       {hostStacks.map(stack => (
-                        <Card key={stack.id} className="p-3 border-orange-500/20 bg-orange-500/5">
+                        <Card key={stack.id} className="p-3 border-warning/20 bg-warning/5">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-start gap-2 min-w-0 flex-1">
-                              <div className="w-2 h-2 rounded-full bg-orange-400 mt-1.5 flex-shrink-0" />
+                              <div className="w-2 h-2 rounded-full bg-warning mt-1.5 flex-shrink-0" />
                               <div className="min-w-0 flex-1">
                                 <p className="font-mono font-semibold text-sm truncate">{stack.name}</p>
                                 <p className="text-xs text-muted-foreground">
@@ -373,16 +373,16 @@ export function PortRegistryDialog({
                               variant="outline"
                               className={
                                 stack.status === 'running'
-                                  ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                  ? 'bg-success/15 text-success border-success/30'
                                   : stack.status === 'failed'
-                                  ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                                  ? 'bg-destructive/15 text-destructive border-destructive/30'
                                   : 'bg-gray-500/20 text-gray-400 border-gray-500/30'
                               }
                             >
                               {stack.status}
                             </Badge>
                           </div>
-                          <div className="mt-2 pt-2 border-t border-orange-500/10">
+                          <div className="mt-2 pt-2 border-t border-warning/10">
                             <p className="text-xs text-muted-foreground">
                               ⚠ All exposed container ports are directly accessible on host network
                             </p>

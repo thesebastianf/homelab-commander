@@ -22,9 +22,9 @@ export function NetworkCard({ network, onRemove, onInspect }: NetworkCardProps) 
 
   return (
     <>
-    <Card className={`p-4 hover:shadow-lg transition-all duration-200 ${
+    <Card className={`card-surface lift p-4 rounded-xl ${
       isManuallyCreated 
-        ? 'border-accent ring-1 ring-accent/40 bg-accent/10 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.02)]'
+        ? 'border-accent/50 ring-1 ring-accent/30 bg-accent/[0.06]'
         : ''
     }`}>
       <div className="flex items-start justify-between gap-3">

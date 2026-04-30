@@ -226,7 +226,7 @@ export function EnhancedStackEditorDialog({
   return (
     <TooltipProvider delayDuration={350}>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             Edit Stack: <span className="font-mono text-primary">{stack.name}</span>
@@ -266,11 +266,11 @@ export function EnhancedStackEditorDialog({
 
           <TabsContent value="compose" className="mt-4 space-y-3">
             {hasExternalChanges && (
-              <div className="flex items-start gap-3 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-3 py-2.5">
-                <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5">
+                <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-yellow-300">External changes detected</p>
-                  <p className="text-xs text-yellow-400/80 mt-0.5">The compose file on disk differs from the DB version. Someone edited it directly on the host.</p>
+                  <p className="text-xs font-medium text-warning">External changes detected</p>
+                  <p className="text-xs text-warning/80 mt-0.5">The compose file on disk differs from the DB version. Someone edited it directly on the host.</p>
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <Tooltip>
@@ -278,7 +278,7 @@ export function EnhancedStackEditorDialog({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-xs gap-1.5 border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/20"
+                        className="h-7 text-xs gap-1.5 border-warning/40 text-warning hover:bg-warning/10"
                         onClick={() => {
                           if (diskComposeContent) setCompose(diskComposeContent)
                           if (diskEnvContent !== null && diskEnvContent !== undefined) setEnvFile(diskEnvContent)

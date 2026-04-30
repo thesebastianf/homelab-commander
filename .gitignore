@@ -43,3 +43,6 @@ Thumbs.db
 docker-compose.yaml.homelab
 .env.homelab
 gitignored/
+.dev-data/
+
+**/dist/

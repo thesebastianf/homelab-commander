@@ -52,19 +52,26 @@ export function ContainerCard({
   return (
     <>
     <Card className={cn(
-      "px-5 py-4 hover:shadow-md transition-all duration-200 border-l-4",
-      isRunning ? "border-l-success" : isStopped ? "border-l-border" : "border-l-warning"
+      "card-surface lift relative px-4 sm:px-5 py-3.5 sm:py-4 rounded-xl overflow-hidden",
+      "before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:content-['']",
+      isRunning ? "before:bg-success" : isStopped ? "before:bg-border" : "before:bg-warning"
     )}>
       {/* Top row: name + status + badges + actions */}
-      <div className="flex items-center gap-3 justify-between">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="p-1.5 rounded-md bg-primary/10 text-primary shrink-0">
-            <Box className="w-4 h-4" />
+      <div className="relative flex items-center gap-3 justify-between">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+          <div className="relative shrink-0">
+            <div className="p-1.5 rounded-lg bg-surface-3 border border-border/60 text-foreground/80">
+              <Box className="w-4 h-4" strokeWidth={2.25} />
+            </div>
+            <span
+              className="status-dot absolute -top-0.5 -right-0.5 ring-2 ring-card"
+              data-state={isRunning ? 'running' : container.status === 'paused' ? 'warning' : isStopped ? 'idle' : 'deploying'}
+            />
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-mono font-semibold text-base leading-tight truncate">{container.name}</h3>
-              <Badge className={cn("text-xs px-2 py-0 border", statusColor)}>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <h3 className="font-mono font-semibold text-[15px] leading-tight truncate">{container.name}</h3>
+              <Badge className={cn("text-[10px] px-2 py-0 border uppercase tracking-wider font-semibold", statusColor)}>
                 {container.status}
               </Badge>
               {container.restartPolicy && container.restartPolicy !== 'no' && (
@@ -76,13 +83,15 @@ export function ContainerCard({
               {smartStartEnabled && (
                 <Badge variant="outline" className="text-xs border-warning text-warning gap-1 px-1.5 py-0">
                   <Zap className="w-2.5 h-2.5" />
-                  Smart Start
+                  <span className="hidden sm:inline">Smart Start</span>
+                  <span className="sm:hidden">SS</span>
                 </Badge>
               )}
               {container.updateAvailable && (
                 <Badge variant="outline" className="text-xs border-warning text-warning gap-1 px-1.5 py-0">
                   <CloudDownload className="w-2.5 h-2.5" />
-                  Update avail.
+                  <span className="hidden sm:inline">Update avail.</span>
+                  <span className="sm:hidden">Upd</span>
                 </Badge>
               )}
             </div>

@@ -99,7 +99,7 @@ function StackRow({ stack, config, diagnostic, checkingAddress, onCheckNow, onCr
           )}
           {/* Device online status when enabled */}
           {enabled && config?.triggerValue && (
-            <Badge className={`text-[9px] px-1.5 py-0 border shrink-0 ${isOnline ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30'}`}>
+            <Badge className={`text-[9px] px-1.5 py-0 border shrink-0 ${isOnline ? 'bg-success/15 text-success border-success/30' : 'bg-destructive/15 text-destructive border-destructive/30'}`}>
               {isOnline ? <Wifi className="w-2.5 h-2.5 mr-0.5 inline" /> : <WifiOff className="w-2.5 h-2.5 mr-0.5 inline" />}
               {isOnline ? 'Device online' : 'Device offline'}
             </Badge>
@@ -184,7 +184,7 @@ function StackRow({ stack, config, diagnostic, checkingAddress, onCheckNow, onCr
               </Button>
 
               {diagnostic && (
-                <span className={`text-[10px] font-mono ${diagnostic.isOnline ? 'text-green-400' : 'text-red-400'}`}>
+                <span className={`text-[10px] font-mono ${diagnostic.isOnline ? 'text-success' : 'text-destructive'}`}>
                   {diagnostic.isOnline ? 'Online' : 'Offline'}
                   {diagnostic.isOnline ? ` (${diagnostic.latencyMs} ms)` : ''}
                   {' · '}
@@ -251,7 +251,7 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
           </DialogHeader>
 
           <div className="flex flex-col gap-3 shrink-0">
-            <div className="rounded-lg bg-blue-500/5 border border-blue-500/20 p-3 flex gap-2 text-xs text-blue-400 shrink-0">
+            <div className="rounded-lg bg-info/15 border border-info/20 p-3 flex gap-2 text-xs text-info shrink-0">
               <Info className="w-4 h-4 shrink-0 mt-0.5" />
               <span>
                 Smart Startup pings the configured device IP or hostname at the set interval.
@@ -261,14 +261,14 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
             </div>
 
         {startupWarnings && startupWarnings.count > 0 && (
-          <Card className="p-3 shrink-0 border-amber-500/30 bg-amber-500/5">
+          <Card className="p-3 shrink-0 border-warning/30 bg-warning/15">
             <div className="flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5" />
+              <AlertTriangle className="w-4 h-4 text-warning mt-0.5" />
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-amber-300">
+                <p className="text-xs font-semibold text-warning">
                   Startup Warning: {startupWarnings.count} Smart Startup config{startupWarnings.count > 1 ? 's' : ''} reference missing stacks
                 </p>
-                <p className="text-[11px] text-amber-200/90 mt-0.5">
+                <p className="text-[11px] text-warning/90 mt-0.5">
                   Checked {formatDistanceToNow(new Date(startupWarnings.checkedAt), { addSuffix: true })}. Remove or reassign these configs to restore automatic starts.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -276,13 +276,13 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
                     <Badge
                       key={item.configId}
                       variant="outline"
-                      className="font-mono text-[10px] border-amber-500/40 text-amber-200 flex items-center pr-1"
+                      className="font-mono text-[10px] border-warning/30 text-warning flex items-center pr-1"
                     >
                       {item.triggerValue} - {item.targetId.slice(0, 8)}
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-4 w-4 ml-1 hover:bg-amber-500/20 text-amber-200"
+                        className="h-4 w-4 ml-1 hover:bg-warning/15 text-warning"
                         onClick={() => {
                           deleteConfig.mutate(item.configId, {
                             onSuccess: () => toast.success('Orphan config removed'),
@@ -310,11 +310,11 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
                 const online = live?.isOnline ?? false
                 const checked = live?.lastCheckedAt ? new Date(live.lastCheckedAt) : null
                 return (
-                  <div key={addr} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-mono ${online ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
+                  <div key={addr} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-mono ${online ? 'border-success/30 bg-success/15' : 'border-destructive/30 bg-destructive/15'}`}>
                     {online
-                      ? <Wifi className="w-3.5 h-3.5 text-green-400" />
-                      : <WifiOff className="w-3.5 h-3.5 text-red-400" />}
-                    <span className={online ? 'text-green-400' : 'text-red-400'}>{addr}</span>
+                      ? <Wifi className="w-3.5 h-3.5 text-success" />
+                      : <WifiOff className="w-3.5 h-3.5 text-destructive" />}
+                    <span className={online ? 'text-success' : 'text-destructive'}>{addr}</span>
                     {checked && <span className="text-muted-foreground text-[10px]">{formatDistanceToNow(checked, { addSuffix: true })}</span>}
                   </div>
                 )

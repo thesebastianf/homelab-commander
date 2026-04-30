@@ -20,7 +20,7 @@ export function VolumeCard({ volume, onRemove, onInspect }: VolumeCardProps) {
 
   return (
     <>
-    <Card className="p-4 hover:shadow-lg transition-all duration-200">
+    <Card className="card-surface lift p-4 rounded-xl">
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex-1 min-w-0">
           <h3 className="font-mono font-semibold text-sm truncate">{volume.name}</h3>

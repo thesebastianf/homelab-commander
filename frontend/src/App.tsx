@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { cn } from '@/lib/utils'
 import { Toaster } from '@/components/ui/sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -7,6 +8,14 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { LoadingScreen } from '@/components/LoadingScreen'
 import { LoginScreen } from '@/components/LoginScreen'
 import { MetricCard } from '@/components/MetricCard'
@@ -27,7 +36,7 @@ import { CreateNetworkDialog } from '@/components/CreateNetworkDialog'
 import { DatabaseExplorer } from '@/components/DatabaseExplorer'
 import { ContainerShellDialog } from '@/components/ContainerShellDialog'
 import { ClockWidget } from '@/components/ClockWidget'
-import { Loader2, RefreshCw, Maximize2, Minimize2 } from 'lucide-react'
+import { Loader2, RefreshCw, Maximize2, Minimize2, Menu, Sun, Moon } from 'lucide-react'
 import {
   Box,
   Home,
@@ -381,113 +390,264 @@ function App() {
     })
   }
 
+  const isLightTheme = (currentSettings.theme || 'dark') === 'light'
+  const toggleTheme = () => {
+    const next = isLightTheme ? 'dark' : 'light'
+    document.documentElement.setAttribute('data-theme', next)
+    updateSettings.mutate({ ...currentSettings, theme: next })
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Toaster position="top-right" richColors />
-      <header className="border-b border-border bg-card sticky top-0 z-50 backdrop-blur-sm bg-card/80">
-        <div className={compactMode ? 'px-4 py-2.5' : 'px-6 py-3'}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <img src="/thc_small_.png" alt="THC Logo" className={compactMode ? 'h-8 w-8 object-contain' : 'h-12 w-12 object-contain'} />
-              {!compactMode && (
-                <div>
-                  <h1 className="text-xl font-bold font-mono tracking-tight">THC</h1>
-                  <p className="text-xs text-muted-foreground">The Homelab Commander · highly addictive.</p>
+      <header className="border-b sticky top-0 z-50 glass">
+        <div className={compactMode ? 'px-3 sm:px-4 py-2.5' : 'px-4 lg:px-6 py-3'}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={cn(
+                "relative shrink-0 rounded-md p-[2px] brand-grad shadow-lg shadow-accent/20",
+                compactMode ? 'h-9 w-9' : 'h-11 w-11 lg:h-12 lg:w-12'
+              )}>
+                <div className="h-full w-full rounded-[5px] bg-card flex items-center justify-center overflow-hidden">
+                  <img src="/thc_small_.png" alt="THC Logo" className="h-[78%] w-[78%] object-contain" />
                 </div>
+                <span className="pointer-events-none absolute inset-0 rounded-md ring-1 ring-foreground/5" />
+              </div>
+              {!compactMode ? (
+                <div className="min-w-0">
+                  <h1 className="text-lg lg:text-2xl font-bold tracking-tight leading-none">
+                    <span className="brand-grad-text">THC</span>
+                    <span className="text-foreground/80 font-medium ml-2 text-sm lg:text-base align-middle">/ Homelab Commander</span>
+                  </h1>
+                  <p className="hidden md:block text-[11px] text-muted-foreground truncate mt-1 tracking-wide uppercase">
+                    Highly addictive · self-hosted control plane
+                  </p>
+                </div>
+              ) : (
+                <h1 className="text-base font-bold tracking-tight">
+                  <span className="brand-grad-text">THC</span>
+                </h1>
               )}
             </div>
 
             {compactMode ? (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 w-7 p-0"
-                      onClick={() => setMobileOverride(false)}
-                    >
-                      <Maximize2 className="w-3.5 h-3.5" />
+              <div className="flex items-center gap-1.5 shrink-0">
+                {/* Compact: status pills wrapped, then hamburger */}
+                {currentSettings.globalUpdateFreeze && (
+                  <Badge variant="destructive" className="gap-1 px-2 h-7 animate-pulse">
+                    <Snowflake className="w-3 h-3" />
+                    <span className="hidden xs:inline text-[10px]">FREEZE</span>
+                  </Badge>
+                )}
+                {containersWithUpdates > 0 && (
+                  <Badge variant="outline" className="border-warning text-warning gap-1 h-7 font-mono text-xs">
+                    <CloudDownload className="w-3 h-3" />
+                    {containersWithUpdates}
+                  </Badge>
+                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-9 w-9 p-0" aria-label="Menu">
+                      <Menu className="w-4 h-4" />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent className="text-xs">Switch to full UI</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel className="text-xs">Actions</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => setPortRegistryOpen(true)}>
+                      <ListOrdered className="w-4 h-4" /> Ports
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSmartStartupOpen(true)}>
+                      <Zap className="w-4 h-4" /> Smart Startup
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setBackupManagementOpen(true)}>
+                      <Save className="w-4 h-4" /> Backups
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setNotificationLogOpen(true)}>
+                      <Bell className="w-4 h-4" /> Alerts
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setMaintenanceOpen(true)}>
+                      <Paintbrush className="w-4 h-4" /> Cleanup
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setDatabaseExplorerOpen(true)}>
+                      <Database className="w-4 h-4" /> Database
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+                      <Settings className="w-4 h-4" /> Settings
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setManualOpen(true)}>
+                      <CircleHelp className="w-4 h-4" /> Help
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={toggleTheme}>
+                      {isLightTheme ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+                      {isLightTheme ? 'Dark theme' : 'Light theme'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setMobileOverride(false)}>
+                      <Maximize2 className="w-4 h-4" /> Switch to full UI
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             ) : (
               <>
-                {/* Status badges */}
-                <div className="flex items-center gap-2">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
+                {/* Right-aligned cluster: clock | status pills | toggles | Tools */}
+                <div className="ml-auto flex items-center gap-2 shrink-0">
+                  {/* Clock + timezone — desktop only */}
+                  <div className="hidden xl:block">
+                    <ClockWidget />
+                  </div>
+
+                  {/* Status pills (hidden on small viewports) */}
+                  <div className="hidden md:flex items-center gap-2">
+                    {currentSettings.globalUpdateFreeze && (
+                      <Badge variant="destructive" className="gap-1 px-3 animate-pulse">
+                        <Snowflake className="w-3 h-3" />
+                        UPDATE FREEZE
+                      </Badge>
+                    )}
+                    {autoUpdateEnabled && !currentSettings.globalUpdateFreeze && (
+                      <Badge variant="secondary" className="gap-1 px-3 font-mono text-xs">
+                        Auto-Update ON
+                      </Badge>
+                    )}
+                    {containersWithUpdates > 0 && (
+                      <Badge variant="outline" className="border-warning text-warning gap-1 font-mono text-xs">
+                        <CloudDownload className="w-3 h-3" />
+                        {containersWithUpdates} Updates
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* Theme + compact toggles */}
+                  <div className="hidden md:flex items-center gap-1">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 w-9 p-0"
+                            onClick={toggleTheme}
+                            aria-label="Toggle light/dark theme"
+                          >
+                            {isLightTheme ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent className="text-xs">{isLightTheme ? 'Switch to dark theme' : 'Switch to light theme'}</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 w-9 p-0"
+                            onClick={() => setMobileOverride(true)}
+                            aria-label="Switch to compact UI"
+                          >
+                            <Minimize2 className="w-4 h-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent className="text-xs">Switch to compact UI</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+
+                  {/* Action buttons consolidated into a single Tools dropdown */}
+                  <div className="hidden md:flex items-center">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => setMobileOverride(true)}
+                          className="h-9 gap-2 px-3"
+                          aria-label="Tools"
                         >
-                          <Minimize2 className="w-3.5 h-3.5" />
+                          <Menu className="w-4 h-4" />
+                          <span className="text-xs font-medium tracking-wide">Tools</span>
                         </Button>
-                      </TooltipTrigger>
-                      <TooltipContent className="text-xs">Switch to compact UI</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  {currentSettings.globalUpdateFreeze && (
-                    <Badge variant="destructive" className="gap-1 px-3 animate-pulse">
-                      <Snowflake className="w-3 h-3" />
-                      UPDATE FREEZE
-                    </Badge>
-                  )}
-                  {autoUpdateEnabled && !currentSettings.globalUpdateFreeze && (
-                    <Badge variant="secondary" className="gap-1 px-3 font-mono text-xs">
-                      Auto-Update ON
-                    </Badge>
-                  )}
-                  {containersWithUpdates > 0 && (
-                    <Badge variant="outline" className="border-warning text-warning gap-1 font-mono text-xs">
-                      <CloudDownload className="w-3 h-3" />
-                      {containersWithUpdates} Updates
-                    </Badge>
-                  )}
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56">
+                        <DropdownMenuLabel className="text-xs">Actions</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => setPortRegistryOpen(true)}>
+                          <ListOrdered className="w-4 h-4" /> Ports
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setSmartStartupOpen(true)}>
+                          <Zap className="w-4 h-4" /> Smart Startup
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setBackupManagementOpen(true)}>
+                          <Save className="w-4 h-4" /> Backups
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setNotificationLogOpen(true)}>
+                          <Bell className="w-4 h-4" /> Alerts
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setMaintenanceOpen(true)}>
+                          <Paintbrush className="w-4 h-4" /> Cleanup
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setDatabaseExplorerOpen(true)}>
+                          <Database className="w-4 h-4" /> Database
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+                          <Settings className="w-4 h-4" /> Settings
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setManualOpen(true)}>
+                          <CircleHelp className="w-4 h-4" /> Help
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
 
-                {/* Clock + timezone */}
-                <ClockWidget />
-
-                {/* Action buttons with labels */}
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => setPortRegistryOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
-                    <ListOrdered className="w-4 h-4" />
-                    <span className="text-[10px] font-mono">Ports</span>
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setSmartStartupOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
-                    <Zap className="w-4 h-4" />
-                    <span className="text-[10px] font-mono">Startup</span>
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setBackupManagementOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
-                    <Save className="w-4 h-4" />
-                    <span className="text-[10px] font-mono">Backup</span>
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setNotificationLogOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
-                    <Bell className="w-4 h-4" />
-                    <span className="text-[10px] font-mono">Alerts</span>
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setMaintenanceOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
-                    <Paintbrush className="w-4 h-4" />
-                    <span className="text-[10px] font-mono">Cleanup</span>
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setDatabaseExplorerOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
-                    <Database className="w-4 h-4" />
-                    <span className="text-[10px] font-mono">Database</span>
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
-                    <Settings className="w-4 h-4" />
-                    <span className="text-[10px] font-mono">Settings</span>
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setManualOpen(true)} className="flex flex-col items-center gap-0.5 h-12 px-3 text-muted-foreground hover:text-foreground">
-                    <CircleHelp className="w-4 h-4" />
-                    <span className="text-[10px] font-mono">?</span>
-                  </Button>
+                {/* Mobile-side hamburger when full mode is active on small viewport */}
+                <div className="flex md:hidden items-center gap-1.5 shrink-0">
+                  {containersWithUpdates > 0 && (
+                    <Badge variant="outline" className="border-warning text-warning gap-1 h-7 font-mono text-xs">
+                      <CloudDownload className="w-3 h-3" />
+                      {containersWithUpdates}
+                    </Badge>
+                  )}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-9 w-9 p-0" aria-label="Menu">
+                        <Menu className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel className="text-xs">Actions</DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => setPortRegistryOpen(true)}>
+                        <ListOrdered className="w-4 h-4" /> Ports
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setSmartStartupOpen(true)}>
+                        <Zap className="w-4 h-4" /> Smart Startup
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setBackupManagementOpen(true)}>
+                        <Save className="w-4 h-4" /> Backups
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setNotificationLogOpen(true)}>
+                        <Bell className="w-4 h-4" /> Alerts
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setMaintenanceOpen(true)}>
+                        <Paintbrush className="w-4 h-4" /> Cleanup
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setDatabaseExplorerOpen(true)}>
+                        <Database className="w-4 h-4" /> Database
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+                        <Settings className="w-4 h-4" /> Settings
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setManualOpen(true)}>
+                        <CircleHelp className="w-4 h-4" /> Help
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={toggleTheme}>
+                        {isLightTheme ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+                        {isLightTheme ? 'Dark theme' : 'Light theme'}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setMobileOverride(true)}>
+                        <Minimize2 className="w-4 h-4" /> Switch to compact UI
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </>
             )}
@@ -495,43 +655,46 @@ function App() {
         </div>
       </header>
 
-      <main className={compactMode ? 'px-4 py-3' : 'px-6 py-6'}>
+      <main className={compactMode ? 'px-3 sm:px-4 py-3' : 'px-4 lg:px-6 py-4 lg:py-6'}>
         <Tabs value={activeTab} onValueChange={handleTabChange}>
-          <TabsList className={compactMode ? 'mb-3 w-full grid grid-cols-2' : 'mb-6'}>
-            <TabsTrigger value="dashboard" className="gap-2">
+          <TabsList
+            className={cn(
+              "card-surface !bg-transparent backdrop-blur-sm rounded-md",
+              compactMode
+                ? 'mb-3 w-full overflow-x-auto no-scrollbar flex justify-start gap-1 h-auto p-1'
+                : 'mb-4 lg:mb-6 w-full md:w-auto overflow-x-auto no-scrollbar flex md:inline-flex justify-start gap-1 p-1.5'
+            )}
+          >
+            <TabsTrigger value="dashboard" className="gap-2 shrink-0">
               <Home className="w-4 h-4" />
               Dashboard
             </TabsTrigger>
-            <TabsTrigger value="stacks" className="gap-2">
+            <TabsTrigger value="stacks" className="gap-2 shrink-0">
               <Layers className="w-4 h-4" />
               Stacks
               <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-mono">
                 {stacks.length}
               </span>
             </TabsTrigger>
-            {!compactMode && (
-              <>
-                <TabsTrigger value="containers" className="gap-2">
-                  <Box className="w-4 h-4" />
-                  Containers
-                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-mono">
-                    {systemStats.containers.total}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger value="volumes" className="gap-2">
-                  <HardDrive className="w-4 h-4" />
-                  Volumes
-                </TabsTrigger>
-                <TabsTrigger value="images" className="gap-2">
-                  <ImageIcon className="w-4 h-4" />
-                  Images
-                </TabsTrigger>
-                <TabsTrigger value="networks" className="gap-2">
-                  <Network className="w-4 h-4" />
-                  Networks
-                </TabsTrigger>
-              </>
-            )}
+            <TabsTrigger value="containers" className="gap-2 shrink-0">
+              <Box className="w-4 h-4" />
+              Containers
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-mono">
+                {systemStats.containers.total}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="volumes" className="gap-2 shrink-0">
+              <HardDrive className="w-4 h-4" />
+              Volumes
+            </TabsTrigger>
+            <TabsTrigger value="images" className="gap-2 shrink-0">
+              <ImageIcon className="w-4 h-4" />
+              Images
+            </TabsTrigger>
+            <TabsTrigger value="networks" className="gap-2 shrink-0">
+              <Network className="w-4 h-4" />
+              Networks
+            </TabsTrigger>
           </TabsList>
 
           {/* ═══ DASHBOARD ═══ */}
@@ -549,7 +712,7 @@ function App() {
                 <>
                   <div>
                     <p className="text-xs font-mono text-muted-foreground font-semibold tracking-widest mb-2 uppercase">Resource Usage</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                       <MetricCard
                         label="CPU"
                         value={`${systemStats.cpuUsage.toFixed(1)}%`}
@@ -607,7 +770,7 @@ function App() {
 
                   <div>
                     <p className="text-xs font-mono text-muted-foreground font-semibold tracking-widest mb-2 uppercase">System Overview</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                       <MetricCard
                         label="Containers"
                         value={systemStats.containers.total}
