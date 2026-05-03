@@ -10,7 +10,6 @@ import { logger } from '../logger.js';
 import { sendNotification } from './notifications.js';
 import { auditLog } from '../lib/audit.js';
 import { runBackup } from './backups.js';
-import { getStackUpdateStatus } from './updates.js';
 
 const execFileAsync = promisify(execFile);
 const MIN_FREE_DISK_GB = 3;
@@ -161,11 +160,6 @@ async function runScheduledUpdates(): Promise<void> {
         return;
       }
 
-      if (!getStackUpdateStatus(String(stack.name || ''))) {
-        logger.info({ stackName: stack.name }, 'Auto-update skipped: stack already up to date');
-        continue;
-      }
-
       logger.info({ stackName: stack.name }, 'Auto-updating stack');
       try {
         // Run backup before update if configured
@@ -176,19 +170,30 @@ async function runScheduledUpdates(): Promise<void> {
           });
         }
 
-        await updateStackImages(stack);
+        const updated = await updateStackImages(stack);
         await pool.query(
           "UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1",
           [stack.id]
         );
-        await auditLog('auto_update', 'stack', String(stack.id), { trigger: 'schedule', action: 'update', source: 'auto-update' });
-        await sendNotification('containerAutoUpdated', {
-          stackName: stack.name,
-          action: 'update',
-          trigger: 'schedule',
-          source: 'auto-update',
-        });
-        logger.info({ stackName: stack.name }, 'Auto-update complete');
+        if (updated) {
+          await auditLog('auto_update', 'stack', String(stack.id), { trigger: 'schedule', action: 'update', source: 'auto-update' });
+          await sendNotification('containerAutoUpdated', {
+            stackName: stack.name,
+            action: 'update',
+            trigger: 'schedule',
+            source: 'auto-update',
+          });
+          logger.info({ stackName: stack.name }, 'Auto-update complete');
+        } else {
+          await auditLog('auto_update', 'stack', String(stack.id), {
+            trigger: 'schedule',
+            action: 'update',
+            source: 'auto-update',
+            noop: true,
+            reason: 'already-up-to-date',
+          });
+          logger.info({ stackName: stack.name }, 'Auto-update finished: no newer images available');
+        }
       } catch (err: any) {
         logger.error({ err, stackName: stack.name }, 'Auto-update failed for stack');
         await pool.query(
@@ -209,7 +214,23 @@ async function runScheduledUpdates(): Promise<void> {
   }
 }
 
-function updateStackImages(stack: any): Promise<void> {
+function composeOutputIndicatesImageUpdate(lines: string[]): boolean {
+  const text = lines.join('\n').toLowerCase();
+  const positiveTokens = [
+    'downloaded newer image',
+    'pull complete',
+    'download complete',
+    'extracting',
+    ' pulled',
+    'recreated',
+    'creating',
+    'created',
+  ];
+
+  return positiveTokens.some((token) => text.includes(token));
+}
+
+function updateStackImages(stack: any): Promise<boolean> {
   return new Promise(async (resolve, reject) => {
     let tempDir: string | null = null;
     try {
@@ -236,7 +257,7 @@ function updateStackImages(stack: any): Promise<void> {
       proc.on('close', (code) => {
         if (tempDir) rm(tempDir, { recursive: true, force: true }).catch(() => {});
         if (code === 0) {
-          resolve();
+          resolve(composeOutputIndicatesImageUpdate(outputLines));
         } else {
           const tail = outputLines.slice(-30).join('\n');
           reject(new Error(`docker compose exited with code ${code}${tail ? '\n' + tail : ''}`));

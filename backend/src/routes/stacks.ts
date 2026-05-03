@@ -452,6 +452,39 @@ function compactComposeOutput(op: OperationState, rawLine: string): void {
   op.lines.push(line);
 }
 
+function composeOutputIndicatesImageUpdate(lines: string[]): boolean {
+  const text = lines.join('\n').toLowerCase();
+  const positiveTokens = [
+    'downloaded newer image',
+    'pull complete',
+    'download complete',
+    'extracting',
+    'images ready',
+    'pulling images',
+    ' pulled',
+    'recreated',
+    'creating',
+    'created',
+  ];
+
+  if (positiveTokens.some((token) => text.includes(token))) {
+    return true;
+  }
+
+  const noUpdateTokens = [
+    'up to date',
+    'already up to date',
+    'no image to be pulled',
+    'no newer images available',
+  ];
+
+  if (noUpdateTokens.some((token) => text.includes(token))) {
+    return false;
+  }
+
+  return false;
+}
+
 interface ComposeInvocationResult {
   runtime: 'docker' | 'docker-compose';
   args: string[];
@@ -682,22 +715,6 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState, tr
   try {
     op.lines.push(`[+] Updating stack ${stack.name}...`);
 
-    // If update checker reports no newer image digests for this stack, skip compose update.
-    if (!getStackUpdateStatus(stack.name)) {
-      const unchangedStatus = wasRunning ? 'running' : 'stopped';
-      await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [unchangedStatus, id]);
-      op.reconciledStatus = unchangedStatus;
-      op.noChange = true;
-      op.lines.push('ℹ Stack is already up to date — no newer images available.');
-      await auditLog('update', 'stack', id, {
-        trigger,
-        source: trigger === 'schedule' ? 'auto-update' : 'user',
-        noop: true,
-        reason: 'already-up-to-date',
-      });
-      return;
-    }
-
     if (await isSelfManagedStack(stack)) {
       const detachedStarted = await startDetachedSelfUpdate(id, stack, op);
       if (detachedStarted) {
@@ -760,18 +777,41 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState, tr
         });
 
         // Success
+        const hintedUpdate = getStackUpdateStatus(stack.name);
+        const observedUpdate = composeOutputIndicatesImageUpdate(op.lines);
+        const hasUpdate = hintedUpdate || observedUpdate;
+
         if (wasRunning) {
           await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [id]);
           op.reconciledStatus = 'running';
-          op.lines.push('✅ Update complete — containers restarted with latest images');
+          if (hasUpdate) {
+            op.lines.push('✅ Update complete — containers restarted with latest images');
+          } else {
+            op.noChange = true;
+            op.lines.push('ℹ Stack is already up to date — no newer images available.');
+          }
         } else {
           await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [stack.status === 'deploying' ? 'stopped' : stack.status, id]);
           op.reconciledStatus = 'stopped';
-          op.lines.push('✅ Images pulled successfully (stack remains stopped)');
+          if (hasUpdate) {
+            op.lines.push('✅ Images pulled successfully (stack remains stopped)');
+          } else {
+            op.noChange = true;
+            op.lines.push('ℹ Stack is already up to date — no newer images available.');
+          }
         }
         setStackUpdateStatus(stack.name, false);
-        await auditLog('update', 'stack', id, { trigger, source: trigger === 'schedule' ? 'auto-update' : 'user' });
-        await sendStackOperationNotification('update', stack, true, { trigger });
+        if (op.noChange) {
+          await auditLog('update', 'stack', id, {
+            trigger,
+            source: trigger === 'schedule' ? 'auto-update' : 'user',
+            noop: true,
+            reason: 'already-up-to-date',
+          });
+        } else {
+          await auditLog('update', 'stack', id, { trigger, source: trigger === 'schedule' ? 'auto-update' : 'user' });
+          await sendStackOperationNotification('update', stack, true, { trigger });
+        }
         return;
       } catch (err: any) {
         lastError = err;
