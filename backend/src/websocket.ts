@@ -49,6 +49,21 @@ function isAuthorized(request: IncomingMessage, url: URL): boolean {
 
 export function setupWebSocket(server: Server): void {
   const wss = new WebSocketServer({ noServer: true });
+  const heartbeatInterval = setInterval(() => {
+    wss.clients.forEach((client) => {
+      const ws = client as WebSocket & { isAlive?: boolean };
+      if (ws.isAlive === false) {
+        try { ws.terminate(); } catch { /* ignore */ }
+        return;
+      }
+      ws.isAlive = false;
+      try { ws.ping(); } catch { /* ignore */ }
+    });
+  }, 25_000);
+
+  wss.on('close', () => {
+    clearInterval(heartbeatInterval);
+  });
 
   server.on('upgrade', (request: IncomingMessage, socket, head) => {
     const url = new URL(request.url || '/', `http://${request.headers.host}`);
@@ -69,6 +84,12 @@ export function setupWebSocket(server: Server): void {
   });
 
   wss.on('connection', (ws: WebSocket, request: IncomingMessage) => {
+    const trackedWs = ws as WebSocket & { isAlive?: boolean };
+    trackedWs.isAlive = true;
+    trackedWs.on('pong', () => {
+      trackedWs.isAlive = true;
+    });
+
     const url = new URL(request.url || '/', `http://${request.headers.host}`);
     const pathname = url.pathname;
 

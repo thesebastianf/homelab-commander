@@ -258,7 +258,7 @@ export async function fetchStackContainers(id: string): Promise<{ id: string; na
   return request(`/stacks/${id}/containers`);
 }
 
-export async function fetchStackOperation(id: string): Promise<{ running: boolean; lines: string[]; done: boolean; action: string | null; error: string | null; reconciledStatus: string | null }> {
+export async function fetchStackOperation(id: string): Promise<{ running: boolean; lines: string[]; done: boolean; action: string | null; error: string | null; reconciledStatus: string | null; noChange?: boolean }> {
   return request(`/stacks/${id}/operation`);
 }
 

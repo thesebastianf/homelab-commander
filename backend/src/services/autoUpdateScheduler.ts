@@ -10,6 +10,7 @@ import { logger } from '../logger.js';
 import { sendNotification } from './notifications.js';
 import { auditLog } from '../lib/audit.js';
 import { runBackup } from './backups.js';
+import { getStackUpdateStatus } from './updates.js';
 
 const execFileAsync = promisify(execFile);
 const MIN_FREE_DISK_GB = 3;
@@ -158,6 +159,11 @@ async function runScheduledUpdates(): Promise<void> {
         logger.info('Auto-update run interrupted: global update freeze enabled during execution');
         await recordFreezeSkip('mid-run', stack.name);
         return;
+      }
+
+      if (!getStackUpdateStatus(String(stack.name || ''))) {
+        logger.info({ stackName: stack.name }, 'Auto-update skipped: stack already up to date');
+        continue;
       }
 
       logger.info({ stackName: stack.name }, 'Auto-updating stack');

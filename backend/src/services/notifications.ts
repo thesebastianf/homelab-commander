@@ -76,6 +76,34 @@ function buildRichPayload(eventType: string, data: Record<string, unknown>): Ric
   const error = pickString(data, ['error', 'message']);
 
   switch (eventType) {
+    case 'smartStartupDeviceOnline': {
+      const address = pickString(data, ['address', 'triggeredBy']) || 'unknown device';
+      return {
+        title: '🟢 Smart Startup Triggered',
+        emoji: '🟢',
+        level: 'info',
+        fields: [
+          { name: '📡 Monitored Device', value: address, inline: true },
+          { name: '📦 Stack', value: stackName || '—', inline: true },
+          { name: '⚡ Action', value: 'Preparing automatic stack start', inline: false },
+        ],
+        oneliner: `🟢 Monitored device *${address}* is online — preparing auto-start for *${stackName || 'stack'}*`,
+      };
+    }
+    case 'smartStartupStackStarted': {
+      const address = pickString(data, ['address', 'triggeredBy']) || 'unknown device';
+      return {
+        title: '🚀 Smart Startup: Stack Started',
+        emoji: '🚀',
+        level: 'success',
+        fields: [
+          { name: '📡 Monitored Device', value: address, inline: true },
+          { name: '📦 Stack', value: stackName || '—', inline: true },
+          { name: '✅ Result', value: 'Stack automatically started', inline: false },
+        ],
+        oneliner: `🚀 Monitored device *${address}* online -> stack *${stackName || 'stack'}* automatically started`,
+      };
+    }
     case 'stackDeployed':
     case 'containerStarted': {
       return {

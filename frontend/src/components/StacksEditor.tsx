@@ -484,13 +484,20 @@ function useStackLogs(
   enabled: boolean
 ): LogLine[] {
   const [lines, setLines] = useState<LogLine[]>([])
-  const wsRefs = useRef<WebSocket[]>([])
+  const wsRefs = useRef<Map<string, WebSocket>>(new Map())
+  const retryTimersRef = useRef<Map<string, number>>(new Map())
+  const reconnectAttemptsRef = useRef<Map<string, number>>(new Map())
   // Stable key to detect when container list actually changes
   const key = containerIds.map(c => c.id).join(',')
 
   useEffect(() => {
-    wsRefs.current.forEach(ws => { try { ws.close() } catch { /* ignore */ } })
-    wsRefs.current = []
+    let isCancelled = false
+
+    wsRefs.current.forEach((ws) => { try { ws.close() } catch { /* ignore */ } })
+    wsRefs.current.clear()
+    retryTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+    retryTimersRef.current.clear()
+    reconnectAttemptsRef.current.clear()
 
     if (!enabled || containerIds.length === 0) {
       setLines([])
@@ -499,23 +506,49 @@ function useStackLogs(
 
     setLines([])
 
-    const connections = containerIds.map(({ id, name }) => {
+    const connect = (id: string, name: string) => {
+      if (isCancelled) return
       const url = wsUrl(`/ws/logs/${encodeURIComponent(id)}`)
       const ws = new WebSocket(url)
+      wsRefs.current.set(id, ws)
+
+      ws.onopen = () => {
+        reconnectAttemptsRef.current.set(id, 0)
+      }
+
       ws.onmessage = (event) => {
         const text = typeof event.data === 'string' ? event.data.trim() : ''
         if (!text) return
         setLines(prev => [...prev.slice(-800), { container: name, text, ts: Date.now() }])
       }
-      ws.onerror = () => {
-        setLines(prev => [...prev, { container: name, text: '⚠ WebSocket error', ts: Date.now() }])
-      }
-      return ws
-    })
 
-    wsRefs.current = connections
+      ws.onerror = () => {
+        try { ws.close() } catch { /* ignore */ }
+      }
+
+      ws.onclose = () => {
+        wsRefs.current.delete(id)
+        if (isCancelled || !enabled) return
+        const nextAttempt = (reconnectAttemptsRef.current.get(id) || 0) + 1
+        reconnectAttemptsRef.current.set(id, nextAttempt)
+        const delayMs = Math.min(15000, 1000 * (2 ** Math.min(nextAttempt, 4)))
+        const retryId = window.setTimeout(() => {
+          retryTimersRef.current.delete(id)
+          connect(id, name)
+        }, delayMs)
+        retryTimersRef.current.set(id, retryId)
+      }
+    }
+
+    containerIds.forEach(({ id, name }) => connect(id, name))
+
     return () => {
-      connections.forEach(ws => { try { ws.close() } catch { /* ignore */ } })
+      isCancelled = true
+      wsRefs.current.forEach((ws) => { try { ws.close() } catch { /* ignore */ } })
+      wsRefs.current.clear()
+      retryTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+      retryTimersRef.current.clear()
+      reconnectAttemptsRef.current.clear()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, key])
@@ -710,7 +743,8 @@ export function StacksEditor({
     if (operation?.done) {
       setIsOperating(false)
       setOperationDone(true)
-      setOperationError(operation.error || null)
+      const noChange = operation.noChange === true
+      setOperationError(noChange ? null : (operation.error || null))
       // Derive a readable label from the backend action
       const actionLabels: Record<string, string> = {
         deploy: 'Started', stop: 'Stopped', deactivate: 'Deactivated',
@@ -718,10 +752,14 @@ export function StacksEditor({
         'bulk-update': 'Updated',
       }
       if (operation.action) {
-        setCurrentOperation(operation.error
+        if (noChange && operation.action === 'update') {
+          setCurrentOperation('Already up to date')
+        } else {
+          setCurrentOperation(operation.error
           ? `${operation.action.charAt(0).toUpperCase() + operation.action.slice(1)} failed`
           : (actionLabels[operation.action] || `${operation.action} complete`)
-        )
+          )
+        }
       }
       qc.invalidateQueries({ queryKey: ['stacks'] })
       qc.invalidateQueries({ queryKey: ['stackContainers', selectedStack?.id] })

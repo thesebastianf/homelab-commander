@@ -135,8 +135,6 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
       setAiTestResult(null)
       setExcludeDraft('')
       setActiveTab('general')
-      // Restore actual saved theme when dialog reopens (in case previous session was cancelled)
-      document.documentElement.setAttribute('data-theme', settings.theme || 'dark')
     }
   }, [open]) // intentionally not [settings] — avoids reset from background refetches
 
@@ -148,8 +146,6 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
   }
 
   const handleCancel = () => {
-    // Revert preview to the saved theme
-    document.documentElement.setAttribute('data-theme', settings.theme || 'dark')
     onOpenChange(false)
   }
 
@@ -224,36 +220,6 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
 
           <TabsContent value="general" className="space-y-6 mt-6">
             <div className="space-y-4">
-              <Card className="p-4 space-y-3">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <div>
-                    <Label className="text-base">Theme</Label>
-                    <p className="text-sm text-muted-foreground mt-0.5">Choose the visual theme for the dashboard.</p>
-                  </div>
-                  <Select
-                    value={localSettings.theme || 'dark'}
-                    onValueChange={(value) => {
-                      const theme = value as AppSettings['theme']
-                      setLocalSettings({ ...localSettings, theme })
-                      // Apply immediately for live preview — save persists it to server
-                      document.documentElement.setAttribute('data-theme', value)
-                    }}
-                  >
-                    <SelectTrigger className="w-56">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="dark">Dark</SelectItem>
-                      <SelectItem value="light">Light</SelectItem>
-                      <SelectItem value="graphite">Graphite</SelectItem>
-                      <SelectItem value="ocean">Ocean</SelectItem>
-                      <SelectItem value="forest">Forest</SelectItem>
-                      <SelectItem value="sunset">Sunset</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </Card>
-
               <Card className="p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div>

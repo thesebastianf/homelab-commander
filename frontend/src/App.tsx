@@ -405,13 +405,10 @@ function App() {
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <div className={cn(
-                "relative shrink-0 rounded-md p-[2px] brand-grad shadow-lg shadow-accent/20",
+                "relative shrink-0 flex items-center justify-center",
                 compactMode ? 'h-9 w-9' : 'h-11 w-11 lg:h-12 lg:w-12'
               )}>
-                <div className="h-full w-full rounded-[5px] bg-card flex items-center justify-center overflow-hidden">
-                  <img src="/thc_small_.png" alt="THC Logo" className="h-[78%] w-[78%] object-contain" />
-                </div>
-                <span className="pointer-events-none absolute inset-0 rounded-md ring-1 ring-foreground/5" />
+                <img src="/thc_small_.png" alt="THC Logo" className="h-full w-full object-contain" />
               </div>
               {!compactMode ? (
                 <div className="min-w-0">

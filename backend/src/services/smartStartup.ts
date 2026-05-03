@@ -127,13 +127,14 @@ const lastChecked = new Map<string, number>();
 async function monitorDevices(): Promise<void> {
   try {
     const { rows: configs } = await pool.query(
-      `SELECT ssc.*, s.stack_path, s.status AS stack_status
+      `SELECT ssc.*, s.stack_path, s.status AS stack_status, s.name AS stack_name
        FROM smart_startup_configs ssc
        LEFT JOIN stacks s ON s.id::text = ssc.target_id
        WHERE ssc.enabled = true`
     );
 
     const now = Date.now();
+    const pingCache = new Map<string, { isOnline: boolean; checkedAt: Date }>();
 
     for (const config of configs) {
       const intervalMs = (config.monitor_interval ?? 30) * 1000;
@@ -149,12 +150,18 @@ async function monitorDevices(): Promise<void> {
         continue;
       }
 
-      const prev = deviceStatuses.get(addr);
-      const wasOnline = prev?.isOnline ?? false;
+      const wasOnline = Boolean(config.device_online);
+      let pingResult = pingCache.get(addr);
+      if (!pingResult) {
+        const { isOnline } = await pingDeviceWithLatency(addr);
+        pingResult = { isOnline, checkedAt: new Date() };
+        pingCache.set(addr, pingResult);
+      }
 
-      const { isOnline } = await pingDeviceWithLatency(addr);
-      const checkedAt = new Date();
-      const seenAt = isOnline ? checkedAt : (prev?.lastSeenAt ?? null);
+      const isOnline = pingResult.isOnline;
+      const checkedAt = pingResult.checkedAt;
+      const persistedLastSeenAt = config.last_seen_at ? new Date(config.last_seen_at) : null;
+      const seenAt = isOnline ? checkedAt : persistedLastSeenAt;
 
       deviceStatuses.set(addr, { isOnline, lastCheckedAt: checkedAt, lastSeenAt: seenAt });
 
@@ -182,9 +189,15 @@ async function monitorDevices(): Promise<void> {
         );
         const status = config.stack_status as string;
         if (status === 'stopped' || status === 'failed') {
-          sendNotification('smartStartupDeviceOnline', { address: addr, stackId: config.target_id }).catch(() => {});
+          const stackName = String(config.stack_name || config.target_id || 'unknown');
+          sendNotification('smartStartupDeviceOnline', {
+            address: addr,
+            stackId: config.target_id,
+            stackName,
+            trigger: 'smart-startup',
+          }).catch(() => {});
           setTimeout(
-            () => startStack(config.target_id, config.stack_path, addr),
+            () => startStack(config.target_id, config.stack_path, addr, stackName),
             (config.start_delay ?? 60) * 1000
           );
         } else {
@@ -231,7 +244,7 @@ async function checkStartupOrphans(): Promise<void> {
   }
 }
 
-async function startStack(stackId: string, stackPath: string, triggeredBy: string): Promise<void> {
+async function startStack(stackId: string, stackPath: string, triggeredBy: string, stackNameHint?: string): Promise<void> {
   try {
     logger.info({ stackId, stackPath, triggeredBy }, 'Smart startup: starting stack');
     await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [stackId]);
@@ -239,7 +252,9 @@ async function startStack(stackId: string, stackPath: string, triggeredBy: strin
       { cwd: stackPath, timeout: 120_000, env: buildComposeCommandEnv() }
     );
     await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [stackId]);
-    sendNotification('smartStartupStackStarted', { stackId, triggeredBy }).catch(() => {});
+    const { rows: [stackRow] } = await pool.query('SELECT name FROM stacks WHERE id = $1', [stackId]);
+    const stackName = String(stackRow?.name || stackNameHint || stackId);
+    sendNotification('smartStartupStackStarted', { stackId, stackName, address: triggeredBy, trigger: 'smart-startup' }).catch(() => {});
     logger.info({ stackId }, 'Smart startup: stack started successfully');
   } catch (err: any) {
     await pool.query("UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1", [stackId]).catch(() => {});

@@ -316,6 +316,7 @@ interface OperationState {
   lines: string[];
   done: boolean;
   error?: string;
+  noChange?: boolean;
   startedAt: Date;
   action: string;
   stackName: string;
@@ -680,6 +681,22 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState, tr
   const wasRunning = stack.status === 'running';
   try {
     op.lines.push(`[+] Updating stack ${stack.name}...`);
+
+    // If update checker reports no newer image digests for this stack, skip compose update.
+    if (!getStackUpdateStatus(stack.name)) {
+      const unchangedStatus = wasRunning ? 'running' : 'stopped';
+      await pool.query('UPDATE stacks SET status = $1, updated_at = NOW() WHERE id = $2', [unchangedStatus, id]);
+      op.reconciledStatus = unchangedStatus;
+      op.noChange = true;
+      op.lines.push('ℹ Stack is already up to date — no newer images available.');
+      await auditLog('update', 'stack', id, {
+        trigger,
+        source: trigger === 'schedule' ? 'auto-update' : 'user',
+        noop: true,
+        reason: 'already-up-to-date',
+      });
+      return;
+    }
 
     if (await isSelfManagedStack(stack)) {
       const detachedStarted = await startDetachedSelfUpdate(id, stack, op);
@@ -1225,6 +1242,11 @@ router.post('/actions/update-all', asyncHandler(async (_req, res) => {
   for (const stack of stacks) {
     const id = String(stack.id);
     const name = String(stack.name);
+
+    if (!getStackUpdateStatus(name)) {
+      summary.skipped.push({ id, name, reason: 'already up to date' });
+      continue;
+    }
 
     const existing = operationStore.get(id);
     if (existing && !existing.done) {
@@ -1777,7 +1799,7 @@ router.get('/:id/operation', asyncHandler(async (req, res) => {
   const op = operationStore.get(id);
   if (!op) {
     const { rows: [stack] } = await pool.query('SELECT status FROM stacks WHERE id = $1', [id]);
-    res.json({ running: false, lines: [], done: stack ? stack.status !== 'deploying' : true, action: null, error: null, reconciledStatus: stack?.status || null });
+    res.json({ running: false, lines: [], done: stack ? stack.status !== 'deploying' : true, action: null, error: null, reconciledStatus: stack?.status || null, noChange: false });
     return;
   }
   res.json({
@@ -1787,6 +1809,7 @@ router.get('/:id/operation', asyncHandler(async (req, res) => {
     action: op.action,
     error: op.error || null,
     reconciledStatus: op.reconciledStatus || null,
+    noChange: op.noChange || false,
   });
 }));
 
