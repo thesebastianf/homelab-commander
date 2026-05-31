@@ -36,7 +36,7 @@ import { CreateNetworkDialog } from '@/components/CreateNetworkDialog'
 import { DatabaseExplorer } from '@/components/DatabaseExplorer'
 import { ContainerShellDialog } from '@/components/ContainerShellDialog'
 import { ClockWidget } from '@/components/ClockWidget'
-import { Loader2, RefreshCw, Maximize2, Minimize2, Menu, Sun, Moon } from 'lucide-react'
+import { Loader2, RefreshCw, Maximize2, Minimize2, Menu, Sun, Moon, Copy, Download } from 'lucide-react'
 import {
   Box,
   Home,
@@ -1143,7 +1143,26 @@ function App() {
             </div>
           ) : (
             <>
-              <div className="flex justify-end mb-1">
+              <div className="flex justify-end gap-2 mb-1">
+                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={() => {
+                  if (!logsData) return
+                  navigator.clipboard.writeText(logsData).then(() => toast.success('Logs copied to clipboard'))
+                }}>
+                  <Copy className="w-3 h-3" /> Copy
+                </Button>
+                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={() => {
+                  if (!logsData) return
+                  const containerName = containers.find(c => c.id === logsContainerId)?.name ?? 'container'
+                  const blob = new Blob([logsData], { type: 'text/plain' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `${containerName}-logs.txt`
+                  a.click()
+                  URL.revokeObjectURL(url)
+                }}>
+                  <Download className="w-3 h-3" /> Download
+                </Button>
                 <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={async () => {
                   if (!logsContainerId) return
                   setLogsLoading(true)

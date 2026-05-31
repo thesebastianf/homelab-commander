@@ -274,10 +274,11 @@ export function NewStackDialog({
 
 function extractPorts(compose: string): number[] {
   const ports: number[] = []
-  const regex = /["']?(\d+):\d+["']?/g
+  // Match host port as either a literal number or ${VAR:-number} default value
+  const regex = /["']?(?:\$\{[A-Za-z_][A-Za-z0-9_]*:-([0-9]+)\}|([0-9]+)):[0-9][^"']*/g
   let match
   while ((match = regex.exec(compose)) !== null) {
-    const port = parseInt(match[1], 10)
+    const port = parseInt(match[1] ?? match[2], 10)
     if (!isNaN(port) && !ports.includes(port)) {
       ports.push(port)
     }

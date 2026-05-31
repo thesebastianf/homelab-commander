@@ -1008,6 +1008,12 @@ export function StacksEditor({
   }
 
   const extractPorts = (yaml: string): number[] => {
+    // Resolve ${VAR:-default} → default, ${VAR} / $VAR → '' (unknown, skip)
+    const resolvePortStr = (s: string): string =>
+      s.replace(/\$\{[A-Za-z_][A-Za-z0-9_]*:-([^}]+)\}/g, '$1')
+       .replace(/\$\{[A-Za-z_][A-Za-z0-9_]*\}/g, '')
+       .replace(/\$[A-Za-z_][A-Za-z0-9_]*/g, '')
+
     try {
       const doc = YAML.load(yaml) as any
       const services = doc?.services
@@ -1023,21 +1029,25 @@ export function StacksEditor({
           }
 
           if (typeof p === 'string') {
-            const stripped = p.split('/')[0]
+            const resolved = resolvePortStr(p)
+            const stripped = resolved.split('/')[0]
             const segments = stripped.split(':').map((s) => s.trim()).filter(Boolean)
             if (segments.length === 1) {
               const only = Number(segments[0])
-              if (Number.isFinite(only)) hostPorts.add(only)
+              if (Number.isFinite(only) && only > 0) hostPorts.add(only)
               continue
             }
             const host = Number(segments[segments.length - 2])
-            if (Number.isFinite(host)) hostPorts.add(host)
+            if (Number.isFinite(host) && host > 0) hostPorts.add(host)
             continue
           }
 
           if (p && typeof p === 'object') {
-            const published = Number((p as Record<string, unknown>).published)
-            if (Number.isFinite(published)) hostPorts.add(published)
+            const pub = (p as Record<string, unknown>).published
+            const published = typeof pub === 'string'
+              ? Number(resolvePortStr(pub))
+              : Number(pub)
+            if (Number.isFinite(published) && published > 0) hostPorts.add(published)
           }
         }
       }
@@ -2653,30 +2663,74 @@ export function StacksEditor({
 
                   {/* LOGS PANEL */}
                   {rightPanel === 'logs' && (
-                    <div className="flex-1 rounded-lg border bg-black/70 overflow-hidden flex flex-col min-h-0">
-                      {stackContainers.length === 0 ? (
-                        <div className="flex-1 flex items-center justify-center">
-                          <p className="text-muted-foreground text-xs font-mono">
-                            {selectedStack.status === 'running' ? 'Connecting to containers...' : 'Stack is not running'}
-                          </p>
-                        </div>
-                      ) : logLines.length === 0 ? (
-                        <div className="flex-1 flex items-center justify-center">
-                          <p className="text-muted-foreground text-xs font-mono">Waiting for log output...</p>
-                        </div>
-                      ) : (
-                        <div ref={logsViewportRef} className="flex-1 overflow-y-auto">
-                          <div className="font-mono text-xs space-y-0.5 p-2">
-                            {logLines.slice(-500).map((line, i) => (
-                              <div key={i} className="flex gap-2 leading-relaxed min-w-0">
-                                <span className="text-warning shrink-0">[{line.container}]</span>
-                                <span className="text-foreground/75 break-all min-w-0">{line.text}</span>
-                              </div>
-                            ))}
+                    <>
+                      <div className="flex-1 rounded-lg border bg-black/70 overflow-hidden flex flex-col min-h-0">
+                        {stackContainers.length === 0 ? (
+                          <div className="flex-1 flex items-center justify-center">
+                            <p className="text-muted-foreground text-xs font-mono">
+                              {selectedStack.status === 'running' ? 'Connecting to containers...' : 'Stack is not running'}
+                            </p>
                           </div>
-                        </div>
-                      )}
-                    </div>
+                        ) : logLines.length === 0 ? (
+                          <div className="flex-1 flex items-center justify-center">
+                            <p className="text-muted-foreground text-xs font-mono">Waiting for log output...</p>
+                          </div>
+                        ) : (
+                          <div ref={logsViewportRef} className="flex-1 overflow-y-auto">
+                            <div className="font-mono text-xs space-y-0.5 p-2">
+                              {logLines.slice(-500).map((line, i) => (
+                                <div key={i} className="flex gap-2 leading-relaxed min-w-0">
+                                  <span className="text-warning shrink-0">[{line.container}]</span>
+                                  <span className="text-foreground/75 break-all min-w-0">{line.text}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-end pt-2 mt-2 border-t shrink-0 gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={logLines.length === 0}
+                              onClick={() => {
+                                const text = logLines.slice(-500).map(l => `[${l.container}] ${l.text}`).join('\n')
+                                navigator.clipboard.writeText(text).then(() => toast.success('Logs copied to clipboard'))
+                              }}
+                              className="gap-1.5 text-xs"
+                            >
+                              <Copy className="w-3.5 h-3.5" /> Copy
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs">Copy visible log lines to clipboard</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={logLines.length === 0}
+                              onClick={() => {
+                                const text = logLines.slice(-500).map(l => `[${l.container}] ${l.text}`).join('\n')
+                                const blob = new Blob([text], { type: 'text/plain' })
+                                const url = URL.createObjectURL(blob)
+                                const a = document.createElement('a')
+                                a.href = url
+                                a.download = `${selectedStack?.name ?? 'stack'}-logs.txt`
+                                a.click()
+                                URL.revokeObjectURL(url)
+                              }}
+                              className="gap-1.5 text-xs"
+                            >
+                              <Download className="w-3.5 h-3.5" /> Download
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs">Download log as .txt file</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </>
                   )}
 
                   {/* COMPARE PANEL */}
