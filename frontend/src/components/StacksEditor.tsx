@@ -1744,7 +1744,7 @@ export function StacksEditor({
                   )}
                   {activeFile === 'env'
                     ? <Textarea value={envContent} onChange={e => setEnvContent(e.target.value)} className="flex-1 font-mono text-xs resize-none min-h-0" spellCheck={false} placeholder="MY_VAR=value" />
-                     : <YamlEditor value={composeContent} onChange={v => { setComposeContent(v); setIsDirty(true); validateYAML(v) }} minHeight="200px" className={`flex-1 ${yamlError ? 'border-destructive' : ''}`} />
+                     : <YamlEditor value={composeContent} onChange={v => { setComposeContent(v); setIsDirty(true); validateYAML(v) }} minHeight="100%" className={`flex-1 min-h-0 ${yamlError ? 'border-destructive' : ''}`} />
                   }
                   <div className="flex items-center justify-end gap-2 pt-2 border-t shrink-0 mt-2">
                     <Tooltip>

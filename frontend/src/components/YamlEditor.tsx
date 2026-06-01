@@ -2,6 +2,7 @@ import CodeMirror from '@uiw/react-codemirror'
 import { yaml } from '@codemirror/lang-yaml'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorView } from '@codemirror/view'
+import type { CSSProperties } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 
 interface YamlEditorProps {
@@ -10,6 +11,7 @@ interface YamlEditorProps {
   readOnly?: boolean
   minHeight?: string
   className?: string
+  style?: CSSProperties
 }
 
 function createEditorTheme(height: string, isLightTheme: boolean) {
@@ -99,7 +101,7 @@ function createEditorTheme(height: string, isLightTheme: boolean) {
   )
 }
 
-export function YamlEditor({ value, onChange, readOnly = false, minHeight = '300px', className }: YamlEditorProps) {
+export function YamlEditor({ value, onChange, readOnly = false, minHeight = '300px', className, style }: YamlEditorProps) {
   const [themeName, setThemeName] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark')
 
   useEffect(() => {
@@ -114,7 +116,7 @@ export function YamlEditor({ value, onChange, readOnly = false, minHeight = '300
   const extensions = useMemo(() => [yaml(), createEditorTheme(minHeight, isLightTheme)], [minHeight, isLightTheme])
 
   return (
-    <div className={`rounded-md border border-input overflow-hidden min-h-0 ${className ?? ''}`}>
+    <div className={`rounded-md border border-input overflow-hidden min-h-0 ${className ?? ''}`} style={style}>
       <CodeMirror
         value={value}
         onChange={onChange}
