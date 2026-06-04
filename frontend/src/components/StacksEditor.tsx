@@ -58,7 +58,11 @@ import {
   Folder,
   Maximize2,
   Minimize2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
 import type { Stack, BackupConfig, OrphanStack } from '@/lib/types'
 import { toast } from 'sonner'
 import * as api from '@/lib/api'
@@ -587,6 +591,13 @@ export function StacksEditor({
   // ── Core state ───────────────────────────────────────────────────────────
   const [selectedStack, setSelectedStack] = useState<Stack | null>(null)
   const [isCreating, setIsCreating] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    return localStorage.getItem('hlc_sidebar_collapsed') === 'true'
+  })
+
+  useEffect(() => {
+    localStorage.setItem('hlc_sidebar_collapsed', String(isSidebarCollapsed))
+  }, [isSidebarCollapsed])
   const [newStackName, setNewStackName] = useState('')
   const [composeContent, setComposeContent] = useState('')
   const [envContent, setEnvContent] = useState('')
@@ -1370,10 +1381,13 @@ export function StacksEditor({
 
   return (
     <TooltipProvider>
-      <div className="flex h-[calc(100vh-200px)] min-h-0 overflow-hidden gap-4">
+      <div className={cn("flex h-[calc(100vh-200px)] min-h-0 overflow-hidden transition-all duration-300 ease-in-out", isSidebarCollapsed ? "gap-0" : "gap-4")}>
 
         {/* LEFT SIDEBAR - Stack List */}
-        <div className="w-80 xl:w-[22rem] flex flex-col gap-2 shrink-0 min-h-0 overflow-hidden">
+        <div className={cn(
+          "flex flex-col gap-2 shrink-0 min-h-0 overflow-hidden transition-all duration-300 ease-in-out",
+          isSidebarCollapsed ? "w-0 opacity-0 pointer-events-none" : "w-80 xl:w-[22rem]"
+        )}>
           <div className="relative shrink-0">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -1686,7 +1700,18 @@ export function StacksEditor({
             /* --- CREATE MODE --- */
             <>
               <div className="flex items-center justify-between gap-3 pb-3 border-b shrink-0">
-                <h2 className="text-lg font-mono font-semibold">New Stack</h2>
+                <div className="flex items-center gap-2 min-w-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                    className="h-8 w-8 shrink-0"
+                    title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+                  >
+                    {isSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+                  </Button>
+                  <h2 className="text-lg font-mono font-semibold">New Stack</h2>
+                </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="outline" size="sm" onClick={() => { setIsCreating(false); setNewStackName(''); setComposeContent(''); setEnvContent(''); setActiveFile('compose'); setIsDirty(false) }} className="gap-1.5">
@@ -1698,10 +1723,10 @@ export function StacksEditor({
                 </Tooltip>
               </div>
 
-              <div className="flex-1 flex gap-3 min-h-0">
+              <ResizablePanelGroup direction="horizontal" autoSaveId="hlc-stacks-creator-layout" className="flex-1 min-h-0">
 
                 {/* -- LEFT: editor -- */}
-                <div className="flex flex-col min-h-0" style={{ flex: '0 0 55%' }}>
+                <ResizablePanel defaultSize={55} minSize={20} className="flex flex-col min-h-0">
                   <Input
                     value={newStackName}
                     onChange={(e) => setNewStackName(e.target.value)}
@@ -1762,10 +1787,12 @@ export function StacksEditor({
                       <TooltipContent className="text-xs">Create stack folder, write compose/.env files, and register in THC</TooltipContent>
                     </Tooltip>
                   </div>
-                </div>
+                </ResizablePanel>
+
+                <ResizableHandle withHandle className="mx-2 bg-border/40 hover:bg-primary/50 transition-colors" />
 
                 {/* -- RIGHT: port conflicts / reference / volumes -- */}
-                <div className="flex-1 flex flex-col min-h-0">
+                <ResizablePanel defaultSize={45} minSize={20} className="flex flex-col min-h-0">
                   <div className="flex items-center gap-1 mb-2 shrink-0">
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -2102,19 +2129,33 @@ export function StacksEditor({
                       emptyStateHint="Start with a prompt like: I need a compose file for service abc with PostgreSQL and Traefik."
                     />
                   )}
-                </div>
-              </div>
+                </ResizablePanel>
+              </ResizablePanelGroup>
             </>
 
           ) : !selectedStack ? (
             /* --- NO SELECTION --- */
-            <Card className="flex-1 flex items-center justify-center text-center py-12">
-              <div>
-                <FileCode className="w-14 h-14 mx-auto mb-4 text-muted-foreground opacity-40" />
-                <p className="text-lg font-mono text-muted-foreground">No stack selected</p>
-                <p className="text-sm text-muted-foreground mt-2">Select a stack from the list or create a new one</p>
+            <div className="flex-1 flex flex-col gap-3 min-h-0">
+              <div className="flex items-center pb-3 border-b shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                  className="h-8 w-8 shrink-0"
+                  title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+                >
+                  {isSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+                </Button>
+                <span className="ml-2 font-mono text-sm text-muted-foreground">No stack selected</span>
               </div>
-            </Card>
+              <Card className="flex-1 flex items-center justify-center text-center py-12">
+                <div>
+                  <FileCode className="w-14 h-14 mx-auto mb-4 text-muted-foreground opacity-40" />
+                  <p className="text-lg font-mono text-muted-foreground">No stack selected</p>
+                  <p className="text-sm text-muted-foreground mt-2">Select a stack from the list or create a new one</p>
+                </div>
+              </Card>
+            </div>
 
           ) : (
             /* EDIT MODE */
@@ -2123,6 +2164,15 @@ export function StacksEditor({
               {/* -- Stack Header -- */}
               <div className="pb-3 border-b shrink-0 space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                    className="h-8 w-8 shrink-0"
+                    title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+                  >
+                    {isSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+                  </Button>
                   <h2 className="text-lg font-mono font-bold truncate">{selectedStack.name}</h2>
                   <Badge variant={getStatusBadgeVariant(selectedStack.status)} className="capitalize shrink-0">
                     {selectedStack.status}
@@ -2259,10 +2309,10 @@ export function StacksEditor({
               )}
 
               {/* Two-Panel Editor */}
-              <div className="flex-1 flex gap-3 min-h-0">
+              <ResizablePanelGroup direction="horizontal" autoSaveId="hlc-stacks-editor-layout" className="flex-1 min-h-0">
 
                 {/* LEFT PANEL: File Editor */}
-                <div className="flex flex-col min-w-0 min-h-0" style={{ flex: '0 0 55%' }}>
+                <ResizablePanel defaultSize={55} minSize={20} className="flex flex-col min-w-0 min-h-0">
 
                   {/* Action buttons */}
                   <div className="flex items-center gap-1.5 mb-2 shrink-0 flex-wrap">
@@ -2521,10 +2571,12 @@ export function StacksEditor({
                       <TooltipContent className="text-xs">Save changes to compose and .env files</TooltipContent>
                     </Tooltip>
                   </div>
-                </div>
+                </ResizablePanel>
+
+                <ResizableHandle withHandle className="mx-2 bg-border/40 hover:bg-primary/50 transition-colors" />
 
                 {/* RIGHT PANEL: Logs or Compare */}
-                <div className="flex flex-col min-w-0 min-h-0 flex-1">
+                <ResizablePanel defaultSize={45} minSize={20} className="flex flex-col min-w-0 min-h-0">
 
                   {/* Panel toggle header */}
                   <div className="flex items-center gap-1 mb-2 shrink-0">
@@ -3162,8 +3214,8 @@ export function StacksEditor({
                       )}
                     </div>
                   )}
-                </div>
-              </div>
+                </ResizablePanel>
+              </ResizablePanelGroup>
             </>
           )}
         </div>
