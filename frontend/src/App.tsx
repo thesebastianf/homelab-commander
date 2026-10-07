@@ -80,6 +80,13 @@ import { toast } from 'sonner'
 const APP_TABS = ['dashboard', 'stacks', 'containers', 'volumes', 'images', 'networks'] as const
 type AppTab = (typeof APP_TABS)[number]
 
+const NAV_TAB_CLASS = cn(
+  'flex-none shrink-0 gap-2 h-auto rounded-none border-0 border-b-2 border-transparent -mb-px px-3 py-2.5',
+  'text-muted-foreground hover:text-foreground',
+  'data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none',
+  'dark:data-[state=active]:border-primary dark:data-[state=active]:bg-transparent dark:text-muted-foreground dark:data-[state=active]:text-foreground',
+)
+
 function isAppTab(value: string | null): value is AppTab {
   return !!value && APP_TABS.includes(value as AppTab)
 }
@@ -443,23 +450,24 @@ function App() {
             <div className="flex items-center gap-3 min-w-0">
               <div className={cn(
                 "relative shrink-0 flex items-center justify-center",
-                compactMode ? 'h-9 w-9' : 'h-11 w-11 lg:h-12 lg:w-12'
+                compactMode ? 'h-8 w-8' : 'h-10 w-10'
               )}>
                 <img src="/thc_small_.png" alt="THC Logo" className="h-full w-full object-contain" />
               </div>
               {!compactMode ? (
                 <div className="min-w-0">
-                  <h1 className="text-lg lg:text-2xl font-bold tracking-tight leading-none">
-                    <span className="brand-grad-text">THC</span>
-                    <span className="text-foreground/80 font-medium ml-2 text-sm lg:text-base align-middle">/ Homelab Commander</span>
+                  <h1 className="text-base lg:text-lg font-semibold tracking-tight leading-tight">
+                    <span className="text-primary">THC</span>
+                    <span className="text-muted-foreground font-normal mx-1.5">/</span>
+                    <span>Homelab Commander</span>
                   </h1>
-                  <p className="hidden md:block text-[11px] text-muted-foreground truncate mt-1 tracking-wide uppercase">
+                  <p className="hidden md:block text-xs text-muted-foreground truncate mt-0.5">
                     Highly addictive · self-hosted control plane
                   </p>
                 </div>
               ) : (
-                <h1 className="text-base font-bold tracking-tight">
-                  <span className="brand-grad-text">THC</span>
+                <h1 className="text-base font-semibold tracking-tight">
+                  <span className="text-primary">THC</span>
                 </h1>
               )}
             </div>
@@ -474,7 +482,7 @@ function App() {
                   </Badge>
                 )}
                 {containersWithUpdates > 0 && (
-                  <Badge variant="outline" className="border-warning text-warning gap-1 h-7 font-mono text-xs">
+                  <Badge variant="outline" className="border-warning/50 text-warning gap-1 h-7 text-xs font-medium">
                     <CloudDownload className="w-3 h-3" />
                     {containersWithUpdates}
                   </Badge>
@@ -540,14 +548,14 @@ function App() {
                       </Badge>
                     )}
                     {autoUpdateEnabled && !currentSettings.globalUpdateFreeze && (
-                      <Badge variant="secondary" className="gap-1 px-3 font-mono text-xs">
-                        Auto-Update ON
+                      <Badge variant="secondary" className="gap-1 px-2.5 text-xs font-medium">
+                        Auto-update on
                       </Badge>
                     )}
                     {containersWithUpdates > 0 && (
-                      <Badge variant="outline" className="border-warning text-warning gap-1 font-mono text-xs">
+                      <Badge variant="outline" className="border-warning/50 text-warning gap-1 text-xs font-medium">
                         <CloudDownload className="w-3 h-3" />
-                        {containersWithUpdates} Updates
+                        {containersWithUpdates} {containersWithUpdates === 1 ? 'update' : 'updates'}
                       </Badge>
                     )}
                   </div>
@@ -635,7 +643,7 @@ function App() {
                 {/* Mobile-side hamburger when full mode is active on small viewport */}
                 <div className="flex md:hidden items-center gap-1.5 shrink-0">
                   {containersWithUpdates > 0 && (
-                    <Badge variant="outline" className="border-warning text-warning gap-1 h-7 font-mono text-xs">
+                    <Badge variant="outline" className="border-warning/50 text-warning gap-1 h-7 text-xs font-medium">
                       <CloudDownload className="w-3 h-3" />
                       {containersWithUpdates}
                     </Badge>
@@ -693,40 +701,38 @@ function App() {
         <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList
             className={cn(
-              "card-surface !bg-transparent backdrop-blur-sm rounded-md",
-              compactMode
-                ? 'mb-3 w-full overflow-x-auto no-scrollbar flex justify-start gap-1 h-auto p-1'
-                : 'mb-4 lg:mb-6 w-full md:w-auto overflow-x-auto no-scrollbar flex md:inline-flex justify-start gap-1 p-1.5'
+              "w-full h-auto p-0 bg-transparent rounded-none border-b flex justify-start gap-1 overflow-x-auto no-scrollbar",
+              compactMode ? 'mb-3' : 'mb-5 lg:mb-6'
             )}
           >
-            <TabsTrigger value="dashboard" className="gap-2 shrink-0">
+            <TabsTrigger value="dashboard" className={NAV_TAB_CLASS}>
               <Home className="w-4 h-4" />
               Dashboard
             </TabsTrigger>
-            <TabsTrigger value="stacks" className="gap-2 shrink-0">
+            <TabsTrigger value="stacks" className={NAV_TAB_CLASS}>
               <Layers className="w-4 h-4" />
               Stacks
-              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-mono">
+              <span className="ml-0.5 px-1.5 rounded-md bg-muted text-muted-foreground text-xs tabular-nums">
                 {stacks.length}
               </span>
             </TabsTrigger>
             {!compactMode && (<>
-            <TabsTrigger value="containers" className="gap-2 shrink-0">
+            <TabsTrigger value="containers" className={NAV_TAB_CLASS}>
               <Box className="w-4 h-4" />
               Containers
-              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-mono">
+              <span className="ml-0.5 px-1.5 rounded-md bg-muted text-muted-foreground text-xs tabular-nums">
                 {systemStats.containers.total}
               </span>
             </TabsTrigger>
-            <TabsTrigger value="volumes" className="gap-2 shrink-0">
+            <TabsTrigger value="volumes" className={NAV_TAB_CLASS}>
               <HardDrive className="w-4 h-4" />
               Volumes
             </TabsTrigger>
-            <TabsTrigger value="images" className="gap-2 shrink-0">
+            <TabsTrigger value="images" className={NAV_TAB_CLASS}>
               <ImageIcon className="w-4 h-4" />
               Images
             </TabsTrigger>
-            <TabsTrigger value="networks" className="gap-2 shrink-0">
+            <TabsTrigger value="networks" className={NAV_TAB_CLASS}>
               <Network className="w-4 h-4" />
               Networks
             </TabsTrigger>
@@ -747,15 +753,15 @@ function App() {
               return (
                 <>
                   <div>
-                    <p className="text-xs font-mono text-muted-foreground font-semibold tracking-widest mb-2 uppercase">Resource Usage</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <p className="text-sm font-medium text-muted-foreground mb-2">Resource usage</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
                       <MetricCard
                         label="CPU"
                         value={`${systemStats.cpuUsage.toFixed(1)}%`}
                         icon={<Cpu className="w-5 h-5" />}
                         compact
                         warning={systemStats.cpuUsage > CPU_WARN}
-                        warningText={`>${CPU_WARN}%`}
+                        warningText={`Above ${CPU_WARN}%`}
                         actionLabel="Cleanup"
                         onAction={() => setMaintenanceOpen(true)}
                       />
@@ -765,7 +771,7 @@ function App() {
                         icon={<MemoryStick className="w-5 h-5" />}
                         compact
                         warning={systemStats.memoryUsage > MEM_WARN}
-                        warningText={`>${MEM_WARN}%`}
+                        warningText={`Above ${MEM_WARN}%`}
                         actionLabel="Cleanup"
                         onAction={() => setMaintenanceOpen(true)}
                       />
@@ -775,18 +781,18 @@ function App() {
                         icon={<Database className="w-5 h-5" />}
                         compact
                         warning={systemStats.diskUsage > DISK_WARN}
-                        warningText={`>${DISK_WARN}%`}
+                        warningText={`Above ${DISK_WARN}%`}
                         actionLabel="Prune"
                         onAction={() => setMaintenanceOpen(true)}
                       />
                       <MetricCard
-                        label="Memory Total"
+                        label="Total memory"
                         value={systemStats.memoryTotal}
                         icon={<MemoryStick className="w-5 h-5" />}
                         compact
                       />
                       <MetricCard
-                        label="Disk Total"
+                        label="Total disk"
                         value={systemStats.diskTotal}
                         icon={<HardDrive className="w-5 h-5" />}
                         compact
@@ -797,7 +803,7 @@ function App() {
                         icon={<Network className="w-5 h-5" />}
                         compact
                         warning={networks.length > NETWORK_WARN}
-                        warningText={`>${NETWORK_WARN} pool`}
+                        warningText={`More than ${NETWORK_WARN}`}
                         actionLabel="Prune"
                         onAction={() => setMaintenanceOpen(true)}
                       />
@@ -805,8 +811,8 @@ function App() {
                   </div>
 
                   <div>
-                    <p className="text-xs font-mono text-muted-foreground font-semibold tracking-widest mb-2 uppercase">System Overview</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <p className="text-sm font-medium text-muted-foreground mb-2">System overview</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
                       <MetricCard
                         label="Containers"
                         value={systemStats.containers.total}
@@ -819,7 +825,6 @@ function App() {
                         value={systemStats.containers.running}
                         icon={<Play className="w-5 h-5" />}
                         compact
-                        className="border-l-4 border-l-success"
                       />
                       <MetricCard
                         label="Stopped"
@@ -827,10 +832,9 @@ function App() {
                         icon={<StopCircle className="w-5 h-5" />}
                         compact
                         warning={stoppedCount > ZOMBIE_WARN}
-                        warningText={`>${ZOMBIE_WARN} stopped`}
+                        warningText={`More than ${ZOMBIE_WARN}`}
                         actionLabel="Prune"
                         onAction={() => setMaintenanceOpen(true)}
-                        className={!stoppedCount ? "" : stoppedCount > ZOMBIE_WARN ? "" : "border-l-4 border-l-destructive"}
                       />
                       <MetricCard
                         label="Images"
@@ -868,7 +872,7 @@ function App() {
                   placeholder="Search containers..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 font-mono"
+                  className="pl-10"
                 />
               </div>
             </div>
@@ -900,7 +904,7 @@ function App() {
           <TabsContent value="images" className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-semibold font-mono">Docker Images</h2>
+                <h2 className="text-xl font-semibold">Docker Images</h2>
                 <p className="text-sm text-muted-foreground mt-1">Manage your Docker images and tags</p>
               </div>
             </div>
@@ -970,7 +974,7 @@ function App() {
           <TabsContent value="volumes" className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-semibold font-mono">Docker Volumes</h2>
+                <h2 className="text-xl font-semibold">Docker Volumes</h2>
                 <p className="text-sm text-muted-foreground mt-1">Persistent data storage for containers</p>
               </div>
             </div>
@@ -998,7 +1002,7 @@ function App() {
           <TabsContent value="networks" className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl font-semibold font-mono">Docker Networks</h2>
+                <h2 className="text-xl font-semibold">Docker Networks</h2>
                 <p className="text-sm text-muted-foreground mt-1">Central shared networks, stack-created networks, and Docker system networks</p>
               </div>
               <Button
@@ -1023,7 +1027,7 @@ function App() {
                   {centralNetworks.length > 0 && (
                     <div className="space-y-2">
                       <div>
-                        <h3 className="font-mono text-sm font-semibold">Central Networks</h3>
+                        <h3 className="text-sm font-semibold">Central Networks</h3>
                         <p className="text-xs text-muted-foreground">Manually created shared networks intended for reuse across stacks.</p>
                       </div>
                       {centralNetworks.map(network => (
@@ -1040,7 +1044,7 @@ function App() {
                   {stackNetworks.length > 0 && (
                     <div className="space-y-2">
                       <div>
-                        <h3 className="font-mono text-sm font-semibold">Stack Networks</h3>
+                        <h3 className="text-sm font-semibold">Stack Networks</h3>
                         <p className="text-xs text-muted-foreground">Networks discovered from compose projects and running stacks.</p>
                       </div>
                       {stackNetworks.map(network => (
@@ -1057,7 +1061,7 @@ function App() {
                   {systemNetworks.length > 0 && (
                     <div className="space-y-2">
                       <div>
-                        <h3 className="font-mono text-sm font-semibold">System Networks</h3>
+                        <h3 className="text-sm font-semibold">System Networks</h3>
                         <p className="text-xs text-muted-foreground">Docker-managed internal networks. These are shown for visibility and are not intended for manual cleanup here.</p>
                       </div>
                       {systemNetworks.map(network => (
@@ -1118,32 +1122,32 @@ function App() {
 
           <div className="space-y-4 text-sm">
             <div className="rounded-lg border p-3 space-y-1.5">
-              <h4 className="font-mono font-semibold">Getting Started</h4>
+              <h4 className="font-semibold">Getting Started</h4>
               <p className="text-muted-foreground">Use Stacks to create, edit, deploy, stop, and inspect your compose projects. Dashboard shows health and warnings at a glance.</p>
               <p className="text-muted-foreground">Open the Tools menu in the header for Ports, Smart Startup, Backups, Alerts, Cleanup, Database, and Settings.</p>
             </div>
 
             <div className="rounded-lg border p-3 space-y-1.5">
-              <h4 className="font-mono font-semibold">Auto-Update Defaults</h4>
+              <h4 className="font-semibold">Auto-Update Defaults</h4>
               <p className="text-muted-foreground">Default schedule is <span className="font-mono">0 7 * * 6</span> (Saturday 07:00).</p>
               <p className="text-muted-foreground">Global Update Freeze always overrides scheduled and per-stack updates.</p>
             </div>
 
             <div className="rounded-lg border p-3 space-y-1.5">
-              <h4 className="font-mono font-semibold">Backup Defaults</h4>
+              <h4 className="font-semibold">Backup Defaults</h4>
               <p className="text-muted-foreground">Default backup schedule is <span className="font-mono">0 22 * * 3</span> (Wednesday 22:00) with simple retention of last 7 backups.</p>
               <p className="text-muted-foreground">Full stack folder and volumes are enabled by default; database dumps are optional per stack.</p>
               <p className="text-muted-foreground">Encryption and incremental flags are stored for future compatibility and currently not executed by the backup engine.</p>
             </div>
 
             <div className="rounded-lg border p-3 space-y-1.5">
-              <h4 className="font-mono font-semibold">Port Conflict Checks</h4>
+              <h4 className="font-semibold">Port Conflict Checks</h4>
               <p className="text-muted-foreground">During create/edit, THC compares declared host ports against all other stacks and highlights collisions.</p>
               <p className="text-muted-foreground">Well-known system ports are flagged as warnings so you can avoid accidental collisions.</p>
             </div>
 
             <div className="rounded-lg border p-3 space-y-1.5">
-              <h4 className="font-mono font-semibold">Maintenance</h4>
+              <h4 className="font-semibold">Maintenance</h4>
               <p className="text-muted-foreground">System Maintenance lets you prune unused images, volumes, networks, and stopped containers.</p>
               <p className="text-muted-foreground">Full System Prune is irreversible. Running containers are not removed.</p>
             </div>
@@ -1195,7 +1199,7 @@ function App() {
       <Dialog open={logsContainerId !== null} onOpenChange={open => { if (!open) { setLogsContainerId(null); setLogsData('') } }}>
         <DialogContent className="w-[94vw] max-w-6xl h-[86vh] flex flex-col overflow-hidden">
           <DialogHeader>
-            <DialogTitle className="font-mono text-sm">
+            <DialogTitle className="text-sm">
               Logs — {containers.find(c => c.id === logsContainerId)?.name}
             </DialogTitle>
             <DialogDescription className="text-xs">
@@ -1244,7 +1248,7 @@ function App() {
       <Dialog open={inspectVolumeName !== null} onOpenChange={open => { if (!open) { setInspectVolumeName(null); setInspectVolumeData(null) } }}>
         <DialogContent className="w-[94vw] max-w-5xl h-[86vh] flex flex-col overflow-hidden">
           <DialogHeader>
-            <DialogTitle className="font-mono text-sm">Volume Inspect — {inspectVolumeName}</DialogTitle>
+            <DialogTitle className="text-sm">Volume Inspect — {inspectVolumeName}</DialogTitle>
             <DialogDescription className="text-xs">docker volume inspect {inspectVolumeName}</DialogDescription>
           </DialogHeader>
           {inspectVolumeLoading ? (
@@ -1263,7 +1267,7 @@ function App() {
       <Dialog open={inspectNetworkId !== null} onOpenChange={open => { if (!open) { setInspectNetworkId(null); setInspectNetworkData(null) } }}>
         <DialogContent className="w-[94vw] max-w-5xl h-[86vh] flex flex-col overflow-hidden">
           <DialogHeader>
-            <DialogTitle className="font-mono text-sm">
+            <DialogTitle className="text-sm">
               Network Inspect — {networks.find(n => n.id === inspectNetworkId)?.name}
             </DialogTitle>
             <DialogDescription className="text-xs">

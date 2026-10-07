@@ -21,7 +21,7 @@ export function VolumeCard({ volume, onRemove, onInspect, removing }: VolumeCard
 
   return (
     <>
-    <Card className="card-surface lift p-4 rounded-xl">
+    <Card className="card-surface lift p-4 rounded-lg">
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex-1 min-w-0">
           <h3 className="font-mono font-semibold text-sm truncate">{volume.name}</h3>

@@ -50,7 +50,7 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
             className="w-20 h-20 object-contain"
           />
           <div className="text-center">
-            <h1 className="text-2xl font-bold font-mono tracking-tight">
+            <h1 className="text-2xl font-bold tracking-tight">
               The Homelab Commander
             </h1>
             <p className="text-sm text-muted-foreground mt-1">

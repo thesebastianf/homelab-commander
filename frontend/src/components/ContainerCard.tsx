@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Play, Square, RotateCw, Trash2, MoreHorizontal, Terminal, FileText, Box, CloudDownload, Zap, RefreshCw } from 'lucide-react'
+import { Play, Square, RotateCw, Trash2, MoreHorizontal, Terminal, FileText, CloudDownload, Zap, RefreshCw } from 'lucide-react'
 import type { Container } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -52,26 +52,22 @@ export function ContainerCard({
   return (
     <>
     <Card className={cn(
-      "card-surface lift relative px-4 sm:px-5 py-3.5 sm:py-4 rounded-xl overflow-hidden",
+      "card-surface lift relative px-4 sm:px-5 py-3.5 sm:py-4 rounded-lg overflow-hidden",
       "before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:content-['']",
       isRunning ? "before:bg-success" : isStopped ? "before:bg-border" : "before:bg-warning"
     )}>
       {/* Top row: name + status + badges + actions */}
       <div className="relative flex items-center gap-3 justify-between">
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-          <div className="relative shrink-0">
-            <div className="p-1.5 rounded-lg bg-surface-3 border border-border/60 text-foreground/80">
-              <Box className="w-4 h-4" strokeWidth={2.25} />
-            </div>
-            <span
-              className="status-dot absolute -top-0.5 -right-0.5 ring-2 ring-card"
-              data-state={isRunning ? 'running' : container.status === 'paused' ? 'warning' : isStopped ? 'idle' : 'deploying'}
-            />
-          </div>
+          <span
+            className="status-dot shrink-0"
+            data-state={isRunning ? 'running' : container.status === 'paused' ? 'warning' : isStopped ? 'idle' : 'deploying'}
+            aria-hidden
+          />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <h3 className="font-mono font-semibold text-[15px] leading-tight truncate">{container.name}</h3>
-              <Badge className={cn("text-[10px] px-2 py-0 border uppercase tracking-wider font-semibold", statusColor)}>
+              <Badge className={cn("text-[11px] px-1.5 py-0 border font-medium capitalize", statusColor)}>
                 {container.status}
               </Badge>
               {container.restartPolicy && container.restartPolicy !== 'no' && (
@@ -142,7 +138,7 @@ export function ContainerCard({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button onClick={() => onOpenTerminal(container.id)} size="sm" variant="ghost"
-                    className="h-8 w-8 p-0 text-primary hover:text-primary hover:bg-primary/10 border border-primary/30">
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground" aria-label="Open shell">
                     <Terminal className="w-4 h-4" />
                   </Button>
                 </TooltipTrigger>

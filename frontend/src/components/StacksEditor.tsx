@@ -1407,7 +1407,7 @@ export function StacksEditor({
               placeholder="Search stacks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 font-mono text-sm"
+              className="pl-10 text-sm"
             />
           </div>
 
@@ -1448,7 +1448,7 @@ export function StacksEditor({
               ) : null}
               {filteredStacks.length > 0 && (
                 <>
-                  <p className="px-1 pt-1 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/70">Managed by THC</p>
+                  <p className="px-1 pt-1 text-xs font-medium text-muted-foreground">Managed by THC</p>
                   {filteredStacks.map(stack => (
                     <Card
                       key={stack.id}
@@ -1594,7 +1594,7 @@ export function StacksEditor({
 
               {filteredExternalStacks.length > 0 && (
                 <>
-                  <p className="px-1 pt-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/70">External Compose Projects</p>
+                  <p className="px-1 pt-3 text-xs font-medium text-muted-foreground">External compose projects</p>
                   {filteredExternalStacks.map(stack => (
                     <Card key={stack.id} className="p-3 border-dashed border-border/60 bg-muted/10">
                       <div className="flex items-start justify-between gap-2">
@@ -1664,7 +1664,7 @@ export function StacksEditor({
 
               {filteredOrphanStacks.length > 0 && (
                 <>
-                  <p className="px-1 pt-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground/70">Found on Disk (Unadopted)</p>
+                  <p className="px-1 pt-3 text-xs font-medium text-muted-foreground">Found on disk (not adopted)</p>
                   {filteredOrphanStacks.map(orphan => (
                     <Card key={orphan.stackPath} className="p-3 border-dashed border-warning/30 bg-warning/15">
                       <div className="flex items-start justify-between gap-2">
@@ -1723,7 +1723,7 @@ export function StacksEditor({
                   >
                     {isSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
                   </Button>
-                  <h2 className="text-lg font-mono font-semibold">New Stack</h2>
+                  <h2 className="text-lg font-semibold">New Stack</h2>
                 </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -2398,7 +2398,7 @@ export function StacksEditor({
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button size="sm" variant="destructive" onClick={() => setShowDeleteConfirm(true)} disabled={isOperating} className="gap-1 text-xs">
+                        <Button size="sm" variant="outline" onClick={() => setShowDeleteConfirm(true)} disabled={isOperating} className="gap-1 text-xs text-destructive hover:text-destructive hover:bg-destructive/10">
                           <Trash2 className="w-3.5 h-3.5" />
                           Delete
                         </Button>

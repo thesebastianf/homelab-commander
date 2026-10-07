@@ -12,29 +12,29 @@
 
 :root {
   /* Anthracite Noir — modern technical dark theme (default) */
-  --background: oklch(0.145 0.012 260);
-  --foreground: oklch(0.96 0.005 250);
+  --background: oklch(0.155 0.006 260);
+  --foreground: oklch(0.94 0.004 250);
 
   /* Layered surfaces with subtle hue drift */
-  --surface-1: oklch(0.185 0.014 258);
-  --surface-2: oklch(0.225 0.016 256);
-  --surface-3: oklch(0.275 0.018 254);
+  --surface-1: oklch(0.185 0.006 258);
+  --surface-2: oklch(0.215 0.007 256);
+  --surface-3: oklch(0.255 0.008 254);
 
-  --card: oklch(0.205 0.015 258);
-  --card-foreground: oklch(0.96 0.005 250);
+  --card: oklch(0.19 0.006 258);
+  --card-foreground: oklch(0.94 0.004 250);
 
-  --popover: oklch(0.19 0.014 258);
-  --popover-foreground: oklch(0.96 0.005 250);
+  --popover: oklch(0.2 0.007 258);
+  --popover-foreground: oklch(0.94 0.004 250);
 
-  /* Emerald/teal — calm technical brand primary */
-  --primary: oklch(0.80 0.14 170);
-  --primary-foreground: oklch(0.14 0.012 260);
+  /* Muted teal — brand primary, used sparingly */
+  --primary: oklch(0.76 0.105 172);
+  --primary-foreground: oklch(0.16 0.01 260);
 
-  --secondary: oklch(0.30 0.018 254);
+  --secondary: oklch(0.26 0.008 254);
   --secondary-foreground: oklch(0.96 0.005 250);
 
-  --muted: oklch(0.25 0.014 256);
-  --muted-foreground: oklch(0.70 0.012 254);
+  --muted: oklch(0.235 0.007 256);
+  --muted-foreground: oklch(0.68 0.008 254);
 
   /* Teal accent for highlights / focus */
   --accent: oklch(0.76 0.13 180);
@@ -52,8 +52,8 @@
   --info: oklch(0.76 0.13 230);
   --info-foreground: oklch(0.14 0.012 260);
 
-  --border: oklch(0.32 0.016 256 / 0.8);
-  --input: oklch(0.32 0.016 256);
+  --border: oklch(0.28 0.008 256);
+  --input: oklch(0.30 0.008 256);
   --ring: oklch(0.76 0.13 180);
 
   /* Brand gradient stops — teal → emerald → deep green */
@@ -83,34 +83,34 @@
 }
 
 html[data-theme='light'] {
-  --background: oklch(0.90 0.006 250);
-  --foreground: oklch(0.22 0.012 255);
-  --surface-1: oklch(0.87 0.007 252);
-  --surface-2: oklch(0.84 0.007 252);
-  --surface-3: oklch(0.80 0.008 252);
-  --card: oklch(0.92 0.005 250);
-  --card-foreground: oklch(0.22 0.012 255);
-  --popover: oklch(0.93 0.005 250);
-  --popover-foreground: oklch(0.22 0.012 255);
-  --primary: oklch(0.52 0.13 175);
+  --background: oklch(0.975 0.003 250);
+  --foreground: oklch(0.22 0.01 255);
+  --surface-1: oklch(0.965 0.003 252);
+  --surface-2: oklch(0.945 0.004 252);
+  --surface-3: oklch(0.92 0.005 252);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.01 255);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.01 255);
+  --primary: oklch(0.52 0.1 175);
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.84 0.007 252);
-  --secondary-foreground: oklch(0.24 0.012 255);
-  --muted: oklch(0.85 0.006 252);
-  --muted-foreground: oklch(0.36 0.010 255);
-  --accent: oklch(0.55 0.13 180);
+  --secondary: oklch(0.945 0.004 252);
+  --secondary-foreground: oklch(0.24 0.01 255);
+  --muted: oklch(0.955 0.004 252);
+  --muted-foreground: oklch(0.47 0.01 255);
+  --accent: oklch(0.55 0.1 180);
   --accent-foreground: oklch(0.99 0 0);
-  --destructive: oklch(0.55 0.22 27);
+  --destructive: oklch(0.55 0.2 27);
   --destructive-foreground: oklch(0.99 0 0);
-  --success: oklch(0.55 0.16 155);
+  --success: oklch(0.55 0.14 155);
   --success-foreground: oklch(0.99 0 0);
-  --warning: oklch(0.70 0.16 75);
-  --warning-foreground: oklch(0.22 0.012 255);
-  --info: oklch(0.55 0.14 230);
+  --warning: oklch(0.66 0.15 70);
+  --warning-foreground: oklch(0.22 0.01 255);
+  --info: oklch(0.55 0.13 230);
   --info-foreground: oklch(0.99 0 0);
-  --border: oklch(0.70 0.010 252 / 0.98);
-  --input: oklch(0.82 0.007 252);
-  --ring: oklch(0.55 0.13 180);
+  --border: oklch(0.9 0.005 252);
+  --input: oklch(0.88 0.006 252);
+  --ring: oklch(0.55 0.1 180);
   --brand-from: oklch(0.58 0.13 185);
   --brand-via:  oklch(0.55 0.15 165);
   --brand-to:   oklch(0.50 0.16 145);
@@ -424,19 +424,14 @@ html[data-theme='sunset'] {
   }
 }
 
-/* ===== Ambient background — subtle radial brand glow ===== */
+/* ===== Page background: flat, no ambient glow ===== */
 body {
   background-color: var(--background);
-  background-image:
-    radial-gradient(ellipse 80% 60% at 15% -10%, color-mix(in oklch, var(--brand-from) 18%, transparent) 0%, transparent 60%),
-    radial-gradient(ellipse 70% 50% at 100% 0%, color-mix(in oklch, var(--brand-to) 14%, transparent) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 40% at 50% 100%, color-mix(in oklch, var(--brand-via) 10%, transparent) 0%, transparent 65%);
-  background-attachment: fixed;
 }
 
 /* ===== Brand gradient utilities ===== */
 .brand-grad {
-  background-image: linear-gradient(135deg, var(--brand-from), var(--brand-via), var(--brand-to));
+  background-color: var(--primary);
 }
 .brand-grad-text {
   background-image: linear-gradient(135deg, var(--brand-from), var(--brand-via), var(--brand-to));
@@ -462,15 +457,11 @@ body {
   z-index: 0;
 }
 
-/* ===== Card surface — gradient layer + subtle hairline ===== */
+/* ===== Card surface — flat panel with a hairline border ===== */
 .card-surface {
-  background-image: linear-gradient(180deg,
-    color-mix(in oklch, var(--card) 100%, transparent) 0%,
-    color-mix(in oklch, var(--surface-1) 100%, transparent) 100%);
+  background-color: var(--card);
   border: 1px solid var(--border);
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in oklch, var(--foreground) 4%, transparent),
-    0 1px 0 0 color-mix(in oklch, var(--background) 60%, transparent);
+  box-shadow: none;
 }
 
 /* ===== Glow / highlight utilities ===== */
@@ -480,6 +471,7 @@ body {
 .glow-destructive { box-shadow: 0 0 0 1px color-mix(in oklch, var(--destructive) 40%, transparent), 0 8px 32px -8px color-mix(in oklch, var(--destructive) 35%, transparent); }
 .glow-accent  { box-shadow: 0 0 0 1px color-mix(in oklch, var(--accent) 40%, transparent),  0 8px 32px -8px color-mix(in oklch, var(--accent) 30%, transparent); }
 
+@layer components {
 /* ===== Animated status dot (pulsing ring) ===== */
 .status-dot {
   position: relative;
@@ -501,9 +493,9 @@ body {
 .status-dot[data-state="failed"]     { background: var(--destructive); color: var(--destructive); }
 .status-dot[data-state="deploying"]  { background: var(--info); color: var(--info); }
 .status-dot[data-state="warning"]    { background: var(--warning); color: var(--warning); }
-.status-dot[data-state="running"]::after,
 .status-dot[data-state="deploying"]::after {
   animation: status-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
 }
 @keyframes status-ping {
   0%   { transform: scale(0.85); opacity: 0.7; }
@@ -512,12 +504,10 @@ body {
 
 /* ===== Card hover lift (subtle, GPU-friendly) ===== */
 .lift {
-  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease, background-color 200ms ease;
-  will-change: transform;
+  transition: border-color 150ms ease, background-color 150ms ease;
 }
 .lift:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in oklch, var(--accent) 40%, var(--border));
+  border-color: color-mix(in oklch, var(--foreground) 22%, var(--border));
 }
 
 /* ===== Mesh-grid backdrop (decorative) ===== */

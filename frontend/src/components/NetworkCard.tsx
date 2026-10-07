@@ -22,7 +22,7 @@ export function NetworkCard({ network, onRemove, onInspect }: NetworkCardProps) 
 
   return (
     <>
-    <Card className={`card-surface lift p-4 rounded-xl ${
+    <Card className={`card-surface lift p-4 rounded-lg ${
       isManuallyCreated 
         ? 'border-accent/50 ring-1 ring-accent/30 bg-accent/[0.06]'
         : ''

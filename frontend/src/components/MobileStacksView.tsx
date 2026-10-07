@@ -107,7 +107,7 @@ export function MobileStacksView({
             placeholder="Search stacks..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 font-mono text-sm h-9"
+            className="pl-10 text-sm h-9"
           />
         </div>
 

@@ -23,42 +23,31 @@ export function MetricCard({ label, value, icon, trend, className, pulse, compac
   if (compact) {
     return (
       <Card className={cn(
-        "card-surface lift relative p-3 overflow-hidden rounded-xl group",
-        warning && "border-warning/50 bg-warning/[0.05]",
+        "card-surface relative px-3.5 py-3 rounded-lg",
+        warning && "border-warning/40",
         className
       )}>
-        {/* gradient top bar */}
-        <span className={cn(
-          "absolute inset-x-0 top-0 h-[2px] opacity-60 group-hover:opacity-100 transition-opacity",
-          warning ? "bg-warning" : "brand-grad"
-        )} />
-        <div className="flex items-center gap-2.5">
-          <div className={cn(
-            "p-1.5 rounded-lg shrink-0 transition-transform group-hover:scale-105",
-            warning ? "bg-warning/15 text-warning" : "brand-grad text-primary-foreground shadow-md shadow-accent/15",
-            pulse && "animate-pulse-glow"
-          )}>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground font-medium truncate">{label}</p>
+          <span className={cn("shrink-0 [&_svg]:w-4 [&_svg]:h-4", warning ? "text-warning" : "text-muted-foreground/70", pulse && "text-success")}>
             {icon}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.12em] truncate">{label}</p>
-            <p className={cn("text-lg font-bold font-mono tabular-nums leading-tight", warning && "text-warning")}>
-              {value}
-            </p>
-          </div>
-          {warning && (
-            <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" />
-          )}
+          </span>
         </div>
+        <p className={cn("mt-1 text-xl font-semibold tabular-nums tracking-tight leading-tight", warning && "text-warning")}>
+          {value}
+        </p>
         {warning && (warningText || actionLabel) && (
-          <div className="mt-2 flex items-center justify-between gap-1">
+          <div className="mt-1.5 flex items-center justify-between gap-2">
             {warningText && (
-              <p className="text-[10px] text-warning/80 font-mono truncate flex-1">{warningText}</p>
+              <p className="flex items-center gap-1 text-[11px] text-warning truncate">
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                {warningText}
+              </p>
             )}
             {actionLabel && onAction && (
               <button
                 onClick={onAction}
-                className="shrink-0 text-[10px] font-medium text-warning border border-warning/40 hover:border-warning hover:bg-warning/10 rounded-md px-2 py-0.5 transition-colors"
+                className="shrink-0 text-[11px] font-medium text-muted-foreground hover:text-foreground underline-offset-2 hover:underline transition-colors"
               >
                 {actionLabel}
               </button>
@@ -66,7 +55,7 @@ export function MetricCard({ label, value, icon, trend, className, pulse, compac
           </div>
         )}
         {trend && (
-          <span className={cn("text-xs font-mono", trend.isPositive ? 'text-success' : 'text-destructive')}>
+          <span className={cn("text-xs", trend.isPositive ? 'text-success' : 'text-destructive')}>
             {trend.isPositive ? '↑' : '↓'}{Math.abs(trend.value)}%
           </span>
         )}
