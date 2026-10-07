@@ -105,7 +105,7 @@ export function ContainerCard({
           {!isRunning && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button onClick={() => onStart(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-success hover:text-success hover:bg-success/10">
+                <Button onClick={() => onStart(container.id)} size="sm" variant="ghost" aria-label="Start" className="h-8 w-8 p-0 text-success hover:text-success hover:bg-success/10">
                   <Play className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
@@ -119,7 +119,7 @@ export function ContainerCard({
             <>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button onClick={() => onStop(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive">
+                  <Button onClick={() => onStop(container.id)} size="sm" variant="ghost" aria-label="Stop" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive">
                     <Square className="w-4 h-4" />
                   </Button>
                 </TooltipTrigger>
@@ -130,24 +130,13 @@ export function ContainerCard({
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button onClick={() => onRestart(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
+                  <Button onClick={() => onRestart(container.id)} size="sm" variant="ghost" aria-label="Restart" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
                     <RotateCw className="w-4 h-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
                   <p className="font-mono text-xs">docker restart {container.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">Stop and start the container</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button onClick={() => onViewLogs(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
-                    <FileText className="w-4 h-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-xs">
-                  <p className="font-mono text-xs">docker logs --tail 100 {container.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">View recent container logs</p>
                 </TooltipContent>
               </Tooltip>
               <Tooltip>
@@ -164,6 +153,17 @@ export function ContainerCard({
               </Tooltip>
             </>
           )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button onClick={() => onViewLogs(container.id)} size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground" aria-label="View logs">
+                <FileText className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">
+              <p className="font-mono text-xs">docker logs --tail 300 {container.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">View recent container logs</p>
+            </TooltipContent>
+          </Tooltip>
           {isStopped && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -180,17 +180,15 @@ export function ContainerCard({
           </TooltipProvider>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground">
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground" aria-label="More actions">
                 <MoreHorizontal className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {isRunning && (
-                <DropdownMenuItem onClick={() => onViewLogs(container.id)}>
-                  <FileText className="w-4 h-4 mr-2" /> View Logs
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={() => setConfirmOpen(true)} className="text-destructive">
+              <DropdownMenuItem onClick={() => onViewLogs(container.id)}>
+                <FileText className="w-4 h-4 mr-2" /> View Logs
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setConfirmOpen(true)} className="text-destructive" disabled={isRunning}>
                 <Trash2 className="w-4 h-4 mr-2" /> Remove
               </DropdownMenuItem>
             </DropdownMenuContent>

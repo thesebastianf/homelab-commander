@@ -59,7 +59,7 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
           </div>
         </div>
 
-        <Card className="w-full">
+        <Card className="w-full flex flex-col gap-4 py-6">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Lock className="w-4 h-4" />

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { cn } from '@/lib/utils'
+import { cn, copyToClipboard } from '@/lib/utils'
 import { Toaster } from '@/components/ui/sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -36,6 +36,7 @@ import { CreateNetworkDialog } from '@/components/CreateNetworkDialog'
 import { DatabaseExplorer } from '@/components/DatabaseExplorer'
 import { ContainerShellDialog } from '@/components/ContainerShellDialog'
 import { ClockWidget } from '@/components/ClockWidget'
+import { EmptyState } from '@/components/EmptyState'
 import { Loader2, RefreshCw, Maximize2, Minimize2, Menu, Sun, Moon, Copy, Download } from 'lucide-react'
 import {
   Box,
@@ -64,11 +65,12 @@ import {
   Plus,
 } from 'lucide-react'
 import { useContainers, useStartContainer, useStopContainer, useRestartContainer, useRemoveContainer, useAggregatedLogs } from '@/hooks/useContainers'
-import { useImages } from '@/hooks/useImages'
+import { useImages, usePullImage, useRemoveImage } from '@/hooks/useImages'
 import { useStacks, useExternalStacks, useOrphanStacks, useDeployStack, useStopStack, useRestartStack, useUpdateStack, useDeactivateStack, useRecreateStack } from '@/hooks/useStacks'
-import { useVolumes } from '@/hooks/useVolumes'
+import { useVolumes, useRemoveVolume } from '@/hooks/useVolumes'
 import { useNetworks, useRemoveNetwork } from '@/hooks/useNetworks'
-import { useSettings, useSystemInfo, useUpdateSettings, usePruneSystem } from '@/hooks/useSettings'
+import { useSettings, useSystemInfo, useUpdateSettings } from '@/hooks/useSettings'
+import { usePortReservations, useCreatePortReservation, useDeletePortReservation } from '@/hooks/useServices'
 import { useIsMobile } from '@/hooks/use-mobile'
 import type { Stack, AppSettings, OrphanStack } from '@/lib/types'
 import { clearStoredCredentials, getStoredCredentials } from '@/lib/api'
@@ -153,8 +155,13 @@ function App() {
   const recreateStack = useRecreateStack()
   const updateStack = useUpdateStack()
   const removeNetwork = useRemoveNetwork()
+  const pullImage = usePullImage()
+  const removeImage = useRemoveImage()
+  const removeVolume = useRemoveVolume()
+  const portReservationsQuery = usePortReservations()
+  const createPortReservation = useCreatePortReservation()
+  const deletePortReservation = useDeletePortReservation()
   const updateSettings = useUpdateSettings()
-  const pruneSystem = usePruneSystem()
 
   // State hooks - MUST BE HERE BEFORE EARLY RETURN
   const isViewportMobile = useIsMobile()
@@ -251,7 +258,7 @@ function App() {
   const systemStats = {
     containers: {
       running: containers.filter(c => c.status === 'running').length,
-      stopped: containers.filter(c => c.status === 'stopped').length,
+      stopped: containers.filter(c => c.status !== 'running').length,
       total: containers.length,
     },
     images: images.length,
@@ -299,7 +306,6 @@ function App() {
   }
 
   const handleViewLogs = async (id: string) => {
-    const container = containers.find(c => c.id === id)
     setLogsContainerId(id)
     setLogsData('')
     setLogsLoading(true)
@@ -312,7 +318,6 @@ function App() {
     } finally {
       setLogsLoading(false)
     }
-    if (!container?.name) return
   }
 
   const handleOpenTerminal = (id: string) => {
@@ -341,7 +346,6 @@ function App() {
   }
 
   const handleNetworkInspect = async (id: string) => {
-    const network = networks.find(n => n.id === id)
     setInspectNetworkId(id)
     setInspectNetworkData(null)
     setInspectNetworkLoading(true)
@@ -354,11 +358,43 @@ function App() {
     } finally {
       setInspectNetworkLoading(false)
     }
-    if (!network?.name) return
   }
 
-  const handlePurgeImages = async () => { await pruneSystem.mutateAsync(); }
-  const handlePruneSystems = async () => { await pruneSystem.mutateAsync(); }
+  const handlePullImage = (repository: string, tag: string) => {
+    const ref = `${repository}:${tag}`
+    const toastId = toast.loading(`Pulling ${ref}...`)
+    pullImage.mutate({ name: repository, tag }, {
+      onSuccess: () => toast.success(`Pulled ${ref}`, { id: toastId }),
+      onError: (error: Error) => toast.error(`Failed to pull ${ref}: ${error.message}`, { id: toastId }),
+    })
+  }
+
+  const handleRemoveImage = (id: string, label: string) => {
+    removeImage.mutate({ id }, {
+      onSuccess: () => toast.success(`Removed ${label}`),
+      onError: (error: Error) => toast.error(`Failed to remove ${label}: ${error.message}`),
+    })
+  }
+
+  const handleRemoveVolume = (name: string) => {
+    removeVolume.mutate(name, {
+      onSuccess: () => toast.success(`Removed volume ${name}`),
+      onError: (error: Error) => toast.error(`Failed to remove volume ${name}: ${error.message}`),
+    })
+  }
+
+  const handleRefreshLogs = async () => {
+    if (!logsContainerId) return
+    setLogsLoading(true)
+    try {
+      setLogsData(await api.fetchContainerLogs(logsContainerId, 300))
+    } catch (e: any) {
+      toast.error(`Failed to fetch logs: ${e.message}`)
+    } finally {
+      setLogsLoading(false)
+    }
+  }
+
   const handleTabChange = (value: string) => {
     if (isAppTab(value)) setActiveTab(value)
   }
@@ -373,9 +409,10 @@ function App() {
   const systemNetworks = visibleNetworks.filter(network => ['bridge', 'host', 'ingress'].includes(String(network.name).toLowerCase()))
   const stackNetworks = visibleNetworks.filter(network => !network.isManuallyCreated && !['bridge', 'host', 'ingress'].includes(String(network.name).toLowerCase()))
 
+  const normalizedSearch = searchQuery.trim().toLowerCase()
   const filteredContainers = containers.filter(c =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.image.toLowerCase().includes(searchQuery.toLowerCase())
+    c.name.toLowerCase().includes(normalizedSearch) ||
+    c.image.toLowerCase().includes(normalizedSearch)
   )
 
   const handleRemoveNetwork = (id: string) => {
@@ -673,6 +710,7 @@ function App() {
                 {stacks.length}
               </span>
             </TabsTrigger>
+            {!compactMode && (<>
             <TabsTrigger value="containers" className="gap-2 shrink-0">
               <Box className="w-4 h-4" />
               Containers
@@ -692,6 +730,7 @@ function App() {
               <Network className="w-4 h-4" />
               Networks
             </TabsTrigger>
+            </>)}
           </TabsList>
 
           {/* ═══ DASHBOARD ═══ */}
@@ -716,7 +755,7 @@ function App() {
                         icon={<Cpu className="w-5 h-5" />}
                         compact
                         warning={systemStats.cpuUsage > CPU_WARN}
-                        warningText={`>{CPU_WARN}%`}
+                        warningText={`>${CPU_WARN}%`}
                         actionLabel="Cleanup"
                         onAction={() => setMaintenanceOpen(true)}
                       />
@@ -818,7 +857,7 @@ function App() {
             })()}
 
             {/* Full-width Aggregated Logs */}
-            <AggregatedLogs logs={aggregatedLogs} />
+            <AggregatedLogs logs={aggregatedLogs} onRefresh={() => aggregatedLogsQuery.refetch()} isRefreshing={aggregatedLogsQuery.isFetching} />
           </TabsContent>
 
           <TabsContent value="containers" className="space-y-6">
@@ -836,11 +875,11 @@ function App() {
 
             <div className="grid gap-4">
               {filteredContainers.length === 0 ? (
-                <div className="text-center py-16 text-muted-foreground">
-                  <Box className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-mono">No containers found</p>
-                  <p className="text-sm mt-2">Create your first container to get started</p>
-                </div>
+                <EmptyState
+                  icon={<Box className="w-10 h-10" />}
+                  title={normalizedSearch ? 'No matching containers' : 'No containers yet'}
+                  description={normalizedSearch ? `Nothing matches "${searchQuery.trim()}".` : 'Deploy a stack to get your first containers running.'}
+                />
               ) : (
                 filteredContainers.map(container => (
                   <ContainerCard
@@ -866,14 +905,24 @@ function App() {
               </div>
             </div>
             <div className="grid gap-4">
-              {images.map(image => (
-                <ImageCard
-                  key={image.id}
-                  image={image}
-                  onPull={() => toast.info(`Pulling latest ${image.repository}:${image.tag}`)}
-                  onRemove={() => toast.success(`Removed ${image.repository}:${image.tag}`)}
+              {images.length === 0 ? (
+                <EmptyState
+                  icon={<ImageIcon className="w-10 h-10" />}
+                  title="No images"
+                  description="Images appear here once a stack pulls them."
                 />
-              ))}
+              ) : (
+                images.map(image => (
+                  <ImageCard
+                    key={image.id}
+                    image={image}
+                    pulling={pullImage.isPending && pullImage.variables?.name === image.repository && pullImage.variables?.tag === image.tag}
+                    removing={removeImage.isPending && removeImage.variables?.id === image.id}
+                    onPull={() => handlePullImage(image.repository, image.tag)}
+                    onRemove={() => handleRemoveImage(image.id, image.repository === '<none>' ? image.id : `${image.repository}:${image.tag}`)}
+                  />
+                ))
+              )}
             </div>
           </TabsContent>
 
@@ -926,19 +975,28 @@ function App() {
               </div>
             </div>
             <div className="grid gap-4">
-              {volumes.map(volume => (
-                <VolumeCard
-                  key={volume.id}
-                  volume={volume}
-                  onRemove={() => toast.success(`Removed volume ${volume.name}`)}
-                  onInspect={() => handleVolumeInspect(volume.name)}
+              {volumes.length === 0 ? (
+                <EmptyState
+                  icon={<HardDrive className="w-10 h-10" />}
+                  title="No volumes"
+                  description="Named volumes created by your stacks will show up here."
                 />
-              ))}
+              ) : (
+                volumes.map(volume => (
+                  <VolumeCard
+                    key={volume.id}
+                    volume={volume}
+                    removing={removeVolume.isPending && removeVolume.variables === volume.name}
+                    onRemove={() => handleRemoveVolume(volume.name)}
+                    onInspect={() => handleVolumeInspect(volume.name)}
+                  />
+                ))
+              )}
             </div>
           </TabsContent>
 
           <TabsContent value="networks" className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-semibold font-mono">Docker Networks</h2>
                 <p className="text-sm text-muted-foreground mt-1">Central shared networks, stack-created networks, and Docker system networks</p>
@@ -947,7 +1005,7 @@ function App() {
                 variant="default"
                 size="sm"
                 onClick={() => setCreateNetworkOpen(true)}
-                className="gap-2"
+                className="gap-2 self-start sm:self-auto"
               >
                 <Plus className="w-4 h-4" />
                 Create Network
@@ -955,10 +1013,11 @@ function App() {
             </div>
             <div className="grid gap-4">
               {visibleNetworks.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Network className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>No networks found</p>
-                </div>
+                <EmptyState
+                  icon={<Network className="w-10 h-10" />}
+                  title="No networks"
+                  description="Create a central network to share it across stacks."
+                />
               ) : (
                 <>
                   {centralNetworks.length > 0 && (
@@ -1061,7 +1120,7 @@ function App() {
             <div className="rounded-lg border p-3 space-y-1.5">
               <h4 className="font-mono font-semibold">Getting Started</h4>
               <p className="text-muted-foreground">Use Stacks to create, edit, deploy, stop, and inspect your compose projects. Dashboard shows health and warnings at a glance.</p>
-              <p className="text-muted-foreground">Use the top action row for Ports, Startup, Backup, Alerts, Cleanup, Database, and Settings.</p>
+              <p className="text-muted-foreground">Open the Tools menu in the header for Ports, Smart Startup, Backups, Alerts, Cleanup, Database, and Settings.</p>
             </div>
 
             <div className="rounded-lg border p-3 space-y-1.5">
@@ -1119,6 +1178,12 @@ function App() {
         onOpenChange={setPortRegistryOpen}
         containers={containers}
         stacks={stacks}
+        reservations={portReservationsQuery.data ?? []}
+        onCreateReservation={(reservation) => createPortReservation.mutateAsync(reservation)}
+        onDeleteReservation={(id) => deletePortReservation.mutate(id, {
+          onSuccess: () => toast.success('Reservation removed'),
+          onError: (error: Error) => toast.error(`Failed to remove reservation: ${error.message}`),
+        })}
       />
 
       <CreateNetworkDialog
@@ -1146,7 +1211,7 @@ function App() {
               <div className="flex justify-end gap-2 mb-1">
                 <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={() => {
                   if (!logsData) return
-                  navigator.clipboard.writeText(logsData).then(() => toast.success('Logs copied to clipboard'))
+                  copyToClipboard(logsData, 'Logs copied to clipboard')
                 }}>
                   <Copy className="w-3 h-3" /> Copy
                 </Button>
@@ -1163,16 +1228,12 @@ function App() {
                 }}>
                   <Download className="w-3 h-3" /> Download
                 </Button>
-                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={async () => {
-                  if (!logsContainerId) return
-                  setLogsLoading(true)
-                  try { setLogsData(await api.fetchContainerLogs(logsContainerId, 300)) } finally { setLogsLoading(false) }
-                }}>
+                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={handleRefreshLogs}>
                   <RefreshCw className="w-3 h-3" /> Refresh
                 </Button>
               </div>
-              <ScrollArea className="flex-1 rounded-lg border bg-black/80">
-                <pre className="font-mono text-xs text-foreground/80 p-3 whitespace-pre-wrap break-all">{logsData || 'No log output.'}</pre>
+              <ScrollArea className="flex-1 min-h-0 rounded-lg border terminal-surface">
+                <pre className="font-mono text-xs text-foreground/85 p-3 whitespace-pre-wrap break-all">{logsData || 'No log output.'}</pre>
               </ScrollArea>
             </>
           )}
@@ -1191,8 +1252,8 @@ function App() {
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <ScrollArea className="flex-1 rounded-lg border bg-black/80">
-              <pre className="font-mono text-xs text-foreground/80 p-3 whitespace-pre-wrap">{JSON.stringify(inspectVolumeData, null, 2)}</pre>
+            <ScrollArea className="flex-1 min-h-0 rounded-lg border terminal-surface">
+              <pre className="font-mono text-xs text-foreground/85 p-3 whitespace-pre-wrap break-all">{JSON.stringify(inspectVolumeData, null, 2)}</pre>
             </ScrollArea>
           )}
         </DialogContent>
@@ -1214,8 +1275,8 @@ function App() {
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <ScrollArea className="flex-1 rounded-lg border bg-black/80">
-              <pre className="font-mono text-xs text-foreground/80 p-3 whitespace-pre-wrap">{JSON.stringify(inspectNetworkData, null, 2)}</pre>
+            <ScrollArea className="flex-1 min-h-0 rounded-lg border terminal-surface">
+              <pre className="font-mono text-xs text-foreground/85 p-3 whitespace-pre-wrap break-all">{JSON.stringify(inspectNetworkData, null, 2)}</pre>
             </ScrollArea>
           )}
         </DialogContent>

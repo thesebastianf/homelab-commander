@@ -22,6 +22,7 @@ import {
   AlertCircle,
   Snowflake,
   CloudDownload,
+  Pencil,
 } from 'lucide-react'
 import type { Stack } from '@/lib/types'
 import { useSettings } from '@/hooks/useSettings'
@@ -51,7 +52,6 @@ function getStatusBadgeVariant(status: Stack['status']) {
 
 export function MobileStacksView({
   stacks,
-  selectedStackId,
   onSelectStack,
   onDeployStack,
   onStopStack,
@@ -139,7 +139,15 @@ export function MobileStacksView({
                     {/* Stack Header */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <h3 className="font-mono text-base font-bold truncate">{stack.name}</h3>
+                        <button
+                          type="button"
+                          onClick={() => onSelectStack(stack)}
+                          className="group/name flex items-center gap-1.5 max-w-full text-left"
+                          title="Open in editor"
+                        >
+                          <h3 className="font-mono text-base font-bold truncate group-hover/name:underline underline-offset-4">{stack.name}</h3>
+                          <Pencil className="w-3.5 h-3.5 shrink-0 text-muted-foreground group-hover/name:text-foreground" />
+                        </button>
                         <p className="text-xs text-muted-foreground mt-1">
                           {stack.services} {stack.services === 1 ? 'service' : 'services'}
                         </p>
@@ -183,7 +191,7 @@ export function MobileStacksView({
                           <TooltipTrigger asChild>
                             <Badge variant="outline" className="border-primary text-primary gap-1">
                               <Zap className="w-2.5 h-2.5" />
-                              Auto upd
+                              Auto-update
                             </Badge>
                           </TooltipTrigger>
                           <TooltipContent>Auto Update enabled</TooltipContent>
@@ -223,7 +231,7 @@ export function MobileStacksView({
                             <TooltipTrigger asChild>
                               <Badge variant="outline" className={`${colorClass} gap-1`}>
                                 {icon}
-                                Bkp:{bkpCount}
+                                {bkpCount} {bkpCount === 1 ? 'backup' : 'backups'}
                               </Badge>
                             </TooltipTrigger>
                             <TooltipContent>{tooltipText}</TooltipContent>
@@ -235,7 +243,7 @@ export function MobileStacksView({
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Badge variant="outline" className="text-[10px] gap-1 font-mono">
-                              {stack.ports!.length} ports
+                              {stack.ports!.length} {stack.ports!.length === 1 ? 'port' : 'ports'}
                             </Badge>
                           </TooltipTrigger>
                           <TooltipContent className="font-mono text-xs">
@@ -259,8 +267,7 @@ export function MobileStacksView({
                                 className="gap-1 text-xs h-9 w-full"
                               >
                                 <RotateCw className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Restart</span>
-                                <span className="sm:hidden">Rst</span>
+                                <span>Restart</span>
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent className="text-xs">docker compose restart</TooltipContent>
@@ -276,8 +283,7 @@ export function MobileStacksView({
                                 className="gap-1 text-xs h-9 w-full"
                               >
                                 <Square className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Stop</span>
-                                <span className="sm:hidden">Stp</span>
+                                <span>Stop</span>
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent className="text-xs">docker compose stop</TooltipContent>
@@ -293,8 +299,7 @@ export function MobileStacksView({
                                 className="gap-1 text-xs h-9 w-full"
                               >
                                 <XCircle className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Down</span>
-                                <span className="sm:hidden">Dwn</span>
+                                <span>Down</span>
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent className="text-xs">docker compose down</TooltipContent>
@@ -310,8 +315,7 @@ export function MobileStacksView({
                                 className="gap-1 text-xs h-9 w-full"
                               >
                                 <History className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Recreate</span>
-                                <span className="sm:hidden">Rec</span>
+                                <span>Recreate</span>
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent className="text-xs">docker compose up -d --force-recreate</TooltipContent>
@@ -328,8 +332,7 @@ export function MobileStacksView({
                                 className="gap-1 text-xs h-9 w-full"
                               >
                                 <Play className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Start</span>
-                                <span className="sm:hidden">Str</span>
+                                <span>Start</span>
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent className="text-xs">docker compose up -d</TooltipContent>
@@ -345,8 +348,7 @@ export function MobileStacksView({
                                 className="gap-1 text-xs h-9 w-full"
                               >
                                 <History className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Recreate</span>
-                                <span className="sm:hidden">Rec</span>
+                                <span>Recreate</span>
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent className="text-xs">docker compose up -d --force-recreate</TooltipContent>

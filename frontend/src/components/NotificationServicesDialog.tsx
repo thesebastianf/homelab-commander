@@ -165,7 +165,7 @@ export function NotificationServicesDialog({ open, onOpenChange, services, onSav
           <div className="space-y-3">
             {localServices.length === 0 ? (
               <Card>
-                <CardContent className="pt-6 text-center text-muted-foreground">
+                <CardContent className="py-6 text-center text-muted-foreground">
                   No notification services configured. Add one to get started.
                 </CardContent>
               </Card>

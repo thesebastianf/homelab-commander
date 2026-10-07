@@ -19,6 +19,8 @@ export interface Container {
   updateAvailable?: boolean
   autoUpdate?: boolean
   restartPolicy?: string
+  /** Compose project label (com.docker.compose.project), if the container belongs to one */
+  project?: string
 }
 
 export interface Image {

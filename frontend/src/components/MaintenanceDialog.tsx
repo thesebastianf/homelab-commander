@@ -158,7 +158,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
         <div className="space-y-3 mt-2">
           {/* Compact System Health Row */}
           <div className={`rounded-lg border p-3 ${isHealthy ? 'border-success/30 bg-success/[0.03]' : 'border-warning/30 bg-warning/[0.03]'}`}>
-            <div className="grid grid-cols-4 gap-4 items-start">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 items-start">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[11px] text-muted-foreground">Disk {diskPct.toFixed(1)}%</span>
@@ -193,7 +193,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
           </div>
 
           {/* Row 1: Images | Volumes | Stopped Containers */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {/* Purge Unused Images */}
             <div className="rounded-lg border border-l-4 border-info/20 border-l-info bg-card p-3 flex flex-col gap-2">
               <div className="flex items-center gap-2">
@@ -262,7 +262,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
               <p className="text-[11px] text-muted-foreground">Clean up stopped / exited containers.</p>
               <div>
                 <p className="text-[10px] text-muted-foreground">To remove</p>
-                <p className={`text-lg font-mono font-bold ${zombieWarning ? 'text-warning' : 'text-muted-foreground'}`}>{stoppedContainers.length} containers</p>
+                <p className={`text-lg font-mono font-bold ${zombieWarning ? 'text-warning' : 'text-muted-foreground'}`}>{stoppedContainers.length} {stoppedContainers.length === 1 ? 'container' : 'containers'}</p>
               </div>
               {stoppedContainers.length > 0 ? (
                 <div className="space-y-0.5 max-h-12 overflow-y-auto">
@@ -291,7 +291,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
           </div>
 
           {/* Row 2: Full Prune | Networks | Docker Connectivity */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {/* Full System Prune */}
             <div className="rounded-lg border border-l-4 border-destructive/30 border-l-destructive bg-destructive/[0.03] p-3 flex flex-col gap-2">
               <div className="flex items-center gap-2">

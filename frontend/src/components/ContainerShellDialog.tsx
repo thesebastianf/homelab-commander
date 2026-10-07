@@ -168,7 +168,7 @@ export function ContainerShellDialog({
             )}
           </div>
         </div>
-        <div className="h-full min-h-0 bg-black/90 p-3">
+        <div className="h-full min-h-0 terminal-surface p-3">
           <div ref={hostRef} className="h-full w-full rounded border border-border/40 overflow-hidden" />
         </div>
       </DialogContent>

@@ -61,7 +61,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, copyToClipboard } from '@/lib/utils'
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
 import type { Stack, BackupConfig, OrphanStack } from '@/lib/types'
 import { toast } from 'sonner'
@@ -521,9 +521,12 @@ function useStackLogs(
       }
 
       ws.onmessage = (event) => {
-        const text = typeof event.data === 'string' ? event.data.trim() : ''
-        if (!text) return
-        setLines(prev => [...prev.slice(-800), { container: name, text, ts: Date.now() }])
+        const raw = typeof event.data === 'string' ? event.data : ''
+        // One frame can carry several log lines; render each on its own row
+        const texts = raw.split(/\r?\n/).map(t => t.trimEnd()).filter(t => t.trim())
+        if (texts.length === 0) return
+        const ts = Date.now()
+        setLines(prev => [...prev, ...texts.map(text => ({ container: name, text, ts }))].slice(-800))
       }
 
       ws.onerror = () => {
@@ -931,7 +934,7 @@ export function StacksEditor({
       if (failed > 0) {
         toast.error(`Bulk backup finished: ${started} completed, ${failed} failed`)
       } else {
-        toast.success(`Bulk backup finished: ${started} stacks backed up`)
+        toast.success(`Bulk backup finished: ${started} ${started === 1 ? 'stack' : 'stacks'} backed up`)
       }
       qc.invalidateQueries({ queryKey: ['backupJobs'] })
       qc.invalidateQueries({ queryKey: ['stacks'] })
@@ -1366,13 +1369,23 @@ export function StacksEditor({
       <MobileStacksView
         stacks={stacks}
         selectedStackId={selectedStack?.id ?? null}
-        onSelectStack={setSelectedStack}
+        onSelectStack={(stack) => {
+          // The editor only exists in the full UI, so leave compact mode first
+          onExitForcedMobileMode?.()
+          setMobileModeEnabled(false)
+          setSelectedStack(stack)
+          setIsCreating(false)
+        }}
         onDeployStack={onDeployStack}
         onStopStack={onStopStack}
         onRestartStack={onRestartStack}
         onRecreateStack={onRecreateStack}
         onDeactivateStack={onDeactivateStack}
-        onCreateNew={handleCreateNew}
+        onCreateNew={() => {
+          onExitForcedMobileMode?.()
+          setMobileModeEnabled(false)
+          handleCreateNew()
+        }}
         onToggleMobileMode={onExitForcedMobileMode ?? (() => setMobileModeEnabled(!mobileModeEnabled))}
         isOperating={isOperating}
       />
@@ -2033,7 +2046,7 @@ export function StacksEditor({
                               <p className="font-mono text-xs text-muted-foreground truncate">{h.value}</p>
                             </div>
                             <button
-                              onClick={() => { navigator.clipboard.writeText(h.value); toast.success('Copied') }}
+                              onClick={() => { copyToClipboard(h.value, 'Copied') }}
                               className="text-muted-foreground hover:text-foreground shrink-0"
                             >
                               <Copy className="w-3.5 h-3.5" />
@@ -2055,7 +2068,7 @@ export function StacksEditor({
                                 {h.meta && <p className="text-[10px] text-muted-foreground/70">{h.meta}</p>}
                               </div>
                               <button
-                                onClick={() => { navigator.clipboard.writeText(h.value); toast.success('Copied network helper') }}
+                                onClick={() => { copyToClipboard(h.value, 'Copied network helper') }}
                                 className="text-muted-foreground hover:text-foreground shrink-0"
                               >
                                 <Copy className="w-3.5 h-3.5" />
@@ -2078,7 +2091,7 @@ export function StacksEditor({
                                 {h.meta && <p className="text-[10px] text-muted-foreground/70">{h.meta}</p>}
                               </div>
                               <button
-                                onClick={() => { navigator.clipboard.writeText(h.value); toast.success('Copied network helper') }}
+                                onClick={() => { copyToClipboard(h.value, 'Copied network helper') }}
                                 className="text-muted-foreground hover:text-foreground shrink-0"
                               >
                                 <Copy className="w-3.5 h-3.5" />
@@ -2268,7 +2281,7 @@ export function StacksEditor({
 
               {/* Operation Terminal */}
               {(isOperating || (operationDone && opLines.length > 0)) && (
-                <div className="rounded-lg border border-border/60 bg-black/80 shrink-0 flex flex-col h-44 min-h-0 overflow-hidden">
+                <div className="rounded-lg border border-border/60 terminal-surface shrink-0 flex flex-col h-44 min-h-0 overflow-hidden">
                   <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/30 shrink-0">
                     <div className="flex items-center gap-2">
                       <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
@@ -2579,12 +2592,12 @@ export function StacksEditor({
                 <ResizablePanel defaultSize={45} minSize={20} className="flex flex-col min-w-0 min-h-0">
 
                   {/* Panel toggle header */}
-                  <div className="flex items-center gap-1 mb-2 shrink-0">
+                  <div className="flex items-center gap-1 mb-2 shrink-0 overflow-x-auto no-scrollbar">
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
                           onClick={() => setRightPanel('logs')}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'logs' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                          className={`flex shrink-0 whitespace-nowrap items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'logs' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
                         >
                           <Terminal className="w-3 h-3" />
                           Logs
@@ -2596,7 +2609,7 @@ export function StacksEditor({
                       <TooltipTrigger asChild>
                         <button
                           onClick={() => setRightPanel('compare')}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'compare' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                          className={`flex shrink-0 whitespace-nowrap items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'compare' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
                         >
                           <Diff className="w-3 h-3" />
                           Compare
@@ -2608,7 +2621,7 @@ export function StacksEditor({
                       <TooltipTrigger asChild>
                         <button
                           onClick={() => setRightPanel('backup')}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'backup' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                          className={`flex shrink-0 whitespace-nowrap items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'backup' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
                         >
                           <Archive className="w-3 h-3" />
                           Backup
@@ -2620,7 +2633,7 @@ export function StacksEditor({
                       <TooltipTrigger asChild>
                         <button
                           onClick={() => setRightPanel('autoupdate')}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'autoupdate' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                          className={`flex shrink-0 whitespace-nowrap items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'autoupdate' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
                         >
                           <Zap className="w-3 h-3" />
                           Auto Update
@@ -2632,7 +2645,7 @@ export function StacksEditor({
                       <TooltipTrigger asChild>
                         <button
                           onClick={() => setRightPanel('ai')}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'ai' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                          className={`flex shrink-0 whitespace-nowrap items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'ai' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
                         >
                           <WandSparkles className="w-3 h-3" />
                           AI
@@ -2644,7 +2657,7 @@ export function StacksEditor({
                       <TooltipTrigger asChild>
                         <button
                           onClick={() => setRightPanel('conflicts')}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'conflicts' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                          className={`flex shrink-0 whitespace-nowrap items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'conflicts' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
                         >
                           <AlertCircle className="w-3 h-3" />
                           Conflicts
@@ -2656,7 +2669,7 @@ export function StacksEditor({
                       <TooltipTrigger asChild>
                         <button
                           onClick={() => setRightPanel('reference')}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'reference' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                          className={`flex shrink-0 whitespace-nowrap items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'reference' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
                         >
                           <BookOpen className="w-3 h-3" />
                           Reference
@@ -2668,7 +2681,7 @@ export function StacksEditor({
                       <TooltipTrigger asChild>
                         <button
                           onClick={() => setRightPanel('helpers')}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'helpers' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                          className={`flex shrink-0 whitespace-nowrap items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'helpers' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
                         >
                           <Clipboard className="w-3 h-3" />
                           Helpers
@@ -2680,7 +2693,7 @@ export function StacksEditor({
                       <TooltipTrigger asChild>
                         <button
                           onClick={() => setRightPanel('files')}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'files' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                          className={`flex shrink-0 whitespace-nowrap items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors ${rightPanel === 'files' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
                         >
                           <FolderOpen className="w-3 h-3" />
                           Files
@@ -2690,7 +2703,7 @@ export function StacksEditor({
                     </Tooltip>
                     <div className="flex-1" />
                     {rightPanel === 'logs' && (
-                      <span className="text-[10px] text-muted-foreground font-mono">
+                      <span className="shrink-0 pl-2 text-[10px] text-muted-foreground font-mono">
                         {stackContainers.length} container{stackContainers.length !== 1 ? 's' : ''}
                       </span>
                     )}
@@ -2699,7 +2712,7 @@ export function StacksEditor({
                         value={compareVersion?.toString() ?? ''}
                         onValueChange={v => setCompareVersion(v ? parseInt(v) : null)}
                       >
-                        <SelectTrigger className="h-6 text-xs w-36">
+                        <SelectTrigger className="h-6 text-xs w-36 shrink-0">
                           <SelectValue placeholder="Select version..." />
                         </SelectTrigger>
                         <SelectContent>
@@ -2716,7 +2729,7 @@ export function StacksEditor({
                   {/* LOGS PANEL */}
                   {rightPanel === 'logs' && (
                     <>
-                      <div className="flex-1 rounded-lg border bg-black/70 overflow-hidden flex flex-col min-h-0">
+                      <div className="flex-1 rounded-lg border terminal-surface overflow-hidden flex flex-col min-h-0">
                         {stackContainers.length === 0 ? (
                           <div className="flex-1 flex items-center justify-center">
                             <p className="text-muted-foreground text-xs font-mono">
@@ -2749,7 +2762,7 @@ export function StacksEditor({
                               disabled={logLines.length === 0}
                               onClick={() => {
                                 const text = logLines.slice(-500).map(l => `[${l.container}] ${l.text}`).join('\n')
-                                navigator.clipboard.writeText(text).then(() => toast.success('Logs copied to clipboard'))
+                                copyToClipboard(text, 'Logs copied to clipboard')
                               }}
                               className="gap-1.5 text-xs"
                             >
@@ -3119,7 +3132,7 @@ export function StacksEditor({
                               <p className="font-mono text-xs text-muted-foreground truncate">{h.value}</p>
                             </div>
                             <button
-                              onClick={() => { navigator.clipboard.writeText(h.value); toast.success('Copied') }}
+                              onClick={() => { copyToClipboard(h.value, 'Copied') }}
                               className="text-muted-foreground hover:text-foreground shrink-0"
                             >
                               <Copy className="w-3.5 h-3.5" />
@@ -3141,7 +3154,7 @@ export function StacksEditor({
                                 {h.meta && <p className="text-[10px] text-muted-foreground/70">{h.meta}</p>}
                               </div>
                               <button
-                                onClick={() => { navigator.clipboard.writeText(h.value); toast.success('Copied network helper') }}
+                                onClick={() => { copyToClipboard(h.value, 'Copied network helper') }}
                                 className="text-muted-foreground hover:text-foreground shrink-0"
                               >
                                 <Copy className="w-3.5 h-3.5" />
@@ -3164,7 +3177,7 @@ export function StacksEditor({
                                 {h.meta && <p className="text-[10px] text-muted-foreground/70">{h.meta}</p>}
                               </div>
                               <button
-                                onClick={() => { navigator.clipboard.writeText(h.value); toast.success('Copied network helper') }}
+                                onClick={() => { copyToClipboard(h.value, 'Copied network helper') }}
                                 className="text-muted-foreground hover:text-foreground shrink-0"
                               >
                                 <Copy className="w-3.5 h-3.5" />

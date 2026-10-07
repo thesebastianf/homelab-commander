@@ -1,6 +1,9 @@
 @import 'tailwindcss';
 @import "tw-animate-css";
 
+/* `dark:` follows the app theme (all themes except "light" are dark), not the OS color scheme */
+@custom-variant dark (&:where(html:not([data-theme='light']), html:not([data-theme='light']) *));
+
 @layer base {
   * {
     @apply border-border;
@@ -409,9 +412,16 @@ html[data-theme='sunset'] {
 }
 
 /* ===== Focus ring polish ===== */
-:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
+/* Layered so utilities like outline-none can still override it */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  /* Programmatic focus targets (tabindex=-1) are not interactive, don't ring them */
+  [tabindex="-1"]:focus-visible {
+    outline: none;
+  }
 }
 
 /* ===== Ambient background — subtle radial brand glow ===== */
@@ -524,3 +534,21 @@ body {
   background: color-mix(in oklch, var(--accent) 35%, transparent);
   color: var(--foreground);
 }
+
+/* ===== Terminal / log surface ===== */
+/* Always dark, independent of the active theme, so log text stays readable in light mode. */
+.terminal-surface {
+  --foreground: oklch(0.93 0.005 250);
+  --muted-foreground: oklch(0.70 0.012 254);
+  --border: oklch(0.32 0.016 256 / 0.8);
+  --success: oklch(0.74 0.17 155);
+  --warning: oklch(0.82 0.14 80);
+  --destructive: oklch(0.68 0.21 22);
+  --info: oklch(0.76 0.13 230);
+  background-color: oklch(0.13 0.01 260 / 0.92);
+  color: var(--foreground);
+}
+
+/* Native form controls and scrollbars match the active theme */
+html { color-scheme: dark; }
+html[data-theme='light'] { color-scheme: light; }

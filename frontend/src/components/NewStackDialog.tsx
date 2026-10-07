@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { copyToClipboard } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -188,8 +189,7 @@ export function NewStackDialog({
                 <Badge variant="outline" className="font-mono text-xs gap-1">
                   {stacksBasePath}/{name.toLowerCase().replace(/\s+/g, '-')}
                   <Copy className="w-3 h-3 cursor-pointer" onClick={() => {
-                    navigator.clipboard.writeText(`${stacksBasePath}/${name.toLowerCase().replace(/\s+/g, '-')}`)
-                    toast.success('Path copied')
+                    copyToClipboard(`${stacksBasePath}/${name.toLowerCase().replace(/\s+/g, '-')}`, 'Path copied')
                   }} />
                 </Badge>
               </div>
@@ -198,8 +198,7 @@ export function NewStackDialog({
                 <Badge variant="outline" className="font-mono text-xs gap-1">
                   {volumesBasePath}/{name.toLowerCase().replace(/\s+/g, '-')}
                   <Copy className="w-3 h-3 cursor-pointer" onClick={() => {
-                    navigator.clipboard.writeText(`${volumesBasePath}/${name.toLowerCase().replace(/\s+/g, '-')}`)
-                    toast.success('Path copied')
+                    copyToClipboard(`${volumesBasePath}/${name.toLowerCase().replace(/\s+/g, '-')}`, 'Path copied')
                   }} />
                 </Badge>
               </div>
