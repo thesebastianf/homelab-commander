@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { LoadingScreen } from '@/components/LoadingScreen'
 import { LoginScreen } from '@/components/LoginScreen'
-import { MetricCard } from '@/components/MetricCard'
+import { ResourceGauge, FleetPanel } from '@/components/DashboardPanels'
 import { ContainerCard } from '@/components/ContainerCard'
 import { ImageCard } from '@/components/ImageCard'
 import { StackCard } from '@/components/StackCard'
@@ -442,7 +442,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen">
       <Toaster position="top-right" richColors />
       <header className="border-b sticky top-0 z-50 glass">
         <div className={compactMode ? 'px-3 sm:px-4 py-2.5' : 'px-4 lg:px-6 py-3'}>
@@ -456,17 +456,16 @@ function App() {
               </div>
               {!compactMode ? (
                 <div className="min-w-0">
-                  <h1 className="text-base lg:text-lg font-semibold tracking-tight leading-tight">
-                    <span className="text-primary">THC</span>
-                    <span className="text-muted-foreground font-normal mx-1.5">/</span>
-                    <span>Homelab Commander</span>
+                  <h1 className="font-display text-lg lg:text-xl font-semibold uppercase tracking-[0.05em] leading-none">
+                    <span className="text-primary font-bold">THC</span>
+                    <span className="ml-2">Homelab Commander</span>
                   </h1>
-                  <p className="hidden md:block text-xs text-muted-foreground truncate mt-0.5">
+                  <p className="hidden md:block text-xs text-muted-foreground truncate mt-1">
                     Highly addictive · self-hosted control plane
                   </p>
                 </div>
               ) : (
-                <h1 className="text-base font-semibold tracking-tight">
+                <h1 className="font-display text-lg font-bold uppercase tracking-[0.05em] leading-none">
                   <span className="text-primary">THC</span>
                 </h1>
               )}
@@ -742,120 +741,68 @@ function App() {
           {/* ═══ DASHBOARD ═══ */}
           <TabsContent value="dashboard" className="space-y-4">
 
-            {/* Row 1: Resource Usage — 6 compact cards with inline warnings */}
             {(() => {
               const NETWORK_WARN = currentSettings.warningThresholds?.networkWarn ?? 25
               const DISK_WARN = currentSettings.warningThresholds?.diskWarn ?? 90
               const ZOMBIE_WARN = currentSettings.warningThresholds?.zombieWarn ?? 5
               const CPU_WARN = currentSettings.warningThresholds?.cpuWarn ?? 85
               const MEM_WARN = currentSettings.warningThresholds?.memoryWarn ?? 85
-              const stoppedCount = containers.filter(c => c.status !== 'running').length
+              const { running, stopped, total } = systemStats.containers
+              const openCleanup = () => setMaintenanceOpen(true)
+              const goTo = (tab: AppTab) => compactMode && tab !== 'stacks' ? undefined : () => handleTabChange(tab)
               return (
                 <>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-2">Resource usage</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-                      <MetricCard
-                        label="CPU"
-                        value={`${systemStats.cpuUsage.toFixed(1)}%`}
-                        icon={<Cpu className="w-5 h-5" />}
-                        compact
-                        warning={systemStats.cpuUsage > CPU_WARN}
-                        warningText={`Above ${CPU_WARN}%`}
-                        actionLabel="Cleanup"
-                        onAction={() => setMaintenanceOpen(true)}
-                      />
-                      <MetricCard
-                        label="Memory"
-                        value={`${systemStats.memoryUsage.toFixed(1)}%`}
-                        icon={<MemoryStick className="w-5 h-5" />}
-                        compact
-                        warning={systemStats.memoryUsage > MEM_WARN}
-                        warningText={`Above ${MEM_WARN}%`}
-                        actionLabel="Cleanup"
-                        onAction={() => setMaintenanceOpen(true)}
-                      />
-                      <MetricCard
-                        label="Disk"
-                        value={`${systemStats.diskUsage.toFixed(1)}%`}
-                        icon={<Database className="w-5 h-5" />}
-                        compact
-                        warning={systemStats.diskUsage > DISK_WARN}
-                        warningText={`Above ${DISK_WARN}%`}
-                        actionLabel="Prune"
-                        onAction={() => setMaintenanceOpen(true)}
-                      />
-                      <MetricCard
-                        label="Total memory"
-                        value={systemStats.memoryTotal}
-                        icon={<MemoryStick className="w-5 h-5" />}
-                        compact
-                      />
-                      <MetricCard
-                        label="Total disk"
-                        value={systemStats.diskTotal}
-                        icon={<HardDrive className="w-5 h-5" />}
-                        compact
-                      />
-                      <MetricCard
-                        label="Networks"
-                        value={systemStats.networks}
-                        icon={<Network className="w-5 h-5" />}
-                        compact
-                        warning={networks.length > NETWORK_WARN}
-                        warningText={`More than ${NETWORK_WARN}`}
-                        actionLabel="Prune"
-                        onAction={() => setMaintenanceOpen(true)}
-                      />
-                    </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <ResourceGauge
+                      label="CPU"
+                      percent={systemStats.cpuUsage}
+                      icon={<Cpu />}
+                      detail={systemInfo?.cpus ? `${systemInfo.cpus} cores` : undefined}
+                      warnAt={CPU_WARN}
+                      actionLabel="Cleanup"
+                      onAction={openCleanup}
+                    />
+                    <ResourceGauge
+                      label="Memory"
+                      percent={systemStats.memoryUsage}
+                      icon={<MemoryStick />}
+                      detail={`of ${systemStats.memoryTotal}`}
+                      warnAt={MEM_WARN}
+                      actionLabel="Cleanup"
+                      onAction={openCleanup}
+                    />
+                    <ResourceGauge
+                      label="Disk"
+                      percent={systemStats.diskUsage}
+                      icon={<Database />}
+                      detail={`of ${systemStats.diskTotal}`}
+                      warnAt={DISK_WARN}
+                      actionLabel="Prune"
+                      onAction={openCleanup}
+                    />
                   </div>
 
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-2">System overview</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-                      <MetricCard
-                        label="Containers"
-                        value={systemStats.containers.total}
-                        icon={<Container className="w-5 h-5" />}
-                        compact
-                        pulse={systemStats.containers.running > 0}
-                      />
-                      <MetricCard
-                        label="Running"
-                        value={systemStats.containers.running}
-                        icon={<Play className="w-5 h-5" />}
-                        compact
-                      />
-                      <MetricCard
-                        label="Stopped"
-                        value={systemStats.containers.stopped}
-                        icon={<StopCircle className="w-5 h-5" />}
-                        compact
-                        warning={stoppedCount > ZOMBIE_WARN}
-                        warningText={`More than ${ZOMBIE_WARN}`}
-                        actionLabel="Prune"
-                        onAction={() => setMaintenanceOpen(true)}
-                      />
-                      <MetricCard
-                        label="Images"
-                        value={systemStats.images}
-                        icon={<ImageIcon className="w-5 h-5" />}
-                        compact
-                      />
-                      <MetricCard
-                        label="Volumes"
-                        value={systemStats.volumes}
-                        icon={<HardDrive className="w-5 h-5" />}
-                        compact
-                      />
-                      <MetricCard
-                        label="Stacks"
-                        value={systemStats.stacks}
-                        icon={<Layers className="w-5 h-5" />}
-                        compact
-                      />
-                    </div>
-                  </div>
+                  <FleetPanel
+                    running={running}
+                    stopped={stopped}
+                    total={total}
+                    stoppedWarning={stopped > ZOMBIE_WARN ? `More than ${ZOMBIE_WARN} stopped` : undefined}
+                    onPrune={openCleanup}
+                    onOpenContainers={goTo('containers')}
+                    inventory={[
+                      { label: 'Stacks', hint: `${stacks.filter(s => s.status === 'running').length} running`, value: systemStats.stacks, icon: <Layers />, onClick: goTo('stacks') },
+                      { label: 'Images', hint: `${images.filter(i => !i.inUse).length} unused`, value: systemStats.images, icon: <ImageIcon />, onClick: goTo('images') },
+                      { label: 'Volumes', hint: `${volumes.filter(v => !v.containers?.length).length} unused`, value: systemStats.volumes, icon: <HardDrive />, onClick: goTo('volumes') },
+                      {
+                        label: 'Networks',
+                        value: systemStats.networks,
+                        icon: <Network />,
+                        onClick: goTo('networks'),
+                        hint: `${networks.filter(n => n.isManuallyCreated).length} custom`,
+                        warning: networks.length > NETWORK_WARN ? `More than ${NETWORK_WARN}` : undefined,
+                      },
+                    ]}
+                  />
                 </>
               )
             })()}

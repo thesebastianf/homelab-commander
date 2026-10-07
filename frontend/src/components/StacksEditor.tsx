@@ -1236,13 +1236,12 @@ export function StacksEditor({
     setYamlError(null)
   }
 
-  const getStatusBadgeVariant = (status: Stack['status']): 'default' | 'outline' | 'destructive' | 'secondary' => {
+  const getStatusBadgeClass = (status: Stack['status']) => {
     switch (status) {
-      case 'running': return 'default'
-      case 'stopped': return 'outline'
-      case 'failed': return 'destructive'
-      case 'deploying': return 'secondary'
-      default: return 'outline'
+      case 'running': return 'border-success/35 bg-success/10 text-success'
+      case 'failed': return 'border-destructive/40 bg-destructive/10 text-destructive'
+      case 'deploying': return 'border-info/35 bg-info/10 text-info'
+      default: return 'text-muted-foreground'
     }
   }
 
@@ -1463,7 +1462,7 @@ export function StacksEditor({
                         <div className="flex-1 min-w-0">
                           <p className="font-mono text-sm truncate font-semibold">{stack.name}</p>
                           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                            <Badge variant={getStatusBadgeVariant(stack.status)} className="text-[10px] px-1.5 py-0 capitalize">
+                            <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 capitalize", getStatusBadgeClass(stack.status))}>
                               {stack.status}
                             </Badge>
                             {stack.services > 0 && (
@@ -1611,7 +1610,7 @@ export function StacksEditor({
                             </Tooltip>
                           </div>
                           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                            <Badge variant={getStatusBadgeVariant(stack.status)} className="text-[10px] px-1.5 py-0 capitalize">
+                            <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 capitalize", getStatusBadgeClass(stack.status))}>
                               {stack.status}
                             </Badge>
                             {stack.services > 0 && (
@@ -2159,12 +2158,12 @@ export function StacksEditor({
                 >
                   {isSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
                 </Button>
-                <span className="ml-2 font-mono text-sm text-muted-foreground">No stack selected</span>
+                <span className="ml-2 text-sm text-muted-foreground">No stack selected</span>
               </div>
               <Card className="flex-1 flex items-center justify-center text-center py-12">
                 <div>
                   <FileCode className="w-14 h-14 mx-auto mb-4 text-muted-foreground opacity-40" />
-                  <p className="text-lg font-mono text-muted-foreground">No stack selected</p>
+                  <p className="text-lg font-medium text-muted-foreground">No stack selected</p>
                   <p className="text-sm text-muted-foreground mt-2">Select a stack from the list or create a new one</p>
                 </div>
               </Card>
@@ -2187,7 +2186,7 @@ export function StacksEditor({
                     {isSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
                   </Button>
                   <h2 className="text-lg font-mono font-bold truncate">{selectedStack.name}</h2>
-                  <Badge variant={getStatusBadgeVariant(selectedStack.status)} className="capitalize shrink-0">
+                  <Badge variant="outline" className={cn("capitalize shrink-0", getStatusBadgeClass(selectedStack.status))}>
                     {selectedStack.status}
                   </Badge>
                   <Badge variant="outline" className="text-xs shrink-0">

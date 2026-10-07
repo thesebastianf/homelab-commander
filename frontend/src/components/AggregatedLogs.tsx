@@ -126,7 +126,7 @@ export function AggregatedLogs({ logs: liveLogs, onRefresh, isRefreshing }: Aggr
       <div className="p-4 border-b border-border">
         <div className="flex items-start justify-between gap-3 mb-1">
           <div className="min-w-0">
-            <h3 className="font-semibold text-base">Aggregated logs</h3>
+            <h3 className="section-heading font-display text-base font-semibold uppercase tracking-[0.05em]">Aggregated logs</h3>
             <p className="text-sm text-muted-foreground">Recent output from all running containers</p>
           </div>
           <div className="flex items-center gap-1 shrink-0">
