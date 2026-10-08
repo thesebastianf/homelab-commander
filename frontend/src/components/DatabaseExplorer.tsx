@@ -79,7 +79,7 @@ export function DatabaseExplorer() {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Database className="w-5 h-5 text-primary" />
-        <h2 className="text-lg font-semibold font-mono">Database Explorer</h2>
+        <h2 className="text-lg font-semibold">Database Explorer</h2>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

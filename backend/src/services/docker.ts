@@ -209,8 +209,7 @@ export async function listImages() {
 
   return images.map(img => ({
     id: img.Id.replace('sha256:', '').slice(0, 12),
-    repository: img.RepoTags?.[0]?.split(':')[0] || '<none>',
-    tag: img.RepoTags?.[0]?.split(':')[1] || '<none>',
+    ...splitRepoTag(img.RepoTags?.[0]),
     size: formatBytes(img.Size),
     created: new Date(img.Created * 1000).toISOString(),
     inUse: usedImages.has(img.Id),
@@ -510,6 +509,14 @@ export async function listComposeProjects() {
 
 // ---- Helpers ----
 
+/** Splits "registry:5000/repo:tag" into repository and tag (the tag never contains a "/"). */
+function splitRepoTag(repoTag: string | undefined): { repository: string; tag: string } {
+  if (!repoTag || repoTag === '<none>:<none>') return { repository: '<none>', tag: '<none>' };
+  const idx = repoTag.lastIndexOf(':');
+  if (idx <= 0 || repoTag.slice(idx + 1).includes('/')) return { repository: repoTag, tag: 'latest' };
+  return { repository: repoTag.slice(0, idx), tag: repoTag.slice(idx + 1) };
+}
+
 function mapContainer(c: Dockerode.ContainerInfo) {
   const ports = (c.Ports || []).map(p =>
     p.PublicPort ? `${p.PublicPort}:${p.PrivatePort}/${p.Type}` : `${p.PrivatePort}/${p.Type}`
@@ -524,6 +531,7 @@ function mapContainer(c: Dockerode.ContainerInfo) {
     created: new Date(c.Created * 1000).toISOString(),
     ports,
     restartPolicy: (c as any).HostConfig?.RestartPolicy?.Name || '',
+    project: c.Labels?.['com.docker.compose.project'] || undefined,
     cpu: 0,
     memory: 0,
     network: { rx: 0, tx: 0, totalRx: 0, totalTx: 0 },

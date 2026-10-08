@@ -4,28 +4,30 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Trash2, Search } from 'lucide-react'
+import { Loader2, Trash2, Search } from 'lucide-react'
 import type { Volume } from '@/lib/types'
 
 interface VolumeCardProps {
   volume: Volume
   onRemove: () => void
   onInspect: () => void
+  removing?: boolean
 }
 
-export function VolumeCard({ volume, onRemove, onInspect }: VolumeCardProps) {
+export function VolumeCard({ volume, onRemove, onInspect, removing }: VolumeCardProps) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const isInUse = volume.containers.length > 0
   const isOrphaned = !isInUse
 
   return (
     <>
-    <Card className="card-surface lift p-4 rounded-xl">
+    <Card className="card-surface lift p-4 rounded-lg">
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex-1 min-w-0">
           <h3 className="font-mono font-semibold text-sm truncate">{volume.name}</h3>
           <div className="flex items-center gap-2 mt-1">
             <Badge variant="outline" className="font-mono text-xs">{volume.driver}</Badge>
+            {!isInUse && <Badge variant="outline" className="text-xs text-muted-foreground">Unused</Badge>}
             {volume.size && <span className="text-xs text-muted-foreground">{volume.size}</span>}
           </div>
         </div>
@@ -61,6 +63,7 @@ export function VolumeCard({ volume, onRemove, onInspect }: VolumeCardProps) {
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
+            <span tabIndex={isInUse ? 0 : undefined}>
             <Button
               onClick={() => setConfirmOpen(true)}
               size="sm"
@@ -70,10 +73,11 @@ export function VolumeCard({ volume, onRemove, onInspect }: VolumeCardProps) {
                   ? 'h-7 px-2 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive'
                   : 'h-7 px-2 text-xs text-muted-foreground'
               }
-              disabled={isInUse}
+              disabled={isInUse || removing}
             >
-              <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
+              {removing ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 mr-1" />} Remove
             </Button>
+            </span>
           </TooltipTrigger>
           <TooltipContent>
             <p className="font-mono text-xs">docker volume rm {volume.name}</p>

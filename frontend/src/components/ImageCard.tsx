@@ -4,13 +4,15 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Download, Trash2 } from 'lucide-react'
+import { Download, Loader2, Trash2 } from 'lucide-react'
 import type { Image } from '@/lib/types'
 
 interface ImageCardProps {
   image: Image
   onPull: () => void
   onRemove: () => void
+  pulling?: boolean
+  removing?: boolean
 }
 
 function formatRelativeTime(isoDate: string): string {
@@ -27,13 +29,13 @@ function formatRelativeTime(isoDate: string): string {
   return `${Math.floor(months / 12)} year${Math.floor(months / 12) !== 1 ? 's' : ''} ago`
 }
 
-export function ImageCard({ image, onPull, onRemove }: ImageCardProps) {
+export function ImageCard({ image, onPull, onRemove, pulling, removing }: ImageCardProps) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const isDangling = image.repository === '<none>' || image.tag === '<none>'
 
   return (
     <>
-    <Card className="card-surface lift p-4 rounded-xl">
+    <Card className="card-surface lift p-4 rounded-lg">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
           <h3 className="font-mono font-semibold text-sm truncate">{isDangling ? 'untagged-image' : image.repository}</h3>
@@ -56,26 +58,37 @@ export function ImageCard({ image, onPull, onRemove }: ImageCardProps) {
         <TooltipProvider delayDuration={400}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button onClick={onPull} size="sm" variant="outline" className="h-7 px-2 text-xs">
-              <Download className="w-3.5 h-3.5 mr-1" /> Pull
-            </Button>
+            <span tabIndex={isDangling ? 0 : undefined}>
+              <Button onClick={onPull} size="sm" variant="outline" className="h-7 px-2 text-xs" disabled={isDangling || pulling}>
+                {pulling ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Download className="w-3.5 h-3.5 mr-1" />}
+                {pulling ? 'Pulling...' : 'Pull'}
+              </Button>
+            </span>
           </TooltipTrigger>
           <TooltipContent>
-            <p className="font-mono text-xs">docker pull {image.repository}:{image.tag}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Pull the latest version of this image</p>
+            {isDangling ? (
+              <p className="text-xs">Untagged images have no reference to pull</p>
+            ) : (
+              <>
+                <p className="font-mono text-xs">docker pull {image.repository}:{image.tag}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Pull the latest version of this image</p>
+              </>
+            )}
           </TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              onClick={() => setConfirmOpen(true)}
-              size="sm"
-              variant="outline"
-              className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-              disabled={image.inUse}
-            >
-              <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
-            </Button>
+            <span tabIndex={image.inUse ? 0 : undefined}>
+              <Button
+                onClick={() => setConfirmOpen(true)}
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                disabled={image.inUse || removing}
+              >
+                {removing ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 mr-1" />} Remove
+              </Button>
+            </span>
           </TooltipTrigger>
           <TooltipContent>
             <p className="font-mono text-xs">docker rmi {image.id}</p>
@@ -91,7 +104,7 @@ export function ImageCard({ image, onPull, onRemove }: ImageCardProps) {
         <AlertDialogHeader>
           <AlertDialogTitle>Remove Image?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete the image <span className="font-mono font-semibold">{image.repository}:{image.tag}</span>.
+            This will permanently delete the image <span className="font-mono font-semibold">{isDangling ? image.id : `${image.repository}:${image.tag}`}</span>.
             Containers using this image will continue to run but the image cannot be recovered without re-pulling.
           </AlertDialogDescription>
         </AlertDialogHeader>

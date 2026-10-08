@@ -120,7 +120,7 @@ export function StacksList({
     <div className="grid grid-cols-12 gap-6 h-full">
       <div className="col-span-4 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold font-mono text-muted-foreground">STACKS</h3>
+          <h3 className="text-sm font-semibold text-muted-foreground">STACKS</h3>
           <Badge variant="outline" className="font-mono">
             {filteredStacks.length}/{stacks.length}
           </Badge>
@@ -133,7 +133,7 @@ export function StacksList({
               placeholder="Search stacks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-9 font-mono"
+              className="pl-9 pr-9"
             />
             {searchQuery && (
               <Button

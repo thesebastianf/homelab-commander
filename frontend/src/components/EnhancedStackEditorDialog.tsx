@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { copyToClipboard } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -314,8 +315,7 @@ export function EnhancedStackEditorDialog({
               <Badge variant="outline" className="font-mono text-xs gap-1">
                 {stackPath}
                 <Copy className="w-3 h-3 cursor-pointer" onClick={() => {
-                  navigator.clipboard.writeText(stackPath)
-                  toast.success('Path copied')
+                  copyToClipboard(stackPath, 'Path copied')
                 }} />
               </Badge>
             </div>

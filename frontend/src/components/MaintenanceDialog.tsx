@@ -146,7 +146,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
       >
         <DialogHeader>
           <div ref={focusRef} tabIndex={-1} className="outline-none" />
-          <DialogTitle className="flex items-center gap-2 font-mono">
+          <DialogTitle className="flex items-center gap-2">
             <Wrench className="w-5 h-5 text-primary" />
             System Maintenance
           </DialogTitle>
@@ -158,7 +158,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
         <div className="space-y-3 mt-2">
           {/* Compact System Health Row */}
           <div className={`rounded-lg border p-3 ${isHealthy ? 'border-success/30 bg-success/[0.03]' : 'border-warning/30 bg-warning/[0.03]'}`}>
-            <div className="grid grid-cols-4 gap-4 items-start">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 items-start">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[11px] text-muted-foreground">Disk {diskPct.toFixed(1)}%</span>
@@ -193,12 +193,12 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
           </div>
 
           {/* Row 1: Images | Volumes | Stopped Containers */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {/* Purge Unused Images */}
             <div className="rounded-lg border border-l-4 border-info/20 border-l-info bg-card p-3 flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <ImageIcon className="w-4 h-4 text-info shrink-0" />
-                <h4 className="font-mono font-semibold text-xs">Purge Unused Images</h4>
+                <h4 className="font-semibold text-xs">Purge Unused Images</h4>
               </div>
               <p className="text-[11px] text-muted-foreground">Remove images not associated with any container.</p>
               {dfData?.images && (
@@ -226,7 +226,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
             <div className="rounded-lg border border-l-4 border-primary/20 border-l-primary bg-card p-3 flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <HardDrive className="w-4 h-4 text-primary shrink-0" />
-                <h4 className="font-mono font-semibold text-xs">Prune Unused Volumes</h4>
+                <h4 className="font-semibold text-xs">Prune Unused Volumes</h4>
               </div>
               <p className="text-[11px] text-muted-foreground">Remove volumes not referenced by any container.</p>
               {dfData?.volumes && (
@@ -255,14 +255,14 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Box className="w-4 h-4 text-warning shrink-0" />
-                  <h4 className="font-mono font-semibold text-xs">Remove Stopped</h4>
+                  <h4 className="font-semibold text-xs">Remove Stopped</h4>
                 </div>
                 {zombieWarning && <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" />}
               </div>
               <p className="text-[11px] text-muted-foreground">Clean up stopped / exited containers.</p>
               <div>
                 <p className="text-[10px] text-muted-foreground">To remove</p>
-                <p className={`text-lg font-mono font-bold ${zombieWarning ? 'text-warning' : 'text-muted-foreground'}`}>{stoppedContainers.length} containers</p>
+                <p className={`text-lg font-mono font-bold ${zombieWarning ? 'text-warning' : 'text-muted-foreground'}`}>{stoppedContainers.length} {stoppedContainers.length === 1 ? 'container' : 'containers'}</p>
               </div>
               {stoppedContainers.length > 0 ? (
                 <div className="space-y-0.5 max-h-12 overflow-y-auto">
@@ -291,12 +291,12 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
           </div>
 
           {/* Row 2: Full Prune | Networks | Docker Connectivity */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {/* Full System Prune */}
             <div className="rounded-lg border border-l-4 border-destructive/30 border-l-destructive bg-destructive/[0.03] p-3 flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
-                <h4 className="font-mono font-semibold text-xs text-destructive">Full System Prune</h4>
+                <h4 className="font-semibold text-xs text-destructive">Full System Prune</h4>
               </div>
               <p className="text-[11px] text-muted-foreground">Remove ALL unused images, volumes, containers, and networks.</p>
               <div>
@@ -320,7 +320,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Network className="w-4 h-4 text-warning shrink-0" />
-                  <h4 className="font-mono font-semibold text-xs">Prune Networks</h4>
+                  <h4 className="font-semibold text-xs">Prune Networks</h4>
                 </div>
                 {networkPoolWarning && (
                   <Badge className="text-[10px] bg-warning/15 text-warning border-warning/30 py-0">Full!</Badge>
@@ -355,7 +355,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
             <div className="rounded-lg border border-l-4 border-muted/30 border-l-muted bg-card p-3 flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <Wifi className="w-4 h-4 text-muted-foreground shrink-0" />
-                <h4 className="font-mono font-semibold text-xs">Docker Connectivity</h4>
+                <h4 className="font-semibold text-xs">Docker Connectivity</h4>
               </div>
               <p className="text-[11px] text-muted-foreground">Test the connection to the Docker daemon via /var/run/docker.sock.</p>
               <div className="flex items-center gap-2 min-h-[1.5rem]">

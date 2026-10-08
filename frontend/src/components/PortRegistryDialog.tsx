@@ -39,7 +39,7 @@ interface PortRegistryDialogProps {
   containers: Container[]
   stacks: Stack[]
   reservations?: PortReservation[]
-  onCreateReservation?: (r: Omit<PortReservation, 'id' | 'createdAt'>) => void
+  onCreateReservation?: (r: Omit<PortReservation, 'id' | 'createdAt'>) => Promise<unknown>
   onDeleteReservation?: (id: string) => void
 }
 
@@ -84,10 +84,23 @@ export function PortRegistryDialog({
       })
     })
 
-    // Include stack-level host ports as additional source data.
+    // Host ports already published by a stack's own containers must not count as a second user.
+    // Compose project names are derived from the stack name the same way the backend does it.
+    const toProjectName = (name: string) => name.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 63) || 'stack'
+    const publishedByProject = new Set<string>()
+    containers.forEach(c => {
+      if (!c.project) return
+      c.ports?.forEach(p => {
+        const hostMatch = p.match(/^(\d+):/)
+        if (hostMatch) publishedByProject.add(`${c.project}:${parseInt(hostMatch[1], 10)}`)
+      })
+    })
+
+    // Include stack-level host ports as additional source data (e.g. for stacks that are not running).
     stacks.forEach(s => {
       if (s.ports) {
         s.ports.forEach(port => {
+          if (publishedByProject.has(`${toProjectName(s.name)}:${port}`)) return
           const key = `${port}:Stack: ${s.name}`
           if (!seen.has(key)) {
             seen.add(key)
@@ -125,7 +138,7 @@ export function PortRegistryDialog({
     groups: [...new Set(reservations.map(r => r.groupName))].length,
   }
 
-  const handleAddReservation = () => {
+  const handleAddReservation = async () => {
     const start = parseInt(newStart)
     const end = parseInt(newEnd)
     if (isNaN(start) || isNaN(end) || start < 1 || end > 65535 || start > end) {
@@ -136,17 +149,22 @@ export function PortRegistryDialog({
       toast.error('Name is required')
       return
     }
-    onCreateReservation?.({
-      name: newName.trim(),
-      portRangeStart: start,
-      portRangeEnd: end,
-      groupName: newGroup,
-      color: newColor,
-    })
-    setNewName('')
-    setNewStart('')
-    setNewEnd('')
-    toast.success(`Range ${start}-${end} reserved`)
+    if (!onCreateReservation) return
+    try {
+      await onCreateReservation({
+        name: newName.trim(),
+        portRangeStart: start,
+        portRangeEnd: end,
+        groupName: newGroup,
+        color: newColor,
+      })
+      setNewName('')
+      setNewStart('')
+      setNewEnd('')
+      toast.success(`Range ${start}-${end} reserved`)
+    } catch (error: any) {
+      toast.error(`Failed to reserve range: ${error?.message || 'Unknown error'}`)
+    }
   }
 
   const applyPreset = (preset: typeof RANGE_PRESETS[number]) => {

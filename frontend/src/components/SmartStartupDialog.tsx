@@ -241,7 +241,7 @@ export function SmartStartupDialog({ open, onOpenChange, stacks }: SmartStartupD
       <DialogContent className="w-[90vw] sm:max-w-4xl h-[90vh] overflow-hidden flex flex-col">
         <div className="flex h-full min-h-0 flex-col">
           <DialogHeader className="shrink-0 mb-4">
-            <DialogTitle className="flex items-center gap-2 font-mono">
+            <DialogTitle className="flex items-center gap-2">
               <Zap className="w-5 h-5 text-primary" />
               Smart Startup
             </DialogTitle>

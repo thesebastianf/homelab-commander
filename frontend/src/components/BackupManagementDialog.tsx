@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { copyToClipboard } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -149,7 +150,7 @@ function StackBackupItem({ stack }: { stack: Stack }) {
       <AccordionTrigger className="hover:no-underline">
         <div className="flex items-center gap-3 flex-1">
           <span className="font-mono text-sm">{stack.name}</span>
-          <Badge variant="outline" className="text-[10px]">{stack.services} services</Badge>
+          <Badge variant="outline" className="text-[10px]">{stack.services} {stack.services === 1 ? 'service' : 'services'}</Badge>
           {cfg.enabled && <Badge className="text-[10px] bg-primary/20 text-primary">Enabled</Badge>}
         </div>
       </AccordionTrigger>
@@ -534,7 +535,7 @@ echo "Backup sync completed at \$(date)"
                 inside the THC container, which maps to the <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">hlc_backups</span> named Docker volume on your host.
                 Do <strong>not</strong> change this internal path — control where it lands on your host by editing your <span className="font-mono text-xs">docker-compose.yml</span> volume binding instead.
               </p>
-              <div className="mt-1 rounded-md border border-border/50 bg-black/50 p-2">
+              <div className="mt-1 rounded-md border border-border/50 terminal-surface p-2">
                 <pre className="font-mono text-xs text-muted-foreground whitespace-pre">{`volumes:\n  hlc_backups:\n    driver: local\n    driver_opts:\n      type: none\n      o: bind\n      device: /your/host/backup/path`}</pre>
               </div>
             </Card>
@@ -548,8 +549,7 @@ echo "Backup sync completed at \$(date)"
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="outline" size="sm" onClick={() => {
-                      navigator.clipboard.writeText(nasScript)
-                      toast.success('Script copied to clipboard')
+                      copyToClipboard(nasScript, 'Script copied to clipboard')
                     }}>
                       <Copy className="w-3.5 h-3.5 mr-1" /> Copy
                     </Button>

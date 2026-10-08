@@ -1,6 +1,6 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { mkdir, writeFile, readdir, rm, stat, cp } from 'fs/promises';
+import { mkdir, writeFile, readdir, rm, stat, cp, access } from 'fs/promises';
 import { join } from 'path';
 import Dockerode from 'dockerode';
 import { pool } from '../database.js';
@@ -346,41 +346,118 @@ async function resolveSelectedDatabaseNames(stackName: string, backupConfig: any
     .map(db => db.serviceName);
 }
 
-async function enforceRetention(stackName: string, config: any): Promise<void> {
-  const backupDir = config.backupsPath || configPath();
-  try {
-    const entries = await readdir(backupDir);
-    const relevantEntries = entries.filter((entry) => entry.startsWith(`${stackName}_`));
-    
-    // Retention days is used as retention count in frontend ("Keep N Last Backups")
-    const retentionCount = config.retention_days || 7;
-    if (relevantEntries.length <= retentionCount) return;
+const BACKUP_DIR_TIMESTAMP = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/;
 
-    const entriesWithStats = await Promise.all(
-      relevantEntries.map(async (entry) => {
-        try {
-          const s = await stat(join(backupDir, entry));
-          return { entry, mtimeMs: s.mtimeMs };
-        } catch {
-          return { entry, mtimeMs: 0 };
-        }
-      })
-    );
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
-    // Sort by mtimeMs descending (newest first)
-    entriesWithStats.sort((a, b) => b.mtimeMs - a.mtimeMs);
+/** Lists this stack's backup folders ("<stack>_YYYYMMDD-HHMMSS"), newest first. */
+async function listStackBackupDirs(backupRoot: string, stackName: string): Promise<Array<{ entry: string; time: Date }>> {
+  // Match the exact naming pattern so stack "media" never matches "media_server_..." folders
+  const pattern = new RegExp(`^${escapeRegExp(stackName)}_(\\d{8}-\\d{6})$`);
+  const entries = await readdir(backupRoot);
+  const result: Array<{ entry: string; time: Date }> = [];
+  for (const entry of entries) {
+    const match = entry.match(pattern);
+    const ts = match?.[1].match(BACKUP_DIR_TIMESTAMP);
+    if (!ts) continue;
+    const [, y, mo, d, h, mi, se] = ts;
+    result.push({ entry, time: new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +se)) });
+  }
+  return result.sort((a, b) => b.time.getTime() - a.time.getTime());
+}
 
-    // Keep the first `retentionCount`
-    const toDelete = entriesWithStats.slice(retentionCount);
-
-    for (const item of toDelete) {
-      if (item.mtimeMs === 0) continue;
-      try {
-        await rm(join(backupDir, item.entry), { recursive: true });
-        logger.info({ backupDir, entry: item.entry }, 'Old backup removed by retention policy');
-      } catch { /* skip */ }
+/** Picks which backups to keep for a grandfather-father-son policy. Input must be newest first. */
+function selectAdvancedRetention(backups: Array<{ entry: string; time: Date }>, policy: Record<string, unknown>): Set<string> {
+  const num = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = Number(policy?.[key]);
+      if (Number.isFinite(value) && value >= 0) return value;
     }
-  } catch { /* directory may not exist */ }
+    return 0;
+  };
+  const keep = new Set<string>();
+  backups.slice(0, num('keepLast', 'last')).forEach((b) => keep.add(b.entry));
+
+  const buckets: Array<[number, (d: Date) => string]> = [
+    [num('keepHourly', 'hourly'), (d) => d.toISOString().slice(0, 13)],
+    [num('keepDaily', 'daily'), (d) => d.toISOString().slice(0, 10)],
+    [num('keepWeekly', 'weekly'), (d) => {
+      const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - ((d.getUTCDay() + 6) % 7)));
+      return monday.toISOString().slice(0, 10);
+    }],
+    [num('keepMonthly', 'monthly'), (d) => d.toISOString().slice(0, 7)],
+    [num('keepYearly', 'yearly'), (d) => d.toISOString().slice(0, 4)],
+  ];
+  for (const [limit, bucketOf] of buckets) {
+    const seen = new Set<string>();
+    for (const backup of backups) {
+      if (seen.size >= limit) break;
+      const bucket = bucketOf(backup.time);
+      if (seen.has(bucket)) continue;
+      seen.add(bucket); // newest backup in each period wins
+      keep.add(backup.entry);
+    }
+  }
+  return keep;
+}
+
+async function enforceRetention(stackName: string, backupConfig: any): Promise<void> {
+  const backupRoot = configPath();
+  let backups: Array<{ entry: string; time: Date }>;
+  try {
+    backups = await listStackBackupDirs(backupRoot, stackName);
+  } catch {
+    return; // directory may not exist
+  }
+
+  let keep: Set<string>;
+  if (backupConfig.use_advanced_retention && backupConfig.retention_policy) {
+    keep = selectAdvancedRetention(backups, backupConfig.retention_policy);
+  } else {
+    // retention_days is used as a count in the UI ("Keep N last backups")
+    const retentionCount = Math.max(1, Number(backupConfig.retention_days) || 7);
+    keep = new Set(backups.slice(0, retentionCount).map((b) => b.entry));
+  }
+  // Never delete the newest backup, whatever the policy says
+  if (backups[0]) keep.add(backups[0].entry);
+
+  const removedPaths: string[] = [];
+  for (const backup of backups) {
+    if (keep.has(backup.entry)) continue;
+    const fullPath = join(backupRoot, backup.entry);
+    try {
+      await rm(fullPath, { recursive: true });
+      removedPaths.push(fullPath);
+      logger.info({ backupRoot, entry: backup.entry }, 'Old backup removed by retention policy');
+    } catch (err) {
+      logger.warn({ err, entry: backup.entry }, 'Failed to remove old backup');
+    }
+  }
+
+  if (removedPaths.length > 0) {
+    // Keep job history in line with what is on disk, so backup counts reflect real files
+    await pool.query('DELETE FROM backup_jobs WHERE backup_path = ANY($1::text[])', [removedPaths]);
+  }
+}
+
+/** Removes completed job records whose backup folder no longer exists (e.g. deleted by hand or by older retention runs). */
+export async function reconcileBackupJobs(): Promise<number> {
+  const { rows } = await pool.query(`SELECT id, backup_path FROM backup_jobs WHERE status = 'completed' AND backup_path IS NOT NULL`);
+  const missing: string[] = [];
+  for (const row of rows) {
+    try {
+      await access(row.backup_path);
+    } catch {
+      missing.push(String(row.id));
+    }
+  }
+  if (missing.length > 0) {
+    await pool.query('DELETE FROM backup_jobs WHERE id = ANY($1::uuid[])', [missing]);
+    logger.info({ removed: missing.length }, 'Removed backup job records without files on disk');
+  }
+  return missing.length;
 }
 
 export async function detectStackVolumeNames(stackName: string): Promise<string[]> {

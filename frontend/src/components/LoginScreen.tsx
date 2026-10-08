@@ -50,7 +50,7 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
             className="w-20 h-20 object-contain"
           />
           <div className="text-center">
-            <h1 className="text-2xl font-bold font-mono tracking-tight">
+            <h1 className="text-2xl font-bold tracking-tight">
               The Homelab Commander
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
@@ -59,7 +59,7 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
           </div>
         </div>
 
-        <Card className="w-full">
+        <Card className="w-full flex flex-col gap-4 py-6">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Lock className="w-4 h-4" />

@@ -150,7 +150,7 @@ export function ContainerShellDialog({
         <div className="px-4 pt-4 pb-2 border-b shrink-0">
           <div className="flex items-start justify-between gap-3 mb-2">
             <div className="flex-1 min-w-0">
-              <DialogTitle className="font-mono text-sm">Interactive Shell - {shellLabel}</DialogTitle>
+              <DialogTitle className="text-sm">Interactive Shell - {shellLabel}</DialogTitle>
               <DialogDescription className="text-xs font-mono truncate">
                 {image || 'image unknown'}
               </DialogDescription>
@@ -168,7 +168,7 @@ export function ContainerShellDialog({
             )}
           </div>
         </div>
-        <div className="h-full min-h-0 bg-black/90 p-3">
+        <div className="h-full min-h-0 terminal-surface p-3">
           <div ref={hostRef} className="h-full w-full rounded border border-border/40 overflow-hidden" />
         </div>
       </DialogContent>

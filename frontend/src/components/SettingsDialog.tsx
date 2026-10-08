@@ -254,7 +254,7 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                 </div>
               </Card>
 
-              <h3 className="font-mono font-semibold text-sm flex items-center gap-2">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
                 <CloudDownload className="w-[18px] h-[18px]" />
                 Update Management
               </h3>
@@ -611,7 +611,7 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-mono font-semibold text-base">Home Assistant Integration</h3>
+                      <h3 className="font-semibold text-base">Home Assistant Integration</h3>
                       <Badge variant={localSettings.homeAssistant?.enabled ? 'default' : 'secondary'}>
                         {localSettings.homeAssistant?.enabled ? 'Connected' : 'Disabled'}
                       </Badge>
@@ -683,7 +683,7 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Github className="w-4 h-4" />
-                  <h3 className="font-mono font-semibold text-base">Git Integration</h3>
+                  <h3 className="font-semibold text-base">Git Integration</h3>
                   <Badge variant={localSettings.gitIntegration?.enabled ? 'default' : 'secondary'}>
                     {localSettings.gitIntegration?.enabled ? 'Enabled' : 'Disabled'}
                   </Badge>
@@ -754,7 +754,7 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Link className="w-4 h-4" />
-                  <h3 className="font-mono font-semibold text-base">gethomepage.dev Service Widget</h3>
+                  <h3 className="font-semibold text-base">gethomepage.dev Service Widget</h3>
                   <Badge variant={localSettings.homepageWidget?.enabled ? 'default' : 'secondary'}>
                     {localSettings.homepageWidget?.enabled ? 'Enabled' : 'Disabled'}
                   </Badge>
@@ -1036,7 +1036,7 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
 
           <TabsContent value="helpers" className="space-y-4 mt-6">
             <div className="space-y-2">
-              <h3 className="font-mono font-semibold text-sm flex items-center gap-2">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
                 <Clipboard className="w-[18px] h-[18px]" />
                 Copy-Paste Helpers
               </h3>
@@ -1099,7 +1099,7 @@ export function SettingsDialog({ open, onOpenChange, settings, onSave }: Setting
 
           <TabsContent value="monitoring" className="space-y-4 mt-6">
             <div className="space-y-2">
-              <h3 className="font-mono font-semibold text-sm flex items-center gap-2">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
                 <AlertTriangle className="w-[18px] h-[18px]" />
                 Warning Thresholds
               </h3>

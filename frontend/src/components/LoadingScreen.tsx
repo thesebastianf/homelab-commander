@@ -8,7 +8,7 @@ export function LoadingScreen() {
           className="w-32 h-32 object-contain animate-pulse"
         />
         <div className="text-center">
-          <h1 className="text-2xl font-bold font-mono tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight">
             The Homelab Commander
           </h1>
           <p className="text-sm text-muted-foreground mt-2">

@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { pool } from '../database.js';
-import { runBackup } from './backups.js';
+import { runBackup, reconcileBackupJobs } from './backups.js';
 import { logger } from '../logger.js';
 
 const scheduledJobs = new Map<string, cron.ScheduledTask>();
@@ -18,6 +18,9 @@ export async function initBackupScheduler(): Promise<void> {
   }
 
   logger.info({ count: rows.length }, 'Backup scheduler initialized');
+
+  // Older versions kept job records after retention deleted the files, which inflated backup counts
+  await reconcileBackupJobs().catch((err) => logger.warn({ err }, 'Backup job reconciliation failed'));
 }
 
 export function scheduleBackup(config: any): void {

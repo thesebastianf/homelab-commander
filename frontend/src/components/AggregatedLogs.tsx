@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { Card } from '@/components/ui/card'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,16 +12,31 @@ import { Search, RotateCw, Pause, Play, AlertTriangle, Info, X, Bug, CheckCircle
 interface AggregatedLogsProps {
   logs: LogEntry[]
   onRefresh?: () => void
+  isRefreshing?: boolean
 }
 
-export function AggregatedLogs({ logs, onRefresh }: AggregatedLogsProps) {
-  const [filteredLogs, setFilteredLogs] = useState<LogEntry[]>(logs)
+export function AggregatedLogs({ logs: liveLogs, onRefresh, isRefreshing }: AggregatedLogsProps) {
+  const [filteredLogs, setFilteredLogs] = useState<LogEntry[]>(liveLogs)
   const [searchQuery, setSearchQuery] = useState('')
   const [levelFilter, setLevelFilter] = useState<string>('warn')
   const [containerFilter, setContainerFilter] = useState<string>('all')
   const [isPaused, setIsPaused] = useState(false)
+  // While paused, keep showing the snapshot taken at pause time instead of the live feed
+  const [pausedLogs, setPausedLogs] = useState<LogEntry[] | null>(null)
+  const logs = isPaused && pausedLogs ? pausedLogs : liveLogs
   const scrollRef = useRef<HTMLDivElement>(null)
-  const [autoScroll, setAutoScroll] = useState(true)
+  // Only follow new lines while the user is already at the bottom, so scrolling up to read isn't interrupted
+  const stickToBottomRef = useRef(true)
+
+  const togglePause = () => {
+    if (isPaused) {
+      setPausedLogs(null)
+      setIsPaused(false)
+    } else {
+      setPausedLogs(liveLogs)
+      setIsPaused(true)
+    }
+  }
 
   const uniqueContainers = Array.from(new Set(logs.map(log => log.container)))
 
@@ -57,18 +71,24 @@ export function AggregatedLogs({ logs, onRefresh }: AggregatedLogsProps) {
   }, [logs, searchQuery, levelFilter, containerFilter])
 
   useEffect(() => {
-    if (autoScroll && scrollRef.current && !isPaused) {
+    if (stickToBottomRef.current && scrollRef.current && !isPaused) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [filteredLogs, autoScroll, isPaused])
+  }, [filteredLogs, isPaused])
+
+  const handleScroll = () => {
+    const el = scrollRef.current
+    if (!el) return
+    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+  }
 
   const getLevelColor = (level: LogEntry['level']) => {
     switch (level) {
-      case 'error': return 'bg-destructive text-destructive-foreground'
-      case 'warn': return 'bg-warning text-warning-foreground'
-      case 'debug': return 'bg-info text-info-foreground'
+      case 'error': return 'bg-destructive/15 text-destructive border-destructive/25'
+      case 'warn': return 'bg-warning/15 text-warning border-warning/25'
+      case 'debug': return 'bg-info/15 text-info border-info/25'
       case 'info':
-      default: return 'bg-muted text-muted-foreground'
+      default: return 'bg-muted text-muted-foreground border-border'
     }
   }
 
@@ -102,20 +122,28 @@ export function AggregatedLogs({ logs, onRefresh }: AggregatedLogsProps) {
 
   return (
     <TooltipProvider delayDuration={350}>
-    <Card className="p-0 overflow-hidden relative">
-      <div className="p-4 border-b border-border bg-card/50">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="font-mono font-semibold text-lg">Aggregated Logs</h3>
-            <p className="text-sm text-muted-foreground">Real-time logs from all containers</p>
+    <Card className="card-surface p-0 overflow-hidden relative rounded-lg">
+      <div className="p-4 border-b border-border">
+        <div className="flex items-start justify-between gap-3 mb-1">
+          <div className="min-w-0">
+            <h3 className="section-heading font-display text-base font-semibold uppercase tracking-[0.05em]">Aggregated logs</h3>
+            <p className="text-sm text-muted-foreground">Recent output from all running containers</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 shrink-0">
+            {isPaused && (
+              <span className="mr-1 bg-warning text-warning-foreground px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold flex items-center gap-1">
+                <Pause className="w-3 h-3" />
+                PAUSED
+              </span>
+            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button 
                   variant="ghost" 
                   size="icon"
-                  onClick={() => setIsPaused(!isPaused)}
+                  onClick={togglePause}
+                  aria-label={isPaused ? 'Resume' : 'Pause'}
+                  className={cn(isPaused && 'text-warning hover:text-warning')}
                 >
                   {isPaused ? <Play className="w-[18px] h-[18px]" /> : <Pause className="w-[18px] h-[18px]" />}
                 </Button>
@@ -130,42 +158,42 @@ export function AggregatedLogs({ logs, onRefresh }: AggregatedLogsProps) {
                   variant="ghost" 
                   size="icon"
                   onClick={onRefresh}
+                  disabled={!onRefresh || isPaused}
+                  aria-label="Refresh"
                 >
-                  <RotateCw className="w-[18px] h-[18px]" />
+                  <RotateCw className={cn('w-[18px] h-[18px]', isRefreshing && 'animate-spin')} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p className="text-xs">Re-fetch logs from backend and rebuild filters</p>
+                <p className="text-xs">{isPaused ? 'Resume to refresh' : 'Re-fetch logs from all running containers'}</p>
               </TooltipContent>
             </Tooltip>
           </div>
         </div>
 
-        <div className="flex gap-2 mb-4 flex-wrap">
-          <Badge variant="outline" className="font-mono">
-            Total: {logCounts.total}
-          </Badge>
-          <Badge className="bg-destructive/10 text-destructive border-destructive/20 font-mono">
-            Errors: {logCounts.error}
-          </Badge>
-          <Badge className="bg-warning/10 text-warning border-warning/20 font-mono">
-            Warnings: {logCounts.warn}
-          </Badge>
-          <Badge className="bg-info/10 text-info border-info/20 font-mono">
-            Debug: {logCounts.debug}
-          </Badge>
-        </div>
+        <p className="mb-3 text-xs text-muted-foreground tabular-nums">
+          {logCounts.total} {logCounts.total === 1 ? 'entry' : 'entries'}
+          <span className="mx-1.5">·</span>
+          <span className={cn(logCounts.error > 0 && 'text-destructive')}>{logCounts.error} {logCounts.error === 1 ? 'error' : 'errors'}</span>
+          <span className="mx-1.5">·</span>
+          <span className={cn(logCounts.warn > 0 && 'text-warning')}>{logCounts.warn} {logCounts.warn === 1 ? 'warning' : 'warnings'}</span>
+          <span className="mx-1.5">·</span>
+          {logCounts.info} info
+          <span className="mx-1.5">·</span>
+          {logCounts.debug} debug
+        </p>
 
         <div className="space-y-3">
           <div className="flex gap-2 flex-wrap items-center">
-            <span className="text-xs font-mono text-muted-foreground font-semibold uppercase tracking-wide">Log Level:</span>
+            <span className="text-xs text-muted-foreground font-medium mr-1">Level</span>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant={levelFilter === 'all' ? 'default' : 'outline'}
+                  variant={levelFilter === 'all' ? 'secondary' : 'ghost'}
                   size="sm"
                   onClick={() => setLevelFilter('all')}
-                  className="h-8 gap-1.5 font-mono"
+                  data-active={levelFilter === 'all'}
+                  className={cn("h-8 gap-1.5 text-muted-foreground", "data-[active=true]:text-foreground")}
                 >
                   <CheckCircle className="w-3.5 h-3.5" />
                   All
@@ -176,13 +204,11 @@ export function AggregatedLogs({ logs, onRefresh }: AggregatedLogsProps) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant={levelFilter === 'info' ? 'default' : 'outline'}
+                  variant={levelFilter === 'info' ? 'secondary' : 'ghost'}
                   size="sm"
                   onClick={() => setLevelFilter('info')}
-                  className={cn(
-                    "h-8 gap-1.5 font-mono",
-                    levelFilter === 'info' && "bg-info text-info-foreground hover:bg-info/90"
-                  )}
+                  data-active={levelFilter === 'info'}
+                  className={cn("h-8 gap-1.5 text-muted-foreground", "data-[active=true]:text-foreground")}
                 >
                   <Info className="w-3.5 h-3.5" />
                   Info
@@ -193,13 +219,11 @@ export function AggregatedLogs({ logs, onRefresh }: AggregatedLogsProps) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant={levelFilter === 'warn' ? 'default' : 'outline'}
+                  variant={levelFilter === 'warn' ? 'secondary' : 'ghost'}
                   size="sm"
                   onClick={() => setLevelFilter('warn')}
-                  className={cn(
-                    "h-8 gap-1.5 font-mono",
-                    levelFilter === 'warn' && "bg-warning text-warning-foreground hover:bg-warning/90"
-                  )}
+                  data-active={levelFilter === 'warn'}
+                  className={cn("h-8 gap-1.5 text-muted-foreground", "data-[active=true]:text-foreground")}
                 >
                   <AlertTriangle className="w-3.5 h-3.5" />
                   Warning
@@ -210,13 +234,11 @@ export function AggregatedLogs({ logs, onRefresh }: AggregatedLogsProps) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant={levelFilter === 'error' ? 'default' : 'outline'}
+                  variant={levelFilter === 'error' ? 'secondary' : 'ghost'}
                   size="sm"
                   onClick={() => setLevelFilter('error')}
-                  className={cn(
-                    "h-8 gap-1.5 font-mono",
-                    levelFilter === 'error' && "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  )}
+                  data-active={levelFilter === 'error'}
+                  className={cn("h-8 gap-1.5 text-muted-foreground", "data-[active=true]:text-foreground")}
                 >
                   <X className="w-3.5 h-3.5" />
                   Error
@@ -227,13 +249,11 @@ export function AggregatedLogs({ logs, onRefresh }: AggregatedLogsProps) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant={levelFilter === 'debug' ? 'default' : 'outline'}
+                  variant={levelFilter === 'debug' ? 'secondary' : 'ghost'}
                   size="sm"
                   onClick={() => setLevelFilter('debug')}
-                  className={cn(
-                    "h-8 gap-1.5 font-mono",
-                    levelFilter === 'debug' && "bg-info text-info-foreground hover:bg-info/90"
-                  )}
+                  data-active={levelFilter === 'debug'}
+                  className={cn("h-8 gap-1.5 text-muted-foreground", "data-[active=true]:text-foreground")}
                 >
                   <Bug className="w-3.5 h-3.5" />
                   Debug
@@ -250,11 +270,11 @@ export function AggregatedLogs({ logs, onRefresh }: AggregatedLogsProps) {
                 placeholder="Search logs..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 font-mono text-sm"
+                className="pl-10 text-sm"
               />
             </div>
             <Select value={containerFilter} onValueChange={setContainerFilter}>
-              <SelectTrigger className="w-[180px] font-mono text-sm">
+              <SelectTrigger className="w-full sm:w-[200px] text-sm">
                 <SelectValue placeholder="Container" />
               </SelectTrigger>
               <SelectContent>
@@ -270,52 +290,45 @@ export function AggregatedLogs({ logs, onRefresh }: AggregatedLogsProps) {
         </div>
       </div>
 
-      <ScrollArea className="h-[400px] font-mono text-xs" ref={scrollRef}>
-        <div className="p-4 space-y-1">
+      <div className="min-h-[160px] max-h-[420px] overflow-y-auto font-mono text-xs" ref={scrollRef} onScroll={handleScroll}>
+        <div className="p-3 sm:p-4 space-y-1">
           {filteredLogs.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>No logs found</p>
+            <div className="text-center py-12 text-muted-foreground">
+              <p>{logs.length === 0 ? 'No log output yet' : 'No logs match the current filters'}</p>
             </div>
           ) : (
             filteredLogs.map((log) => (
               <div
                 key={log.id}
                 className={cn(
-                  "flex items-start gap-3 p-2 rounded hover:bg-accent/5 transition-colors",
+                  "flex flex-wrap sm:flex-nowrap items-start gap-x-3 gap-y-1.5 p-2 rounded-md hover:bg-accent/5 transition-colors",
                   log.level === 'error' && "bg-destructive/5",
                   log.level === 'warn' && "bg-warning/5"
                 )}
               >
                 <Badge 
                   className={cn(
-                    "shrink-0 h-6 px-2 gap-1",
+                    "shrink-0 h-6 w-[4.75rem] justify-center px-2 gap-1",
                     getLevelColor(log.level)
                   )}
                 >
                   {getLevelIcon(log.level)}
                   {log.level.toUpperCase()}
                 </Badge>
-                <span className="text-muted-foreground shrink-0 w-20">
+                <span className="text-muted-foreground shrink-0 leading-6 tabular-nums">
                   {formatTimestamp(log.timestamp)}
                 </span>
-                <Badge variant="outline" className="shrink-0 font-mono">
+                <Badge variant="outline" className="shrink-0 font-mono max-w-[14rem] truncate" title={log.container}>
                   {log.container}
                 </Badge>
-                <span className="text-foreground break-all">
+                <span className="text-foreground break-words min-w-0 basis-full sm:basis-auto sm:flex-1 leading-6">
                   {log.message}
                 </span>
               </div>
             ))
           )}
         </div>
-      </ScrollArea>
-
-      {isPaused && (
-        <div className="absolute top-4 right-4 bg-warning text-warning-foreground px-3 py-1 rounded-full text-xs font-mono font-semibold flex items-center gap-1 shadow-lg">
-          <Pause className="w-3.5 h-3.5" />
-          PAUSED
-        </div>
-      )}
+      </div>
     </Card>
     </TooltipProvider>
   )
