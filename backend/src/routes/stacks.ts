@@ -6,10 +6,9 @@ import { createStackBody, updateStackBody } from '../validation/schemas.js';
 import { auditLog } from '../lib/audit.js';
 import { sendNotification } from '../services/notifications.js';
 import { config } from '../config.js';
-import { mkdir, writeFile, readFile, readdir, access, mkdtemp, rm } from 'fs/promises';
+import { mkdir, writeFile, readFile, readdir, access, rm } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, resolve, relative, dirname } from 'path';
-import { tmpdir } from 'os';
 import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import { randomUUID } from 'crypto';
@@ -17,94 +16,16 @@ import { getStackUpdateStatus, setStackUpdateStatus } from '../services/updates.
 import { listComposeProjects } from '../services/docker.js';
 import { logger } from '../logger.js';
 import { runBackup } from '../services/backups.js';
+import {
+  COMPOSE_FILENAMES,
+  composeProjectNameFromStack,
+  findComposeFile,
+  resolveAccessibleStackPath,
+  resolveStackCwd,
+} from '../lib/stackPaths.js';
 
 const execFileAsync = promisify(execFile);
 const router = Router();
-
-// Docker supports 4 compose filenames in priority order
-const COMPOSE_FILENAMES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'];
-
-function getStackPathCandidates(stackPath: string): string[] {
-  const candidates = new Set<string>();
-  const normalizedPath = String(stackPath || '').replace(/\\/g, '/').replace(/\/+$/, '');
-  const mountedBase = config.stacksPath.replace(/\\/g, '/').replace(/\/+$/, '');
-
-  if (!normalizedPath) return [];
-
-  candidates.add(normalizedPath);
-
-  const stackSegments = normalizedPath.split('/').filter(Boolean);
-  const stackName = stackSegments[stackSegments.length - 1];
-  if (stackName) {
-    candidates.add(join(mountedBase, stackName).replace(/\\/g, '/'));
-  }
-
-  const marker = '/stacks/';
-  const markerIndex = normalizedPath.lastIndexOf(marker);
-  if (markerIndex !== -1) {
-    const suffix = normalizedPath.slice(markerIndex + marker.length);
-    if (suffix) {
-      candidates.add(join(mountedBase, suffix).replace(/\\/g, '/'));
-    }
-  }
-
-  return [...candidates];
-}
-
-async function resolveAccessibleStackPath(stack: any): Promise<string | null> {
-  for (const candidate of getStackPathCandidates(stack.stack_path)) {
-    try {
-      await access(candidate);
-      return candidate;
-    } catch {
-      // try next candidate
-    }
-  }
-  return null;
-}
-
-/** Returns the first compose filename found in the given directory, or 'docker-compose.yml' as fallback */
-async function findComposeFile(dir: string): Promise<string> {
-  for (const filename of COMPOSE_FILENAMES) {
-    try {
-      await access(join(dir, filename));
-      return filename;
-    } catch { /* not found, try next */ }
-  }
-  return 'docker-compose.yml'; // fallback for stacks created by THC
-}
-
-/**
- * Resolve where to run docker compose for a given stack.
- * - Preferred: use the real stack_path directly (works when mounted as volume, e.g. /data/stacks).
- *   This means relative bind mounts in the compose file resolve correctly.
- * - Fallback: write compose content to a temp dir (for adopted stacks whose host path is not
- *   accessible from within the container).
- */
-async function resolveStackCwd(stack: any): Promise<{ cwd: string; cleanup: (() => Promise<void>) | null }> {
-  const accessiblePath = await resolveAccessibleStackPath(stack);
-  if (accessiblePath) {
-    return { cwd: accessiblePath, cleanup: null };
-  }
-
-  // Path not accessible (external/adopted stack) — fall back to in-container temp dir
-  const tempDir = await mkdtemp(join(tmpdir(), 'hlc-'));
-  await writeFile(join(tempDir, 'docker-compose.yml'), stack.compose_content || '');
-  if (stack.env_content) {
-    await writeFile(join(tempDir, '.env'), stack.env_content);
-  }
-  return {
-    cwd: tempDir,
-    cleanup: async () => { try { await rm(tempDir, { recursive: true, force: true }); } catch {} },
-  };
-}
-
-function composeProjectNameFromStack(stack: any): string {
-  return String(stack.name || 'stack')
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]/g, '')
-    .slice(0, 63) || 'stack';
-}
 
 let cachedCurrentComposeProjectName: string | null | undefined;
 

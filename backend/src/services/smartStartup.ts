@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import { pool } from '../database.js';
 import { logger } from '../logger.js';
 import { sendNotification } from './notifications.js';
+import { composeProjectNameFromStack, resolveStackCwd } from '../lib/stackPaths.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -127,7 +128,7 @@ const lastChecked = new Map<string, number>();
 async function monitorDevices(): Promise<void> {
   try {
     const { rows: configs } = await pool.query(
-      `SELECT ssc.*, s.stack_path, s.status AS stack_status, s.name AS stack_name
+      `SELECT ssc.*, s.id AS stack_id, s.name AS stack_name
        FROM smart_startup_configs ssc
        LEFT JOIN stacks s ON s.id::text = ssc.target_id
        WHERE ssc.enabled = true`
@@ -175,7 +176,7 @@ async function monitorDevices(): Promise<void> {
 
       // Transition: offline → online → start stack after configurable delay
       if (isOnline && !wasOnline) {
-        if (!config.stack_path) {
+        if (!config.stack_id) {
           logger.warn(
             { addr, stackId: config.target_id },
             'Smart startup: config references missing stack, skipping start'
@@ -183,26 +184,30 @@ async function monitorDevices(): Promise<void> {
           continue;
         }
 
+        const stackName = String(config.stack_name || config.target_id || 'unknown');
+        // Ask Docker, not the stacks table: the stored status is only written by
+        // THC's own actions, so containers that died with the trigger device
+        // still read as 'running' there and would never be restarted.
+        if (await isStackRunning(config.stack_name)) {
+          logger.info({ stackId: config.target_id }, 'Smart startup: stack already running, skipping');
+          await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [config.target_id]);
+          continue;
+        }
+
         logger.info(
           { addr, stackId: config.target_id, delay: config.start_delay },
           'Smart startup: trigger device came online — scheduling stack start'
         );
-        const status = config.stack_status as string;
-        if (status === 'stopped' || status === 'failed') {
-          const stackName = String(config.stack_name || config.target_id || 'unknown');
-          sendNotification('smartStartupDeviceOnline', {
-            address: addr,
-            stackId: config.target_id,
-            stackName,
-            trigger: 'smart-startup',
-          }).catch(() => {});
-          setTimeout(
-            () => startStack(config.target_id, config.stack_path, addr, stackName),
-            (config.start_delay ?? 60) * 1000
-          );
-        } else {
-          logger.info({ stackId: config.target_id, status }, 'Smart startup: stack already running, skipping');
-        }
+        sendNotification('smartStartupDeviceOnline', {
+          address: addr,
+          stackId: config.target_id,
+          stackName,
+          trigger: 'smart-startup',
+        }).catch(() => {});
+        setTimeout(
+          () => startStack(config.target_id, addr),
+          (config.start_delay ?? 60) * 1000
+        );
       }
     }
   } catch (err) {
@@ -244,21 +249,52 @@ async function checkStartupOrphans(): Promise<void> {
   }
 }
 
-async function startStack(stackId: string, stackPath: string, triggeredBy: string, stackNameHint?: string): Promise<void> {
+/** True when every container of the stack's compose project is running. */
+async function isStackRunning(stackName: string): Promise<boolean> {
+  const project = composeProjectNameFromStack({ name: stackName });
   try {
-    logger.info({ stackId, stackPath, triggeredBy }, 'Smart startup: starting stack');
+    const { stdout } = await execFileAsync(
+      'docker',
+      ['ps', '-a', '--filter', `label=com.docker.compose.project=${project}`, '--format', '{{.State}}'],
+      { timeout: 10_000 }
+    );
+    const states = String(stdout || '').split('\n').map((v) => v.trim()).filter(Boolean);
+    return states.length > 0 && states.every((state) => state === 'running');
+  } catch (err) {
+    logger.warn({ err, project }, 'Smart startup: could not read stack runtime state, starting anyway');
+    return false;
+  }
+}
+
+async function startStack(stackId: string, triggeredBy: string): Promise<void> {
+  let stackName = stackId;
+  let cleanup: (() => Promise<void>) | null = null;
+  try {
+    const { rows: [stack] } = await pool.query('SELECT * FROM stacks WHERE id = $1', [stackId]);
+    if (!stack) {
+      logger.warn({ stackId }, 'Smart startup: stack was removed before its start delay elapsed');
+      return;
+    }
+    stackName = String(stack.name || stackId);
+    const resolved = await resolveStackCwd(stack);
+    cleanup = resolved.cleanup;
+
+    logger.info({ stackId, cwd: resolved.cwd, triggeredBy }, 'Smart startup: starting stack');
     await pool.query("UPDATE stacks SET status = 'deploying', updated_at = NOW() WHERE id = $1", [stackId]);
-    await execFileAsync('docker', ['compose', 'up', '-d'],
-      { cwd: stackPath, timeout: 120_000, env: buildComposeCommandEnv() }
+    // Same project name as manual starts, so compose reuses the existing containers
+    await execFileAsync('docker', ['compose', '--project-name', composeProjectNameFromStack(stack), 'up', '-d'],
+      { cwd: resolved.cwd, timeout: 120_000, env: buildComposeCommandEnv() }
     );
     await pool.query("UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1", [stackId]);
-    const { rows: [stackRow] } = await pool.query('SELECT name FROM stacks WHERE id = $1', [stackId]);
-    const stackName = String(stackRow?.name || stackNameHint || stackId);
     sendNotification('smartStartupStackStarted', { stackId, stackName, address: triggeredBy, trigger: 'smart-startup' }).catch(() => {});
     logger.info({ stackId }, 'Smart startup: stack started successfully');
   } catch (err: any) {
     await pool.query("UPDATE stacks SET status = 'failed', updated_at = NOW() WHERE id = $1", [stackId]).catch(() => {});
+    const error = String(err?.stderr || err?.message || err).trim();
+    sendNotification('stackFailed', { stackId, stackName, action: 'smart start', trigger: 'smart-startup', error }).catch(() => {});
     logger.error({ err, stackId }, 'Smart startup: stack start failed');
+  } finally {
+    if (cleanup) await cleanup();
   }
 }
 
