@@ -37,6 +37,7 @@ import { DatabaseExplorer } from '@/components/DatabaseExplorer'
 import { ContainerShellDialog } from '@/components/ContainerShellDialog'
 import { ClockWidget } from '@/components/ClockWidget'
 import { EmptyState } from '@/components/EmptyState'
+import { UpdatesPopover } from '@/components/UpdatesPopover'
 import { Loader2, RefreshCw, Maximize2, Minimize2, Menu, Sun, Moon, Copy, Download } from 'lucide-react'
 import {
   Box,
@@ -481,10 +482,12 @@ function App() {
                   </Badge>
                 )}
                 {containersWithUpdates > 0 && (
-                  <Badge variant="outline" className="border-warning/50 text-warning gap-1 h-7 text-xs font-medium">
-                    <CloudDownload className="w-3 h-3" />
-                    {containersWithUpdates}
-                  </Badge>
+                  <UpdatesPopover stacks={stacks} containers={containers}>
+                    <Badge variant="outline" className="border-warning/50 text-warning hover:bg-warning/10 transition-colors gap-1 h-7 text-xs font-medium">
+                      <CloudDownload className="w-3 h-3" />
+                      {containersWithUpdates}
+                    </Badge>
+                  </UpdatesPopover>
                 )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -552,10 +555,12 @@ function App() {
                       </Badge>
                     )}
                     {containersWithUpdates > 0 && (
-                      <Badge variant="outline" className="border-warning/50 text-warning gap-1 text-xs font-medium">
-                        <CloudDownload className="w-3 h-3" />
-                        {containersWithUpdates} {containersWithUpdates === 1 ? 'update' : 'updates'}
-                      </Badge>
+                      <UpdatesPopover stacks={stacks} containers={containers}>
+                        <Badge variant="outline" className="border-warning/50 text-warning hover:bg-warning/10 transition-colors gap-1 text-xs font-medium">
+                          <CloudDownload className="w-3 h-3" />
+                          {containersWithUpdates} {containersWithUpdates === 1 ? 'update' : 'updates'}
+                        </Badge>
+                      </UpdatesPopover>
                     )}
                   </div>
 
@@ -642,10 +647,12 @@ function App() {
                 {/* Mobile-side hamburger when full mode is active on small viewport */}
                 <div className="flex md:hidden items-center gap-1.5 shrink-0">
                   {containersWithUpdates > 0 && (
-                    <Badge variant="outline" className="border-warning/50 text-warning gap-1 h-7 text-xs font-medium">
-                      <CloudDownload className="w-3 h-3" />
-                      {containersWithUpdates}
-                    </Badge>
+                    <UpdatesPopover stacks={stacks} containers={containers}>
+                      <Badge variant="outline" className="border-warning/50 text-warning hover:bg-warning/10 transition-colors gap-1 h-7 text-xs font-medium">
+                        <CloudDownload className="w-3 h-3" />
+                        {containersWithUpdates}
+                      </Badge>
+                    </UpdatesPopover>
                   )}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
