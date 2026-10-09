@@ -351,31 +351,69 @@ export async function getSystemInfo() {
   };
 }
 
+// Mirrors what `docker system df` reports as reclaimable, scoped to what the
+// matching prune buttons actually remove.
 export async function getSystemDf() {
-  const df = await docker.df();
+  const df: any = await docker.df();
+  const images: any[] = df.Images || [];
+  const containers: any[] = df.Containers || [];
+  const volumes: any[] = df.Volumes || [];
+
+  // Images: `docker image prune -a` removes every image without a container.
+  // Shared layers stay as long as a used image references them, so subtract
+  // the unique bytes of used images from the total layer size (same as the CLI).
+  const unusedImages = images.filter((i) => (i.Containers ?? 0) === 0);
+  const usedImageBytes = images
+    .filter((i) => (i.Containers ?? 0) > 0 && i.Size >= 0 && i.SharedSize >= 0)
+    .reduce((acc, i) => acc + (i.Size - i.SharedSize), 0);
+  const layersSize = df.LayersSize ?? images.reduce((acc, i) => acc + Math.max(i.Size || 0, 0), 0);
+
+  // Containers: stopped ones are removed by `docker container prune`.
+  const stoppedContainers = containers.filter(
+    (c) => !['running', 'paused', 'restarting'].includes(c.State)
+  );
+
+  // Volumes: `docker volume prune` (API >= 1.42) only removes unused anonymous
+  // volumes; named volumes are kept unless `--all` is passed.
+  const isAnonymous = (v: any) =>
+    v.Labels?.['com.docker.volume.anonymous'] !== undefined || /^[0-9a-f]{64}$/.test(v.Name || '');
+  const unusedVolumes = volumes.filter(
+    (v) => (v.UsageData?.RefCount ?? 0) === 0 && isAnonymous(v)
+  );
+
+  const sizeOf = (n: unknown) => (typeof n === 'number' && n > 0 ? n : 0);
+
   return {
-    images: df.Images?.map((i: any) => ({
-      id: i.Id?.slice(0, 12),
-      size: formatBytes(i.Size || 0),
-      shared: formatBytes(i.SharedSize || 0),
-    })) || [],
-    containers: df.Containers?.map((c: any) => ({
-      id: c.Id?.slice(0, 12),
-      size: formatBytes(c.SizeRw || 0),
-    })) || [],
-    volumes: df.Volumes?.map((v: any) => ({
-      name: v.Name,
-      size: formatBytes(v.UsageData?.Size || 0),
-    })) || [],
-    buildCache: formatBytes(
-      df.BuildCache?.reduce((acc: number, bc: any) => acc + (bc.Size || 0), 0) || 0
-    ),
+    images: {
+      total: images.length,
+      count: unusedImages.length,
+      reclaimable: Math.max(layersSize - usedImageBytes, 0),
+    },
+    containers: {
+      total: containers.length,
+      count: stoppedContainers.length,
+      reclaimable: stoppedContainers.reduce((acc, c) => acc + sizeOf(c.SizeRw), 0),
+    },
+    volumes: {
+      total: volumes.length,
+      count: unusedVolumes.length,
+      reclaimable: unusedVolumes.reduce((acc, v) => acc + sizeOf(v.UsageData?.Size), 0),
+    },
+    buildCache: {
+      reclaimable: (df.BuildCache || [])
+        .filter((bc: any) => !bc.InUse)
+        .reduce((acc: number, bc: any) => acc + sizeOf(bc.Size), 0),
+    },
   };
 }
 
+// The daemon only prunes dangling images by default; dangling=false matches
+// `docker image prune -a`, which is what the UI advertises.
+const PRUNE_ALL_UNUSED_IMAGES = { filters: { dangling: ['false'] } };
+
 export async function pruneSystem() {
   const containers = await docker.pruneContainers();
-  const images = await docker.pruneImages();
+  const images = await docker.pruneImages(PRUNE_ALL_UNUSED_IMAGES);
   const volumes = await docker.pruneVolumes();
   const networks = await docker.pruneNetworks();
   return {
@@ -392,7 +430,7 @@ export async function pruneSystem() {
 }
 
 export async function pruneImages() {
-  const result = await docker.pruneImages();
+  const result = await docker.pruneImages(PRUNE_ALL_UNUSED_IMAGES);
   return {
     deleted: result.ImagesDeleted?.length || 0,
     spaceReclaimed: formatBytes(result.SpaceReclaimed || 0),
