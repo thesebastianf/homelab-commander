@@ -228,7 +228,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
                 <HardDrive className="w-4 h-4 text-primary shrink-0" />
                 <h4 className="font-semibold text-xs">Prune Unused Volumes</h4>
               </div>
-              <p className="text-[11px] text-muted-foreground">Remove volumes not referenced by any container.</p>
+              <p className="text-[11px] text-muted-foreground">Remove anonymous volumes not referenced by any container. Named volumes are kept.</p>
               {dfData?.volumes && (
                 <div className="flex gap-4">
                   <div>
@@ -243,7 +243,7 @@ export function MaintenanceDialog({ open, onOpenChange }: MaintenanceDialogProps
               )}
               <div className="mt-auto flex flex-col gap-1">
                 <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-7 w-fit"
-                  disabled={pruning !== null} onClick={() => handlePrune('volumes', 'Volume prune', 'All volumes not referenced by any container will be permanently deleted including their data. This cannot be undone.')}>
+                  disabled={pruning !== null} onClick={() => handlePrune('volumes', 'Volume prune', 'All anonymous volumes not referenced by any container will be permanently deleted including their data. Named volumes are kept. This cannot be undone.')}>
                   {pruning === 'volumes' ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Pruning...</> : 'Prune Volumes'}
                 </Button>
                 <code className="text-[10px] font-mono text-muted-foreground/60">docker volume prune -f</code>
