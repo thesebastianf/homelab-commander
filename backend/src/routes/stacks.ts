@@ -12,7 +12,7 @@ import { join, resolve, relative, dirname } from 'path';
 import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import { randomUUID } from 'crypto';
-import { getStackUpdateStatus, setStackUpdateStatus } from '../services/updates.js';
+import { getStackUpdateStatus, scheduleUpdateRecheck, setStackUpdateStatus } from '../services/updates.js';
 import { listComposeProjects } from '../services/docker.js';
 import { logger } from '../logger.js';
 import { runBackup } from '../services/backups.js';
@@ -722,6 +722,7 @@ async function runUpdateOperation(id: string, stack: any, op: OperationState, tr
           }
         }
         setStackUpdateStatus(stack.name, false);
+        scheduleUpdateRecheck();
         if (op.noChange) {
           await auditLog('update', 'stack', id, {
             trigger,

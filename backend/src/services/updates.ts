@@ -1,109 +1,184 @@
 import { logger } from '../logger.js';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
-
-const execFileAsync = promisify(execFile);
+import { composeProjectNameFromStack } from '../lib/stackPaths.js';
 
 const containerUpdateResults = new Map<string, boolean>();
-// keyed by stack project name (com.docker.compose.project label, lowercased)
+// keyed by compose project name (normalized the same way stacks are deployed)
 const stackUpdateResults = new Map<string, boolean>();
+
+const REGISTRY_TIMEOUT_MS = 15_000;
+
+function stackKey(stackName: string): string {
+  return composeProjectNameFromStack({ name: stackName });
+}
 
 export function getUpdateStatus(containerId: string): boolean {
   return containerUpdateResults.get(containerId) || false;
 }
 
 export function getStackUpdateStatus(stackName: string): boolean {
-  return stackUpdateResults.get(stackName.toLowerCase()) || false;
+  return stackUpdateResults.get(stackKey(stackName)) || false;
 }
 
 export function setStackUpdateStatus(stackName: string, hasUpdate: boolean): void {
-  stackUpdateResults.set(stackName.toLowerCase(), hasUpdate);
+  stackUpdateResults.set(stackKey(stackName), hasUpdate);
 }
 
-export async function checkForUpdates(): Promise<void> {
+export interface ImageRef {
+  registry: string;
+  repo: string;
+  tag: string;
+  /** Set when the reference is pinned by digest; such images never get updates */
+  digest?: string;
+  isDockerHub: boolean;
+}
+
+const DOCKER_HUB_HOSTS = new Set(['docker.io', 'index.docker.io', 'registry-1.docker.io']);
+
+/**
+ * Parses an image reference the way Docker does: a first path component with a
+ * dot, a colon or "localhost" is a registry; the tag is only what follows the last
+ * colon after the last slash (so "registry:5000/app" has no tag); "@sha256:" pins a digest.
+ */
+export function parseImageRef(reference: string): ImageRef | null {
+  let rest = reference.trim();
+  if (!rest || rest.startsWith('sha256:')) return null;
+
+  let digest: string | undefined;
+  const at = rest.indexOf('@');
+  if (at >= 0) {
+    digest = rest.slice(at + 1);
+    rest = rest.slice(0, at);
+  }
+
+  let tag = 'latest';
+  const lastSlash = rest.lastIndexOf('/');
+  const lastColon = rest.lastIndexOf(':');
+  if (lastColon > lastSlash) {
+    tag = rest.slice(lastColon + 1);
+    rest = rest.slice(0, lastColon);
+  }
+
+  const parts = rest.split('/');
+  const first = parts[0] || '';
+  const hasRegistry = parts.length > 1 && (first.includes('.') || first.includes(':') || first === 'localhost');
+  const registry = hasRegistry ? first : 'docker.io';
+  let repo = hasRegistry ? parts.slice(1).join('/') : rest;
+  const isDockerHub = DOCKER_HUB_HOSTS.has(registry);
+  if (isDockerHub && !repo.includes('/')) repo = `library/${repo}`;
+  if (!repo || !tag) return null;
+
+  return { registry: isDockerHub ? 'docker.io' : registry, repo, tag, digest, isDockerHub };
+}
+
+/**
+ * Digests the local image is known under for the given repository. RepoDigests can hold
+ * entries for several repositories (and several digests per repository), so picking the
+ * first one compares against the wrong thing.
+ */
+export function localDigestsFor(ref: ImageRef, repoDigests: string[]): string[] {
+  const digests: string[] = [];
+  for (const entry of repoDigests) {
+    const at = entry.lastIndexOf('@');
+    if (at < 0) continue;
+    const entryRef = parseImageRef(entry.slice(0, at));
+    if (entryRef && entryRef.registry === ref.registry && entryRef.repo === ref.repo) {
+      digests.push(entry.slice(at + 1));
+    }
+  }
+  return digests;
+}
+
+let checkInProgress: Promise<void> | null = null;
+
+export function checkForUpdates(): Promise<void> {
+  if (!checkInProgress) {
+    checkInProgress = runUpdateCheck().finally(() => { checkInProgress = null; });
+  }
+  return checkInProgress;
+}
+
+let recheckTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Re-runs the update check shortly, e.g. after a stack was updated outside the regular schedule. */
+export function scheduleUpdateRecheck(delayMs = 60_000): void {
+  if (recheckTimer) clearTimeout(recheckTimer);
+  recheckTimer = setTimeout(() => {
+    recheckTimer = null;
+    void checkForUpdates();
+  }, delayMs);
+}
+
+async function runUpdateCheck(): Promise<void> {
   try {
-    const { listContainers } = await import('./docker.js');
-    const containers = await listContainers();
+    const { listContainersForUpdateCheck } = await import('./docker.js');
+    const containers = await listContainersForUpdateCheck();
 
-    // Accumulate per-stack results in this run
-    const thisRunStackResults = new Map<string, boolean>();
-
-    for (const container of containers) {
-      const colonIdx = container.image.lastIndexOf(':');
-      const imageName = colonIdx > 0 ? container.image.slice(0, colonIdx) : container.image;
-      const tag = colonIdx > 0 ? container.image.slice(colonIdx + 1) : 'latest';
-      if (!imageName) continue;
-
-      // Derive stack name from container name (compose format: stackname-service-1)
-      // Also works for: stackname_service_1 (older compose)
-      const stackNameFromContainer = container.name.replace(/-[^-]+-\d+$/, '').replace(/_[^_]+_\d+$/, '').toLowerCase();
-
-      try {
-        // Get local image manifest digest
-        const { stdout: repoDigestRaw } = await execFileAsync(
-          'docker',
-          ['inspect', container.image, '--format', '{{index .RepoDigests 0}}'],
-          { timeout: 5000 }
-        ).catch(() => ({ stdout: '' }));
-        const localDigest = repoDigestRaw.trim().split('@')[1] || '';
-
-        // Get remote manifest digest
-        const remoteDigest = await checkRegistryDigest(imageName, tag);
-
-        let hasUpdate = false;
-        if (remoteDigest && localDigest && localDigest !== remoteDigest) {
-          hasUpdate = true;
-          logger.debug({ image: container.image, localDigest, remoteDigest }, 'Update available');
-        }
-
-        containerUpdateResults.set(container.id, hasUpdate);
-
-        // Accumulate: if ANY container in the stack has an update, mark the stack
-        const existing = thisRunStackResults.get(stackNameFromContainer) || false;
-        thisRunStackResults.set(stackNameFromContainer, existing || hasUpdate);
-      } catch {
-        containerUpdateResults.set(container.id, false);
-        if (!thisRunStackResults.has(stackNameFromContainer)) {
-          thisRunStackResults.set(stackNameFromContainer, false);
-        }
+    // Several containers often share one image; ask the registry once per reference.
+    const remoteDigests = new Map<string, Promise<string | null>>();
+    const remoteDigestFor = (ref: ImageRef) => {
+      const key = `${ref.registry}/${ref.repo}:${ref.tag}`;
+      let pending = remoteDigests.get(key);
+      if (!pending) {
+        pending = checkRegistryDigest(ref);
+        remoteDigests.set(key, pending);
       }
+      return pending;
+    };
+
+    const nextContainerResults = new Map<string, boolean>();
+    let unknown = 0;
+
+    await Promise.all(containers.map(async (container) => {
+      const ref = parseImageRef(container.imageRef);
+      // Digest-pinned and locally built images (no repo digest) can't be compared.
+      const localDigests = ref && !ref.digest ? localDigestsFor(ref, container.repoDigests) : [];
+      if (!ref || localDigests.length === 0) {
+        nextContainerResults.set(container.id, false);
+        return;
+      }
+
+      const remoteDigest = await remoteDigestFor(ref);
+      if (!remoteDigest) {
+        // Registry unreachable or rate limited: keep the last known answer instead of
+        // silently dropping a pending update until the next successful check.
+        unknown++;
+        nextContainerResults.set(container.id, containerUpdateResults.get(container.id) || false);
+        return;
+      }
+
+      const hasUpdate = !localDigests.includes(remoteDigest);
+      if (hasUpdate) {
+        logger.debug({ image: container.imageRef, localDigests, remoteDigest }, 'Update available');
+      }
+      nextContainerResults.set(container.id, hasUpdate);
+    }));
+
+    const nextStackResults = new Map<string, boolean>();
+    for (const container of containers) {
+      if (!container.project) continue;
+      const key = stackKey(container.project);
+      nextStackResults.set(key, (nextStackResults.get(key) || false) || (nextContainerResults.get(container.id) || false));
     }
 
-    // Replace stack results with this run's results
+    containerUpdateResults.clear();
+    nextContainerResults.forEach((v, k) => containerUpdateResults.set(k, v));
     stackUpdateResults.clear();
-    thisRunStackResults.forEach((v, k) => stackUpdateResults.set(k, v));
+    nextStackResults.forEach((v, k) => stackUpdateResults.set(k, v));
 
     const updatable = [...stackUpdateResults.entries()].filter(([, v]) => v).map(([k]) => k);
-    logger.info({ checked: containers.length, stacksWithUpdates: updatable }, 'Update check completed');
+    logger.info({ checked: containers.length, registryErrors: unknown, stacksWithUpdates: updatable }, 'Update check completed');
   } catch (err) {
     logger.error({ err }, 'Update check failed');
   }
 }
 
-async function checkRegistryDigest(image: string, tag: string): Promise<string | null> {
+async function checkRegistryDigest(ref: ImageRef): Promise<string | null> {
   const manifestAccept = [
+    'application/vnd.oci.image.index.v1+json',
+    'application/vnd.docker.distribution.manifest.list.v2+json',
     'application/vnd.oci.image.manifest.v1+json',
     'application/vnd.docker.distribution.manifest.v2+json',
-    'application/vnd.docker.distribution.manifest.list.v2+json',
-    'application/vnd.oci.image.index.v1+json',
   ].join(', ');
-
-  const getParsedImageRef = (name: string) => {
-    const parts = name.split('/');
-    const first = parts[0] || '';
-    const hasRegistry = first.includes('.') || first.includes(':') || first === 'localhost';
-
-    if (!hasRegistry) {
-      const repo = parts.length === 1 ? `library/${name}` : name;
-      return { registry: 'registry-1.docker.io', repo, isDockerHub: true };
-    }
-
-    return {
-      registry: first,
-      repo: parts.slice(1).join('/'),
-      isDockerHub: first === 'docker.io' || first === 'index.docker.io' || first === 'registry-1.docker.io',
-    };
-  };
 
   const parseBearerChallenge = (header: string) => {
     const realm = /realm="([^"]+)"/.exec(header)?.[1];
@@ -122,39 +197,36 @@ async function checkRegistryDigest(image: string, tag: string): Promise<string |
     return null;
   };
 
+  const request = (url: string, method: 'HEAD' | 'GET', token?: string) => fetch(url, {
+    method,
+    headers: {
+      Accept: manifestAccept,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    signal: AbortSignal.timeout(REGISTRY_TIMEOUT_MS),
+  });
+
+  const fetchToken = async (url: string): Promise<string | null> => {
+    const res = await fetch(url, { signal: AbortSignal.timeout(REGISTRY_TIMEOUT_MS) });
+    if (!res.ok) return null;
+    return extractToken(await res.json());
+  };
+
   try {
-    const ref = getParsedImageRef(image);
     const registryHost = ref.isDockerHub ? 'registry-1.docker.io' : ref.registry;
-    const manifestUrl = `https://${registryHost}/v2/${ref.repo}/manifests/${tag}`;
+    const manifestUrl = `https://${registryHost}/v2/${ref.repo}/manifests/${ref.tag}`;
 
+    let token: string | undefined;
     if (ref.isDockerHub) {
-      const authRes = await fetch(
+      token = await fetchToken(
         `https://auth.docker.io/token?service=registry.docker.io&scope=repository:${ref.repo}:pull`
-      );
-      if (!authRes.ok) return null;
-
-      const tokenPayload = await authRes.json();
-      const token = extractToken(tokenPayload);
+      ) ?? undefined;
       if (!token) return null;
-
-      const manifestRes = await fetch(manifestUrl, {
-        method: 'HEAD',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: manifestAccept,
-        },
-      });
-
-      return manifestRes.headers.get('docker-content-digest');
     }
 
-    // Try generic OCI registry flow (unauthenticated first, then Bearer challenge if needed).
-    let manifestRes = await fetch(manifestUrl, {
-      method: 'HEAD',
-      headers: { Accept: manifestAccept },
-    });
+    let manifestRes = await request(manifestUrl, 'HEAD', token);
 
-    if (manifestRes.status === 401) {
+    if (manifestRes.status === 401 && !token) {
       const challenge = manifestRes.headers.get('www-authenticate') || '';
       if (challenge.toLowerCase().startsWith('bearer')) {
         const { realm, service, scope } = parseBearerChallenge(challenge);
@@ -162,26 +234,31 @@ async function checkRegistryDigest(image: string, tag: string): Promise<string |
           const tokenUrl = new URL(realm);
           if (service) tokenUrl.searchParams.set('service', service);
           tokenUrl.searchParams.set('scope', scope || `repository:${ref.repo}:pull`);
-
-          const tokenRes = await fetch(tokenUrl.toString());
-          if (!tokenRes.ok) return null;
-          const tokenPayload = await tokenRes.json();
-          const token = extractToken(tokenPayload);
+          token = await fetchToken(tokenUrl.toString()) ?? undefined;
           if (!token) return null;
-
-          manifestRes = await fetch(manifestUrl, {
-            method: 'HEAD',
-            headers: {
-              Authorization: `Bearer ${token}`,
-              Accept: manifestAccept,
-            },
-          });
+          manifestRes = await request(manifestUrl, 'HEAD', token);
         }
       }
     }
 
-    return manifestRes.headers.get('docker-content-digest');
-  } catch {
+    if (!manifestRes.ok) {
+      logger.debug({ registry: ref.registry, repo: ref.repo, tag: ref.tag, status: manifestRes.status }, 'Registry manifest lookup failed');
+      return null;
+    }
+
+    const digest = manifestRes.headers.get('docker-content-digest');
+    if (digest) return digest;
+
+    // Some registries omit the digest header on HEAD; GET returns it (or we hash the body).
+    const getRes = await request(manifestUrl, 'GET', token);
+    if (!getRes.ok) return null;
+    const headerDigest = getRes.headers.get('docker-content-digest');
+    if (headerDigest) return headerDigest;
+    const { createHash } = await import('crypto');
+    const body = Buffer.from(await getRes.arrayBuffer());
+    return `sha256:${createHash('sha256').update(body).digest('hex')}`;
+  } catch (err) {
+    logger.debug({ err, registry: ref.registry, repo: ref.repo, tag: ref.tag }, 'Registry digest check failed');
     return null;
   }
 }
