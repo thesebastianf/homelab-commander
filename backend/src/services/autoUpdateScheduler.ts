@@ -10,6 +10,8 @@ import { logger } from '../logger.js';
 import { sendNotification } from './notifications.js';
 import { auditLog } from '../lib/audit.js';
 import { runBackup } from './backups.js';
+import { scheduleUpdateRecheck, setStackUpdateStatus } from './updates.js';
+import { composeProjectNameFromStack } from '../lib/stackPaths.js';
 
 const execFileAsync = promisify(execFile);
 const MIN_FREE_DISK_GB = 3;
@@ -171,6 +173,8 @@ async function runScheduledUpdates(): Promise<void> {
         }
 
         const updated = await updateStackImages(stack);
+        setStackUpdateStatus(stack.name, false);
+        scheduleUpdateRecheck();
         await pool.query(
           "UPDATE stacks SET status = 'running', updated_at = NOW() WHERE id = $1",
           [stack.id]
@@ -242,7 +246,7 @@ function updateStackImages(stack: any): Promise<boolean> {
 
       const proc = spawn(
         'docker',
-        ['compose', '-p', stack.name.toLowerCase(), 'up', '-d', '--pull', 'always'],
+        ['compose', '-p', composeProjectNameFromStack(stack), 'up', '-d', '--pull', 'always'],
         { cwd: tempDir, env: buildComposeCommandEnv() }
       );
       const outputLines: string[] = [];

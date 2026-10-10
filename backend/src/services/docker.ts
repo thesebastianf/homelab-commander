@@ -656,3 +656,54 @@ function formatBytes(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
+
+// ---- Update check inputs ----
+
+export interface UpdateCheckContainer {
+  id: string;
+  name: string;
+  /** Compose project label, if the container belongs to a compose project */
+  project?: string;
+  /** Image reference as configured for the container (e.g. "nginx:1.27", "ghcr.io/foo/bar") */
+  imageRef: string;
+  /** Repo digests of the image the container is actually running (not of whatever the tag points to now) */
+  repoDigests: string[];
+}
+
+/**
+ * Lists all containers together with the image they were created from and that
+ * image's repo digests. Unlike listContainers() this skips stats sampling.
+ */
+export async function listContainersForUpdateCheck(): Promise<UpdateCheckContainer[]> {
+  const containers = await docker.listContainers({ all: true });
+  const digestsByImageId = new Map<string, Promise<string[]>>();
+  const repoDigestsFor = (imageId: string) => {
+    let pending = digestsByImageId.get(imageId);
+    if (!pending) {
+      pending = docker.getImage(imageId).inspect()
+        .then((info) => info.RepoDigests || [])
+        .catch(() => []);
+      digestsByImageId.set(imageId, pending);
+    }
+    return pending;
+  };
+
+  return Promise.all(containers.map(async (c) => {
+    // ContainerInfo.Image turns into a bare image ID once the tag has moved on to a
+    // newer pull, so read the configured reference from the container itself.
+    let imageRef = c.Image;
+    try {
+      const info = await docker.getContainer(c.Id).inspect();
+      imageRef = info.Config?.Image || imageRef;
+    } catch {
+      // Container vanished between list and inspect; fall back to the list value.
+    }
+    return {
+      id: c.Id.slice(0, 12),
+      name: c.Names[0]?.replace(/^\//, '') || '',
+      project: c.Labels?.['com.docker.compose.project'] || undefined,
+      imageRef,
+      repoDigests: await repoDigestsFor(c.ImageID),
+    };
+  }));
+}
